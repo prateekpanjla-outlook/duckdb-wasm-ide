@@ -7,28 +7,41 @@ import { apiClient } from './api-client.js';
 
 export class AuthManager {
     constructor() {
+        console.log('[AuthManager] Constructor called');
         this.authModal = null;
         this.isLoginMode = true;
+        console.log('[AuthManager] About to call initializeUI()');
         this.initializeUI();
+        console.log('[AuthManager] initializeUI() returned');
+        console.log('[AuthManager] About to call checkExistingAuth()');
         this.checkExistingAuth();
+        console.log('[AuthManager] Constructor complete');
     }
 
     /**
      * Initialize UI elements
      */
     initializeUI() {
+        console.log('[AuthManager] initializeUI() - Starting');
         // Create auth modal HTML
+        console.log('[AuthManager] initializeUI() - About to call createAuthModal()');
         this.createAuthModal();
+        console.log('[AuthManager] initializeUI() - createAuthModal() returned');
         this.addAuthButtonToHeader();
+        console.log('[AuthManager] initializeUI() - Complete');
     }
 
     /**
      * Check if user is already authenticated
      */
     async checkExistingAuth() {
+        console.log('[AuthManager] checkExistingAuth() - Checking...');
         if (apiClient.isAuthenticated()) {
             const user = apiClient.getUser();
+            console.log('[AuthManager] checkExistingAuth() - User already authenticated:', user);
             this.updateUIForLoggedInUser(user);
+        } else {
+            console.log('[AuthManager] checkExistingAuth() - No existing auth');
         }
     }
 
@@ -36,6 +49,9 @@ export class AuthManager {
      * Create auth modal HTML
      */
     createAuthModal() {
+        console.log('[AuthManager] createAuthModal() - Starting');
+        console.log('[AuthManager] createAuthModal() - document.body exists:', !!document.body);
+
         const modalHTML = `
             <div id="authModal" class="auth-modal">
                 <div class="auth-modal-content">
@@ -86,8 +102,15 @@ export class AuthManager {
             </div>
         `;
 
+        console.log('[AuthManager] createAuthModal() - Modal HTML created, inserting into DOM');
         document.body.insertAdjacentHTML('beforeend', modalHTML);
+        console.log('[AuthManager] createAuthModal() - Modal inserted, verifying...');
+
+        const modal = document.getElementById('authModal');
+        console.log('[AuthManager] createAuthModal() - Modal element exists:', !!modal);
+
         this.attachEventListeners();
+        console.log('[AuthManager] createAuthModal() - Complete');
     }
 
     /**

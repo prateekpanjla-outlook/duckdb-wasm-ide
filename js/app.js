@@ -19,20 +19,39 @@ class App {
     }
 
     async init() {
+        console.log('[app.js] init() - Starting application initialization');
+
         // Set up event listeners
+        console.log('[app.js] init() - Setting up event listeners');
         this.setupEventListeners();
 
         // Initialize Authentication Manager (but don't initialize DuckDB yet!)
+        console.log('[app.js] init() - Creating AuthManager...');
         this.authManager = new AuthManager();
+        console.log('[app.js] init() - AuthManager created, checking if modal exists...');
+
+        // Check if modal was created
+        setTimeout(() => {
+            const modal = document.getElementById('authModal');
+            console.log('[app.js] init() - AuthModal exists in DOM:', !!modal);
+            console.log('[app.js] init() - window.app exists:', !!window.app);
+            console.log('[app.js] init() - window.app.authManager exists:', !!(window.app && window.app.authManager));
+        }, 100);
 
         // Initialize Questions Manager
+        console.log('[app.js] init() - Creating QuestionsManager...');
         this.questionsManager = new QuestionsManager();
+        console.log('[app.js] init() - QuestionsManager created');
 
         // Check if user is already logged in from localStorage
         const token = localStorage.getItem('auth_token');
         const user = JSON.parse(localStorage.getItem('user_data') || 'null');
 
+        console.log('[app.js] init() - Token exists:', !!token);
+        console.log('[app.js] init() - User exists:', !!user);
+
         if (token && user) {
+            console.log('[app.js] init() - User is logged in, initializing DuckDB');
             // User is logged in, initialize DuckDB now
             await this.initializeDuckDB();
 
@@ -45,11 +64,14 @@ class App {
 
             // Make app instance available globally
             window.app = this;
+            console.log('[app.js] init() - App instance set to window.app');
         } else {
+            console.log('[app.js] init() - User not logged in, showing login prompt');
             // User not logged in, show login prompt
             this.showLoginPrompt();
         }
 
+        console.log('[app.js] init() - Initialization complete');
         // Hide loading overlay
         this.showLoading(false);
     }
