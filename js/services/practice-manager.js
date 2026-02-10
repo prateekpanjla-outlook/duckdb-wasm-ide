@@ -214,6 +214,34 @@ export class PracticeManager {
     }
 
     /**
+     * Start practice mode with a specific question (from dropdown/modal)
+     */
+    async startQuestion(question) {
+        try {
+            // Show loading
+            this.showLoading('Loading question...');
+
+            // Set current question
+            this.currentQuestion = question;
+
+            // Initialize practice DuckDB instance
+            await this.initializePracticeDuckDB();
+
+            // Show practice UI
+            this.showPracticeUI();
+
+            // Start timer
+            this.startTimer();
+
+        } catch (error) {
+            console.error('Failed to start question:', error);
+            alert('Failed to start question: ' + error.message);
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    /**
      * Initialize separate DuckDB instance for practice
      */
     async initializePracticeDuckDB() {

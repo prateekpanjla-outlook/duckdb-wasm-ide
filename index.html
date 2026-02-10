@@ -47,27 +47,33 @@
         </header>
 
         <main class="main-content">
-            <!-- Left Panel: File Upload & Query Editor -->
+            <!-- Left Panel: Question Selector & Query Editor -->
             <section class="left-panel">
-                <!-- File Upload Section -->
-                <div class="file-upload-section">
-                    <h2>📁 Load Data File</h2>
-                    <p class="hint">Supports: CSV, JSON, Parquet, DuckDB (.duckdb) files</p>
-                    <div id="dropZone" class="drop-zone">
-                        <div class="drop-zone-content">
-                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                <polyline points="17 8 12 3 7 8"></polyline>
-                                <line x1="12" y1="3" x2="12" y2="15"></line>
-                            </svg>
-                            <p>Drag & drop file here or click to browse</p>
-                            <input type="file" id="fileInput" accept=".csv,.json,.parquet,.duckdb" hidden>
+                <!-- Question Selector Section (replaces File Upload) -->
+                <div id="questionSelectorSection" class="question-selector-section hidden">
+                    <h2>📝 Select Question</h2>
+                    <p class="hint">Choose a SQL practice question to work on</p>
+                    <div class="question-dropdown-container">
+                        <select id="questionDropdown" class="question-dropdown" disabled>
+                            <option value="">-- Select a Question --</option>
+                        </select>
+                        <button id="loadQuestionBtn" class="btn btn-primary" disabled>Load Question</button>
+                    </div>
+                    <div id="selectedQuestionInfo" class="selected-question-info hidden">
+                        <div class="question-info-header">
+                            <span class="question-info-title" id="selectedQuestionTitle"></span>
+                            <span class="question-info-badge" id="selectedQuestionCategory"></span>
+                            <span class="question-info-badge" id="selectedQuestionDifficulty"></span>
                         </div>
+                        <p class="question-info-desc" id="selectedQuestionDesc"></p>
                     </div>
-                    <div id="fileInfo" class="file-info hidden">
-                        <span class="file-name" id="fileName"></span>
-                        <button id="clearFileBtn" class="btn btn-small btn-danger">✕ Clear</button>
-                    </div>
+                </div>
+
+                <!-- Login Prompt Section (shown when not logged in) -->
+                <div id="loginPromptSection" class="login-prompt-section">
+                    <h2>🔐 Please Login</h2>
+                    <p class="hint">Login to access SQL practice questions</p>
+                    <button id="loginPromptBtn" class="btn btn-primary">Login to Start</button>
                 </div>
 
                 <!-- Query Editor Section -->

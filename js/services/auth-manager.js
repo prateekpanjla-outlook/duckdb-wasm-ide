@@ -209,6 +209,19 @@ export class AuthManager {
             // Show success message
             this.showNotification(`${this.isLoginMode ? 'Login' : 'Registration'} successful!`, 'success');
 
+            // Initialize DuckDB after login and show question selector
+            if (window.app && typeof window.app.initializeDuckDB === 'function') {
+                await window.app.initializeDuckDB();
+                // Initialize Practice Manager after DuckDB is ready
+                window.app.practiceManager = new PracticeManager(window.app.dbManager);
+                window.practiceManager = window.app.practiceManager;
+            }
+
+            // Show question selector
+            if (window.app && typeof window.app.showQuestionSelector === 'function') {
+                window.app.showQuestionSelector();
+            }
+
         } catch (error) {
             errorDiv.textContent = error.message || `${this.isLoginMode ? 'Login' : 'Registration'} failed`;
             errorDiv.classList.remove('hidden');

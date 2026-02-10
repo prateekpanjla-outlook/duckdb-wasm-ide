@@ -1095,3 +1095,110 @@ table tbody tr.no-data td {
 .hidden {
     display: none !important;
 }
+
+/* ==================== Question Selector Section ==================== */
+.question-selector-section {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.login-prompt-section {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 8px;
+    padding: 2rem;
+    text-align: center;
+    margin-bottom: 1rem;
+}
+
+.login-prompt-section h2 {
+    color: white;
+    margin: 0 0 0.5rem 0;
+}
+
+.login-prompt-section .hint {
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 1rem;
+}
+
+.question-dropdown-container {
+    display: flex;
+    gap: 0.5rem;
+    align-items: stretch;
+}
+
+.question-dropdown {
+    flex: 1;
+    padding: 0.75rem;
+    border: 2px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 1rem;
+    background: white;
+    cursor: pointer;
+    transition: border-color 0.2s ease;
+}
+
+.question-dropdown:hover:not(:disabled) {
+    border-color: var(--primary-color);
+}
+
+.question-dropdown:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.1);
+}
+
+.question-dropdown:disabled {
+    background: #f8f9fa;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.selected-question-info {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border-left: 4px solid var(--primary-color);
+}
+
+.question-info-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.question-info-title {
+    font-weight: 600;
+    color: var(--text-color);
+    font-size: 1.05rem;
+}
+
+.question-info-badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+
+.question-info-badge:first-of-type {
+    background: #e7f3ff;
+    color: #0066cc;
+}
+
+.question-info-badge:last-of-type {
+    background: #f3e7ff;
+    color: #6600cc;
+}
+
+.question-info-desc {
+    color: #6c757d;
+    margin: 0;
+    line-height: 1.5;
+}

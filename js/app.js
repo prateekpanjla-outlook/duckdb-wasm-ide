@@ -6,6 +6,7 @@ import { ResultsView } from './results-view.js';
 import { AuthManager } from './services/auth-manager.js';
 import { PracticeManager } from './services/practice-manager.js';
 import QuestionsManager from './services/questions-manager.js';
+import QuestionDropdownManager from './services/question-dropdown-manager.js';
 
 class App {
     constructor() {
@@ -18,6 +19,45 @@ class App {
     }
 
     async init() {
+        // Set up event listeners
+        this.setupEventListeners();
+
+        // Initialize Authentication Manager (but don't initialize DuckDB yet!)
+        this.authManager = new AuthManager();
+
+        // Initialize Questions Manager
+        this.questionsManager = new QuestionsManager();
+
+        // Check if user is already logged in from localStorage
+        const token = localStorage.getItem('auth_token');
+        const user = JSON.parse(localStorage.getItem('user_data') || 'null');
+
+        if (token && user) {
+            // User is logged in, initialize DuckDB now
+            await this.initializeDuckDB();
+
+            // Update UI for logged in user
+            this.authManager.updateUIForLoggedInUser(user);
+
+            // Initialize Practice Manager
+            this.practiceManager = new PracticeManager(this.dbManager);
+            window.practiceManager = this.practiceManager;
+
+            // Make app instance available globally
+            window.app = this;
+        } else {
+            // User not logged in, show login prompt
+            this.showLoginPrompt();
+        }
+
+        // Hide loading overlay
+        this.showLoading(false);
+    }
+
+    /**
+     * Initialize DuckDB (called after login)
+     */
+    async initializeDuckDB() {
         // Show loading state
         this.showLoading(true, 'Initializing DuckDB WASM...');
 
@@ -25,23 +65,54 @@ class App {
         const success = await this.dbManager.initialize();
         this.updateStatus(success);
 
-        // Hide loading state and enable app
+        // Hide loading state
         this.showLoading(false);
 
-        // Set up event listeners only after initialization
-        this.setupEventListeners();
+        return success;
+    }
 
-        // Initialize Authentication Manager
-        this.authManager = new AuthManager();
+    /**
+     * Show login prompt when not authenticated
+     */
+    showLoginPrompt() {
+        const loginPromptSection = document.getElementById('loginPromptSection');
+        const questionSelectorSection = document.getElementById('questionSelectorSection');
 
-        // Initialize Questions Manager
-        this.questionsManager = new QuestionsManager();
+        if (loginPromptSection) {
+            loginPromptSection.classList.remove('hidden');
+        }
+        if (questionSelectorSection) {
+            questionSelectorSection.classList.add('hidden');
+        }
 
-        // Initialize Practice Manager
-        this.practiceManager = new PracticeManager(this.dbManager);
+        // Set up login prompt button
+        const loginPromptBtn = document.getElementById('loginPromptBtn');
+        if (loginPromptBtn) {
+            loginPromptBtn.addEventListener('click', () => {
+                if (this.authManager) {
+                    this.authManager.openModal();
+                }
+            });
+        }
+    }
 
-        // Make practice manager available globally for QuestionsManager
-        window.practiceManager = this.practiceManager;
+    /**
+     * Show question selector after login
+     */
+    showQuestionSelector() {
+        const loginPromptSection = document.getElementById('loginPromptSection');
+        const questionSelectorSection = document.getElementById('questionSelectorSection');
+
+        if (loginPromptSection) {
+            loginPromptSection.classList.add('hidden');
+        }
+        if (questionSelectorSection) {
+            questionSelectorSection.classList.remove('hidden');
+        }
+
+        // Initialize Question Dropdown Manager
+        this.questionDropdownManager = new QuestionDropdownManager();
+        this.questionDropdownManager.loadQuestions();
     }
 
     showLoading(show, message = '') {
