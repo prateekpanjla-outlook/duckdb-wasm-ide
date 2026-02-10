@@ -109,3 +109,7 @@ MIT License - Feel free to use and modify as needed.
 - [DuckDB WASM Documentation](https://duckdb.org/docs/stable/clients/wasm/overview.html)
 - [DuckDB GitHub](https://github.com/duckdb/duckdb-wasm)
 - [CodeMirror](https://codemirror.net/)
+
+<!-- 🔴 HIGH PRIORITY TODO - AuthManager Module Loading Issue -->
+<!-- See: HIGH_PRIORITY_TODO.md for details -->
+
