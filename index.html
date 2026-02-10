@@ -4,6 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DuckDB WebAssembly IDE</title>
+    <!-- Import Map for DuckDB dependencies -->
+    <script type="importmap">
+    {
+        "imports": {
+            "apache-arrow": "/node_modules/apache-arrow/Arrow.dom.mjs",
+            "apache-arrow/": "/node_modules/apache-arrow/",
+            "tslib": "/node_modules/tslib/tslib.es6.js",
+            "tslib/": "/node_modules/tslib/modules/",
+            "qs": "/node_modules/qs/lib/index.js",
+            "side-channel": "/node_modules/side-channel/index.js",
+            "flatbuffers": "/node_modules/flatbuffers/mjs/flatbuffers.js"
+        }
+    }
+    </script>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>

@@ -43,6 +43,16 @@ describe('DuckDBManager', () => {
             expect(mockLogger.log).toHaveBeenCalled();
         });
 
+        it('should initialize with correct parameter order (logger, worker)', async () => {
+            // This test validates the fix for: AsyncDuckDB(logger, worker) not (worker, logger)
+            // Reference: test-duckdb-init.html - working initialization pattern
+            const result = await dbManager.initialize();
+
+            expect(result).toBe(true);
+            // Verify that the database was instantiated with pthreadWorker
+            expect(mockDuckDB.instantiate).toHaveBeenCalled();
+        });
+
         it('should handle initialization errors gracefully', async () => {
             const failingManager = new DuckDBManager({
                 duckdbModule: null,

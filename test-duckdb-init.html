@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DuckDB Initialization Test</title>
+    <!-- Import Map for DuckDB dependencies -->
+    <script type="importmap">
+    {
+        "imports": {
+            "apache-arrow": "/node_modules/apache-arrow/Arrow.dom.mjs",
+            "apache-arrow/": "/node_modules/apache-arrow/",
+            "tslib": "/node_modules/tslib/tslib.es6.js",
+            "tslib/": "/node_modules/tslib/modules/",
+            "qs": "/node_modules/qs/lib/index.js",
+            "side-channel": "/node_modules/side-channel/index.js",
+            "flatbuffers": "/node_modules/flatbuffers/mjs/flatbuffers.js"
+        }
+    }
+    </script>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #d4d4d4;
+        }
+        .log-entry {
+            padding: 5px 0;
+            border-bottom: 1px solid #333;
+        }
+        .success { color: #4ec9b0; }
+        .error { color: #f48771; }
+        .info { color: #569cd6; }
+        .warn { color: #dcdcaa; }
+        h1 { color: #4ec9b0; }
+    </style>
+</head>
+<body>
+    <h1>🦆 DuckDB WASM Initialization Test</h1>
+    <div id="log"></div>
+
+    <script type="module">
+        const log = document.getElementById('log');
+
+        function addLog(message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${new Date().toISOString()}] ${message}`;
+            log.appendChild(entry);
+            console.log(`[${type.toUpperCase()}]`, message);
+        }
+
+        async function testInitialization() {
+            try {
+                addLog('🚀 Starting DuckDB WASM initialization test...', 'info');
+
+                // Step 1: Import DuckDB module
+                addLog('Step 1: Loading DuckDB module from /libs/duckdb-wasm/duckdb-browser.mjs', 'info');
+                const duckdb = await import('/libs/duckdb-wasm/duckdb-browser.mjs');
+                addLog('✅ DuckDB module loaded successfully!', 'success');
+                addLog(`   Available exports: ${Object.keys(duckdb).slice(0, 10).join(', ')}...`, 'info');
+
+                // Step 2: Create logger
+                addLog('Step 2: Creating console logger...', 'info');
+                const logger = new duckdb.ConsoleLogger();
+                addLog('✅ Logger created successfully!', 'success');
+
+                // Step 3: Define bundle paths
+                addLog('Step 3: Setting up bundle paths...', 'info');
+                const bundle = {
+                    mainModule: '/libs/duckdb-wasm/duckdb-mvp.wasm',
+                    mainWorker: '/libs/duckdb-wasm/duckdb-browser-mvp.worker.js',
+                    pthreadWorker: '/libs/duckdb-wasm/duckdb-browser-mvp.worker.js'
+                };
+                addLog(`   WASM file: ${bundle.mainModule}`, 'info');
+                addLog(`   Worker file: ${bundle.mainWorker}`, 'info');
+                addLog(`   PThread Worker: ${bundle.pthreadWorker}`, 'info');
+
+                // Step 4: Test if files exist
+                addLog('Step 4: Checking if WASM files exist...', 'info');
+                try {
+                    const wasmResponse = await fetch(bundle.mainModule, { method: 'HEAD' });
+                    addLog(`   WASM file status: ${wasmResponse.status} ${wasmResponse.statusText}`, wasmResponse.ok ? 'success' : 'error');
+                } catch (e) {
+                    addLog(`   ❌ Cannot fetch WASM file: ${e.message}`, 'error');
+                }
+
+                try {
+                    const workerResponse = await fetch(bundle.mainWorker, { method: 'HEAD' });
+                    addLog(`   Worker file status: ${workerResponse.status} ${workerResponse.statusText}`, workerResponse.ok ? 'success' : 'error');
+                } catch (e) {
+                    addLog(`   ❌ Cannot fetch Worker file: ${e.message}`, 'error');
+                }
+
+                // Step 5: Create worker
+                addLog('Step 5: Creating worker...', 'info');
+                const worker = new Worker(bundle.mainWorker);
+                addLog('✅ Worker created successfully!', 'success');
+                addLog(`   Worker type: ${worker.constructor.name}`, 'info');
+
+                // Step 6: Create AsyncDuckDB instance (logger FIRST, then worker)
+                addLog('Step 6: Creating AsyncDuckDB instance...', 'info');
+                const db = new duckdb.AsyncDuckDB(logger, worker);
+                addLog('✅ AsyncDuckDB instance created!', 'success');
+
+                // Step 7: Instantiate database (use pthreadWorker)
+                addLog('Step 7: Instantiating database with WASM file...', 'info');
+                await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+                addLog('✅ Database instantiated successfully!', 'success');
+
+                // Step 8: Connect to database
+                addLog('Step 8: Connecting to database...', 'info');
+                const connection = await db.connect();
+                addLog('✅ Database connected successfully!', 'success');
+
+                // Step 9: Test a simple query
+                addLog('Step 9: Testing simple query (SELECT 1)...', 'info');
+                const result = await connection.query('SELECT 1 AS test_column');
+                addLog('✅ Query executed successfully!', 'success');
+                addLog(`   Result: ${JSON.stringify(result)}`, 'info');
+
+                // Success!
+                addLog('🎉 ALL TESTS PASSED! DuckDB WASM is working correctly!', 'success');
+
+                // Cleanup
+                await connection.close();
+                addLog('✅ Connection closed', 'info');
+
+            } catch (error) {
+                addLog(`❌ ERROR: ${error.message}`, 'error');
+                addLog(`   Stack: ${error.stack}`, 'error');
+                addLog('   This is where the initialization is failing!', 'warn');
+            }
+        }
+
+        // Start test when page loads
+        testInitialization();
+    </script>
+</body>
+</html>
