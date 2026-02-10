@@ -75,6 +75,7 @@ router.get('/next', authenticate, async (req, res) => {
                 id: nextQuestion.id,
                 sql_data: nextQuestion.sql_data,
                 sql_question: nextQuestion.sql_question,
+                sql_solution: nextQuestion.sql_solution,
                 sql_solution_explanation: nextQuestion.sql_solution_explanation,
                 difficulty: nextQuestion.difficulty,
                 category: nextQuestion.category

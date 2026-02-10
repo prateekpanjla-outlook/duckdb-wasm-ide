@@ -166,6 +166,12 @@ class APIClient {
                 userResults,
                 isCorrect,
                 timeTakenSeconds
+            }, (key, value) => {
+                // Convert BigInt to string
+                if (typeof value === 'bigint') {
+                    return value.toString();
+                }
+                return value;
             })
         });
     }

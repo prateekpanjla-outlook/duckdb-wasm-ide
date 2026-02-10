@@ -217,9 +217,27 @@ export class PracticeManager {
      * Initialize separate DuckDB instance for practice
      */
     async initializePracticeDuckDB() {
+        // Close old connection if it exists
+        if (this.practiceDuckDB && typeof this.practiceDuckDB.close === 'function') {
+            try {
+                await this.practiceDuckDB.close();
+                // Add a delay to ensure the connection is fully closed
+                // This prevents DuckDB WASM internal errors when opening new connections
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            } catch (e) {
+                console.warn('Failed to close old practice connection:', e.message);
+            }
+        }
+
+        // Add a small delay before creating new connection
+        await new Promise(resolve => setTimeout(resolve, 200));
+
         // Create new DuckDB instance for practice mode
         // This is separate from the main instance
         this.practiceDuckDB = await this.dbManager.getNewConnection();
+
+        // Add a delay after creating connection
+        await new Promise(resolve => setTimeout(resolve, 100));
 
         // Load the question's data
         const data = this.currentQuestion.sql_data;
@@ -230,6 +248,8 @@ export class PracticeManager {
                 await this.practiceDuckDB.run(statement);
             }
         }
+
+        console.log(`✅ Practice DuckDB initialized with ${statements.length} SQL statements`);
     }
 
     /**
@@ -317,13 +337,23 @@ export class PracticeManager {
             // Execute user query
             const userResults = await this.practiceDuckDB.query(userQuery);
 
+            // Debug: Check what tables exist before solution query
+            console.log('🔍 DEBUG: Tables before solution query');
+            try {
+                const tables = await this.practiceDuckDB.query("SHOW TABLES");
+                console.log('   Tables:', JSON.stringify(tables, null, 2));
+            } catch (e) {
+                console.log('   Error showing tables:', e.message);
+            }
+
             // Get solution results for comparison
             const solutionResults = await this.practiceDuckDB.query(this.currentQuestion.sql_solution);
 
-            // Debug logging
+            // Debug logging (handle BigInt serialization)
             console.log('Comparing results:');
-            console.log('User results:', JSON.stringify(userResults, null, 2));
-            console.log('Solution results:', JSON.stringify(solutionResults, null, 2));
+            console.log('User results:', this.safeStringify(userResults));
+            console.log('Solution results:', this.safeStringify(solutionResults));
+            console.log('Solution query:', this.currentQuestion.sql_solution);
 
             // Compare results
             const isCorrect = this.compareResults(userResults, solutionResults);
@@ -359,27 +389,46 @@ export class PracticeManager {
         // Improved comparison for DuckDB results
 
         if (!userResults || !solutionResults) {
+            console.log('❌ Compare: Missing results');
             return false;
         }
 
         // Check if both have rows
         if (!userResults.rows || !solutionResults.rows) {
+            console.log('❌ Compare: Missing rows');
             return false;
         }
 
         const userRows = userResults.rows;
         const solutionRows = solutionResults.rows;
 
+        console.log(`📊 Row count: User=${userRows.length}, Solution=${solutionRows.length}`);
+
         // Compare row count
         if (userRows.length !== solutionRows.length) {
+            console.log('❌ Compare: Row count mismatch');
             return false;
         }
 
         // Compare column names
-        const userCols = Object.keys(userRows[0] || {});
-        const solutionCols = Object.keys(solutionRows[0] || {});
+        const userCols = userRows.length > 0 ? Object.keys(userRows[0] || {}) : [];
+        const solutionCols = solutionRows.length > 0 ? Object.keys(solutionRows[0] || {}) : [];
+
+        console.log(`📊 Columns - User: [${userCols.join(', ')}]`);
+        console.log(`📊 Columns - Solution: [${solutionCols.join(', ')}]`);
 
         if (userCols.length !== solutionCols.length) {
+            console.log('❌ Compare: Column count mismatch');
+            return false;
+        }
+
+        // Check if columns match (regardless of order)
+        const userColsSorted = [...userCols].sort();
+        const solutionColsSorted = [...solutionCols].sort();
+        const colsMatch = userColsSorted.every((col, i) => col === solutionColsSorted[i]);
+
+        if (!colsMatch) {
+            console.log('❌ Compare: Column names do not match');
             return false;
         }
 
@@ -394,12 +443,19 @@ export class PracticeManager {
                 const solutionVal = solutionRow[col];
 
                 // Compare values (handle numbers as strings)
-                if (String(userVal) !== String(solutionVal)) {
+                const userStr = String(userVal);
+                const solutionStr = String(solutionVal);
+
+                if (userStr !== solutionStr) {
+                    console.log(`❌ Compare: Row ${i}, Column '${col}' mismatch`);
+                    console.log(`   User: "${userStr}" (${typeof userVal})`);
+                    console.log(`   Solution: "${solutionStr}" (${typeof solutionVal})`);
                     return false;
                 }
             }
         }
 
+        console.log('✅ Compare: Results match!');
         return true;
     }
 
@@ -624,5 +680,18 @@ export class PracticeManager {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    /**
+     * Safely stringify results, handling BigInt values
+     */
+    safeStringify(obj, indent = 2) {
+        return JSON.stringify(obj, (key, value) => {
+            // Convert BigInt to string
+            if (typeof value === 'bigint') {
+                return value.toString();
+            }
+            return value;
+        }, indent);
     }
 }
