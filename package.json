@@ -24,7 +24,9 @@
     "jsdom": "^23.0.1",
     "vitest": "^1.1.0"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@duckdb/duckdb-wasm": "^1.33.1-dev18.0"
+  },
   "engines": {
     "node": ">=18.0.0"
   }

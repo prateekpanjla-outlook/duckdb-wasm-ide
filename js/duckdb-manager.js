@@ -7,27 +7,25 @@ export class DuckDBManager {
 
     async initialize() {
         try {
-            // Select the appropriate worker script
-            const JS_DELIVR_BUNDLE = 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.1/dist/';
-
-            // Load DuckDB WASM
-            const duckdb = await import(
-                'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.1/dist/duckdb-browser-blocking.mjs'
-            );
+            // Load DuckDB WASM from local files
+            const duckdb = await import('/libs/duckdb-wasm/duckdb-browser.mjs');
 
             // Create a new logger
             const logger = new duckdb.console_logger(duckdb.LogLevel.WARNING);
 
+            // Select bundle with local paths
+            const bundle = {
+                mainModule: '/libs/duckdb-wasm/duckdb-mvp.wasm',
+                mainWorker: '/libs/duckdb-wasm/duckdb-browser-mvp.worker.js'
+            };
+
             // Create worker
-            const worker = await duckdb.createWorker(JS_DELIVR_BUNDLE + 'duckdb-browser-blocking.worker.js');
+            const worker = await duckdb.createWorker(bundle.mainWorker);
             worker.logger = logger;
 
             // Instantiate database
             this.db = new duckdb.AsyncDuckDB(worker, logger);
-            await this.db.instantiate(
-                JS_DELIVR_BUNDLE + 'duckdb-browser-blocking.wasm',
-                JS_DELIVR_BUNDLE + 'duckdb-browser-blocking.worker.js'
-            );
+            await this.db.instantiate(bundle.mainModule, bundle.mainWorker);
 
             // Open connection
             this.connection = await this.db.connect();

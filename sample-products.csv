@@ -1,0 +1,31 @@
+product_id,product_name,category,price,stock_quantity,manufacturer
+101,Laptop Pro 15,Electronics,2499.99,45,TechCorp
+102,Wireless Mouse,Electronics,29.99,320,Peripherals Inc
+103,Mechanical Keyboard,Electronics,149.99,85,KeyMaster
+104,27" 4K Monitor,Electronics,399.99,28,DisplayTech
+105,USB-C Hub,Electronics,49.99,150,ConnectAll
+106,Ergonomic Chair,Furniture,599.99,12,ComfortSeating
+107,Standing Desk,Furniture,449.99,8,DeskPro
+108,LED Desk Lamp,Lighting,34.99,95,LiteBright
+109,Noise-Cancelling Headphones,Electronics,199.99,42,AudioMax
+110,Bluetooth Speaker,Electronics,79.99,180,SoundWave
+111,External Hard Drive 2TB,Electronics,89.99,67,StorageCorp
+112,Graphics Tablet,Electronics,299.99,33,DigiDraw
+113,Webcam HD,Electronics,69.99,120,VisionTech
+114,Wireless Charger,Electronics,39.99,200,PowerUp
+115,Laptop Sleeve,Accessories,24.99,250,ProtectCase
+116,Office Chair Mat,Accessories,39.99,45,MatCo
+117,Cable Management Kit,Accessories,19.99,88,TidyTech
+118,Monitor Arm,Accessories,79.99,30,ErgoMount
+119,Desk Organizer,Accessories,29.99,165,OrganizePro
+120,Document Scanner,Electronics,179.99,18,ScanMaster
+121,All-in-One Printer,Electronics,299.99,22,PrintPro
+122,Shredder,Office Equipment,89.99,35,SecureShred
+123,Laminator,Office Equipment,59.99,12,SealPro
+124,Whiteboard,Office Supplies,49.99,28,BoardCo
+125,Marker Set,Office Supplies,15.99,95,WriteRight
+126,Notebook Set,Office Supplies,12.99,200,NoteBookPro
+127, Stapler,Office Supplies,19.99,140,FastenPro
+128,Paper Clips Box,Office Supplies,8.99,300,ClipCo
+129,File Cabinet,Office Furniture,149.99,15,StoreMax
+130,Bookshelf,Office Furniture,89.99,22,ShelfPro
