@@ -17,9 +17,9 @@ const PORT = process.env.PORT || 3000;
 // Security middleware
 app.use(helmet());
 
-// CORS configuration
+// CORS configuration - allow all origins for external access
 app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:8000',
+    origin: '*',
     credentials: true
 }));
 
@@ -67,7 +67,8 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+// Start server - bind to all interfaces (0.0.0.0) for external access
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 DuckDB WASM Backend Server running on port ${PORT}`);
     console.log(`📊 API endpoint: http://localhost:${PORT}/api`);
     console.log(`❤️  Health check: http://localhost:${PORT}/health`);

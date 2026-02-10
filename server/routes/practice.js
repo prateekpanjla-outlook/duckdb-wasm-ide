@@ -88,6 +88,43 @@ router.get('/next', authenticate, async (req, res) => {
 });
 
 /**
+ * GET /api/practice/questions
+ * Get all available questions
+ */
+router.get('/questions', authenticate, async (req, res) => {
+    try {
+        const questions = await Question.getAll();
+
+        // Get user progress for each question
+        const progress = {};
+        for (const question of questions) {
+            const attempts = await UserAttempt.getUserQuestionAttempts(req.user.id, question.id);
+            const completed = attempts.some(a => a.is_correct);
+
+            progress[question.id] = {
+                attempts: attempts.length,
+                completed: completed,
+                lastAttempt: attempts.length > 0 ? attempts[0].created_at : null
+            };
+        }
+
+        res.json({
+            questions: questions.map(q => ({
+                id: q.id,
+                order_index: q.order_index,
+                category: q.category,
+                difficulty: q.difficulty,
+                sql_question: q.sql_question
+            })),
+            progress: progress
+        });
+    } catch (error) {
+        console.error('Get questions error:', error);
+        res.status(500).json({ error: 'Failed to get questions' });
+    }
+});
+
+/**
  * GET /api/practice/question/:id
  * Get specific question by ID
  */

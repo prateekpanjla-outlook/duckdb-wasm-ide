@@ -38,6 +38,9 @@
                 <span class="status" id="dbStatus">⚫ Not Connected</span>
             </div>
             <div class="header-right">
+                <button id="viewQuestionsBtn" class="btn btn-secondary hidden">📋 Questions</button>
+                <button id="startPracticeBtn" class="btn btn-success hidden">▶ Start Practice</button>
+                <button id="authBtn" class="btn btn-primary">Login</button>
                 <button id="clearHistoryBtn" class="btn btn-secondary">Clear History</button>
                 <button id="exportResultsBtn" class="btn btn-secondary">Export Results</button>
             </div>
@@ -118,6 +121,21 @@
         <footer class="footer">
             <p>Powered by <a href="https://duckdb.org/docs/stable/clients/wasm/overview.html" target="_blank">DuckDB WASM</a> | Data stays in your browser</p>
         </footer>
+    </div>
+
+    <!-- Questions List Modal -->
+    <div id="questionsModal" class="modal hidden">
+        <div class="modal-content questions-modal-content">
+            <div class="modal-header">
+                <h2>📋 Practice Questions</h2>
+                <button class="modal-close" id="closeQuestionsModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="questionsList" class="questions-list">
+                    <div class="loading">Loading questions...</div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- CodeMirror for SQL Editor -->

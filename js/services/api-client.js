@@ -3,7 +3,10 @@
  * Handles all HTTP requests to the backend server
  */
 
-const API_BASE_URL = 'http://localhost:3000/api';
+// Dynamic API URL - uses same hostname as frontend, just different port
+// This works for localhost, 127.0.0.1, or any IP address automatically
+const hostname = window.location.hostname;
+const API_BASE_URL = `http://${hostname}:3000/api`;
 
 class APIClient {
     constructor() {

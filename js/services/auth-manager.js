@@ -226,6 +226,7 @@ export class AuthManager {
     updateUIForLoggedInUser(user) {
         const authBtn = document.getElementById('authBtn');
         const practiceBtn = document.getElementById('startPracticeBtn');
+        const viewQuestionsBtn = document.getElementById('viewQuestionsBtn');
 
         if (user) {
             // Create user menu
@@ -236,9 +237,12 @@ export class AuthManager {
             // Add logout functionality
             authBtn.onclick = () => this.handleLogout();
 
-            // Show practice button when logged in
+            // Show practice and questions buttons when logged in
             if (practiceBtn) {
                 practiceBtn.style.display = 'inline-block';
+            }
+            if (viewQuestionsBtn) {
+                viewQuestionsBtn.classList.remove('hidden');
             }
         } else {
             authBtn.textContent = 'Login';
@@ -246,7 +250,13 @@ export class AuthManager {
             authBtn.classList.add('btn-primary');
             authBtn.onclick = () => this.openModal();
 
-            // Hide practice button when logged out
+            // Hide practice and questions buttons when logged out
+            if (practiceBtn) {
+                practiceBtn.style.display = 'none';
+            }
+            if (viewQuestionsBtn) {
+                viewQuestionsBtn.classList.add('hidden');
+            }
             if (practiceBtn) {
                 practiceBtn.style.display = 'none';
             }

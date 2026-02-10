@@ -5,6 +5,7 @@ import { QueryEditor } from './query-editor.js';
 import { ResultsView } from './results-view.js';
 import { AuthManager } from './services/auth-manager.js';
 import { PracticeManager } from './services/practice-manager.js';
+import QuestionsManager from './services/questions-manager.js';
 
 class App {
     constructor() {
@@ -33,8 +34,14 @@ class App {
         // Initialize Authentication Manager
         this.authManager = new AuthManager();
 
+        // Initialize Questions Manager
+        this.questionsManager = new QuestionsManager();
+
         // Initialize Practice Manager
         this.practiceManager = new PracticeManager(this.dbManager);
+
+        // Make practice manager available globally for QuestionsManager
+        window.practiceManager = this.practiceManager;
     }
 
     showLoading(show, message = '') {

@@ -64,6 +64,23 @@ export class UserAttempt {
     /**
      * Get user's attempts for a specific question
      */
+    static async getUserQuestionAttempts(userId, questionId) {
+        const text = `
+            SELECT
+                id, user_query, is_correct, attempts_count,
+                completed_at, time_taken_seconds
+            FROM user_attempts
+            WHERE user_id = $1 AND question_id = $2
+            ORDER BY completed_at DESC
+        `;
+
+        const result = await query(text, [userId, questionId]);
+        return result.rows;
+    }
+
+    /**
+     * Get user's attempts for a specific question (alias)
+     */
     static async getQuestionAttempts(userId, questionId) {
         const text = `
             SELECT
