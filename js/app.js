@@ -3,6 +3,8 @@ import { DuckDBManager } from './duckdb-manager.js';
 import { FileHandler } from './file-handler.js';
 import { QueryEditor } from './query-editor.js';
 import { ResultsView } from './results-view.js';
+import { AuthManager } from './services/auth-manager.js';
+import { PracticeManager } from './services/practice-manager.js';
 
 class App {
     constructor() {
@@ -27,6 +29,12 @@ class App {
 
         // Set up event listeners only after initialization
         this.setupEventListeners();
+
+        // Initialize Authentication Manager
+        this.authManager = new AuthManager();
+
+        // Initialize Practice Manager
+        this.practiceManager = new PracticeManager(this.dbManager);
     }
 
     showLoading(show, message = '') {

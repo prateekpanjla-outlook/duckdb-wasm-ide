@@ -227,4 +227,33 @@ export class DuckDBManager {
         }
         this.db = null;
     }
+
+    /**
+     * Get a new connection (for practice mode)
+     * Creates a separate connection that can be used independently
+     */
+    async getNewConnection() {
+        if (!this.db) {
+            throw new Error('Database not initialized');
+        }
+
+        try {
+            const newConnection = await this.db.connect();
+            return {
+                query: async (sql) => {
+                    const result = await newConnection.query(sql);
+                    return this.formatResult(result);
+                },
+                run: async (sql) => {
+                    // Use query instead of run for executing SQL
+                    await newConnection.query(sql);
+                },
+                close: async () => {
+                    await newConnection.close();
+                }
+            };
+        } catch (error) {
+            throw new Error(`Failed to create new connection: ${error.message}`);
+        }
+    }
 }
