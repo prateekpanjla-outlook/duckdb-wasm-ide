@@ -15,12 +15,37 @@ class App {
     }
 
     async init() {
+        // Show loading state
+        this.showLoading(true, 'Initializing DuckDB WASM...');
+
         // Initialize DuckDB
         const success = await this.dbManager.initialize();
         this.updateStatus(success);
 
-        // Set up event listeners
+        // Hide loading state and enable app
+        this.showLoading(false);
+
+        // Set up event listeners only after initialization
         this.setupEventListeners();
+    }
+
+    showLoading(show, message = '') {
+        const overlay = document.getElementById('loadingOverlay');
+        const appContainer = document.getElementById('appContainer');
+        const loadingMessage = document.getElementById('loadingMessage');
+
+        if (show) {
+            overlay.classList.add('visible');
+            appContainer.style.opacity = '0.5';
+            appContainer.style.pointerEvents = 'none';
+            if (message) {
+                loadingMessage.textContent = message;
+            }
+        } else {
+            overlay.classList.remove('visible');
+            appContainer.style.opacity = '1';
+            appContainer.style.pointerEvents = 'auto';
+        }
     }
 
     setupEventListeners() {
@@ -37,6 +62,22 @@ class App {
         // Export results button
         document.getElementById('exportResultsBtn').addEventListener('click', () => {
             this.resultsView.exportResults();
+        });
+
+        // Help toggle button
+        const toggleHelpBtn = document.getElementById('toggleHelp');
+        const helpContent = document.getElementById('helpContent');
+        toggleHelpBtn.addEventListener('click', () => {
+            const isExpanded = helpContent.classList.contains('expanded');
+            if (isExpanded) {
+                helpContent.classList.remove('expanded');
+                helpContent.classList.add('collapsed');
+                toggleHelpBtn.textContent = 'Show';
+            } else {
+                helpContent.classList.remove('collapsed');
+                helpContent.classList.add('expanded');
+                toggleHelpBtn.textContent = 'Hide';
+            }
         });
 
         // Keyboard shortcut: Ctrl+Enter to run query

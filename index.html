@@ -21,7 +21,16 @@
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <div class="app-container">
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-content">
+            <div class="spinner-large"></div>
+            <h2>🦆 Initializing DuckDB WASM...</h2>
+            <p id="loadingMessage">Loading database engine, please wait...</p>
+        </div>
+    </div>
+
+    <div class="app-container" id="appContainer" style="opacity: 0.5; pointer-events: none;">
         <!-- Header -->
         <header class="header">
             <div class="header-left">
@@ -90,6 +99,20 @@
                 </div>
             </section>
         </main>
+
+        <!-- Help Section -->
+        <section class="help-section">
+            <div class="help-header">
+                <h2>❓ How to Use</h2>
+                <button id="toggleHelp" class="btn btn-secondary btn-small">Show</button>
+            </div>
+            <div id="helpContent" class="help-content collapsed">
+                <!-- Help content will be added here -->
+                <div class="help-placeholder">
+                    <p>📚 Help documentation coming soon...</p>
+                </div>
+            </div>
+        </section>
 
         <!-- Footer -->
         <footer class="footer">

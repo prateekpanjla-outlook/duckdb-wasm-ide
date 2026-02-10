@@ -366,6 +366,49 @@ table tbody tr.no-data td {
     text-decoration: underline;
 }
 
+/* Help Section */
+.help-section {
+    background: white;
+    border-top: 1px solid var(--border-color);
+    padding: 1rem 2rem;
+}
+
+.help-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.help-header h2 {
+    font-size: 1.125rem;
+    color: var(--primary-color);
+    margin: 0;
+}
+
+.help-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+}
+
+.help-content.expanded {
+    max-height: 1000px;
+}
+
+.help-content.collapsed {
+    max-height: 0;
+}
+
+.help-placeholder {
+    padding: 2rem;
+    text-align: center;
+    color: var(--text-light);
+    background: var(--bg-light);
+    border-radius: 8px;
+    border: 2px dashed var(--border-color);
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
     .main-content {
@@ -400,4 +443,60 @@ table tbody tr.no-data td {
 
 @keyframes spin {
     to { transform: rotate(360deg); }
+}
+
+/* Loading Overlay */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.98);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    transition: opacity 0.3s ease;
+}
+
+.loading-overlay.visible {
+    display: flex;
+}
+
+.loading-content {
+    text-align: center;
+    animation: fadeIn 0.5s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.spinner-large {
+    width: 60px;
+    height: 60px;
+    margin: 0 auto 1.5rem;
+    border: 6px solid #e0e0e0;
+    border-top: 6px solid var(--accent-color);
+    border-radius: 50%;
+    animation: spin 1s ease-in-out infinite;
+}
+
+.loading-content h2 {
+    color: var(--primary-color);
+    margin-bottom: 0.5rem;
+    font-size: 1.5rem;
+}
+
+.loading-content p {
+    color: var(--text-light);
+    font-size: 1rem;
 }
