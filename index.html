@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DuckDB WebAssembly IDE</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <h1>🦆 DuckDB WebAssembly IDE</h1>
+                <span class="status" id="dbStatus">⚫ Not Connected</span>
+            </div>
+            <div class="header-right">
+                <button id="clearHistoryBtn" class="btn btn-secondary">Clear History</button>
+                <button id="exportResultsBtn" class="btn btn-secondary">Export Results</button>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <!-- Left Panel: File Upload & Query Editor -->
+            <section class="left-panel">
+                <!-- File Upload Section -->
+                <div class="file-upload-section">
+                    <h2>📁 Load Data File</h2>
+                    <p class="hint">Supports: CSV, JSON, Parquet, DuckDB (.duckdb) files</p>
+                    <div id="dropZone" class="drop-zone">
+                        <div class="drop-zone-content">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            <p>Drag & drop file here or click to browse</p>
+                            <input type="file" id="fileInput" accept=".csv,.json,.parquet,.duckdb" hidden>
+                        </div>
+                    </div>
+                    <div id="fileInfo" class="file-info hidden">
+                        <span class="file-name" id="fileName"></span>
+                        <button id="clearFileBtn" class="btn btn-small btn-danger">✕ Clear</button>
+                    </div>
+                </div>
+
+                <!-- Query Editor Section -->
+                <div class="query-section">
+                    <div class="query-header">
+                        <h2>📝 SQL Editor</h2>
+                        <div class="query-actions">
+                            <select id="historySelect" class="history-select">
+                                <option value="">Query History...</option>
+                            </select>
+                            <button id="runQueryBtn" class="btn btn-primary">▶ Run (Ctrl+Enter)</button>
+                        </div>
+                    </div>
+                    <div id="queryEditor" class="query-editor"></div>
+                </div>
+            </section>
+
+            <!-- Right Panel: Results -->
+            <section class="right-panel">
+                <div class="results-header">
+                    <h2>📊 Results</h2>
+                    <div class="results-info">
+                        <span id="rowCount">0 rows</span>
+                        <span id="queryTime"></span>
+                    </div>
+                </div>
+                <div id="resultsContainer" class="results-container">
+                    <div class="results-placeholder">
+                        <p>Run a query to see results here</p>
+                        <p class="hint">Load a data file first, then execute your SQL query</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Powered by <a href="https://duckdb.org/docs/stable/clients/wasm/overview.html" target="_blank">DuckDB WASM</a> | Data stays in your browser</p>
+        </footer>
+    </div>
+
+    <!-- DuckDB WASM via CDN -->
+    <script type="module">
+        import * as duckdb from 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.1/dist/duckdb-mvp.wasm?url';
+        window.duckdb = duckdb;
+    </script>
+
+    <!-- CodeMirror for SQL Editor -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/sql-hint.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.css">
+
+    <!-- App Scripts -->
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>

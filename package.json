@@ -1,0 +1,31 @@
+{
+  "name": "duckdb-wasm-ide",
+  "version": "1.0.0",
+  "description": "DuckDB WebAssembly IDE with comprehensive testing",
+  "type": "module",
+  "scripts": {
+    "dev": "python server.py",
+    "test": "vitest",
+    "test:unit": "vitest tests/unit",
+    "test:integration": "vitest tests/integration",
+    "test:coverage": "vitest --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug",
+    "test:all": "npm run test:unit && npm run test:integration && npm run test:e2e",
+    "test:watch": "vitest --watch",
+    "lint": "eslint js tests",
+    "lint:fix": "eslint js tests --fix"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.1",
+    "@vitest/coverage-v8": "^1.1.0",
+    "eslint": "^8.56.0",
+    "jsdom": "^23.0.1",
+    "vitest": "^1.1.0"
+  },
+  "dependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
