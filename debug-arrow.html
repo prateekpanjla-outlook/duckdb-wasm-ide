@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DuckDB Arrow Debug</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background: #f9f9f9;
+        }
+        .section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        pre {
+            background: #fff;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            overflow-x: auto;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .error { color: red; }
+        .success { color: green; }
+        .info { color: blue; }
+    </style>
+</head>
+<body>
+    <h1>🦆 DuckDB Arrow Structure Debugger</h1>
+
+    <div class="section">
+        <h3>Actions</h3>
+        <button onclick="testShowTables()">Test SHOW TABLES</button>
+        <button onclick="testDescribe()">Test DESCRIBE sample_employees</button>
+        <button onclick="testSelect()">Test SELECT * FROM sample_employees LIMIT 5</button>
+        <button onclick="autoRunAll()">🚀 Auto-Run All Tests (with screenshots)</button>
+    </div>
+
+    <div class="section">
+        <h3>Auto-Run Progress</h3>
+        <pre id="progress-log">Waiting for auto-run...</pre>
+    </div>
+
+    <div class="section">
+        <h3>Raw Arrow Structure</h3>
+        <pre id="arrow-structure">No data yet. Click a button above to run a query.</pre>
+    </div>
+
+    <div class="section">
+        <h3>Schema</h3>
+        <pre id="schema-info">No schema data yet.</pre>
+    </div>
+
+    <div class="section">
+        <h3>Batches</h3>
+        <pre id="batches-info">No batch data yet.</pre>
+    </div>
+
+    <div class="section">
+        <h3>Formatted Result</h3>
+        <pre id="formatted-result">No formatted result yet.</pre>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "apache-arrow": "/node_modules/apache-arrow/Arrow.dom.mjs",
+            "apache-arrow/": "/node_modules/apache-arrow/",
+            "tslib": "/node_modules/tslib/tslib.es6.js",
+            "tslib/": "/node_modules/tslib/modules/",
+            "qs": "/node_modules/qs/lib/index.js",
+            "side-channel": "/node_modules/side-channel/index.js",
+            "flatbuffers": "/node_modules/flatbuffers/mjs/flatbuffers.js"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as duckdb from '/libs/duckdb-wasm/duckdb-browser.mjs';
+
+        let db = null;
+        let connection = null;
+
+        async function init() {
+            try {
+                const logger = new duckdb.ConsoleLogger();
+                const bundle = {
+                    mainModule: '/libs/duckdb-wasm/duckdb-mvp.wasm',
+                    mainWorker: '/libs/duckdb-wasm/duckdb-browser-mvp.worker.js',
+                    pthreadWorker: '/libs/duckdb-wasm/duckdb-browser-mvp.worker.js'
+                };
+                const worker = new Worker(bundle.mainWorker);
+                db = new duckdb.AsyncDuckDB(logger, worker);
+                await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+                connection = await db.connect();
+                log('✅ DuckDB initialized', 'success');
+
+                // Automatically load sample CSV file
+                await loadSampleData();
+            } catch (error) {
+                log('❌ Init failed: ' + error.message, 'error');
+            }
+        }
+
+        async function loadSampleData() {
+            try {
+                log('Loading sample-employees.csv...', 'info');
+
+                // Fetch the CSV file
+                const response = await fetch('/sample-employees.csv');
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch CSV: ${response.status}`);
+                }
+
+                const csvText = await response.text();
+                log(`✅ CSV file loaded (${csvText.length} bytes)`, 'success');
+
+                // Register file with DuckDB
+                const csvFile = new File([csvText], 'sample-employees.csv', { type: 'text/csv' });
+                await db.registerFileHandle('sample-employees.csv', csvFile, 2, true);
+                log('✅ File registered with DuckDB', 'success');
+
+                // Create table from CSV
+                await connection.insertCSVFromPath('sample-employees.csv', {
+                    name: 'sample_employees',
+                    detect: true,
+                    header: true
+                });
+                log('✅ Table "sample_employees" created', 'success');
+
+                // Run SHOW TABLES to verify
+                const result = await connection.query('SHOW TABLES');
+                log(`✅ Tables loaded: ${result.numRows} table(s) found`, 'success');
+
+            } catch (error) {
+                log('❌ Failed to load sample data: ' + error.message, 'error');
+                console.error('Load error:', error);
+            }
+        }
+
+        function log(message, type = 'info') {
+            const colors = { error: 'red', success: 'green', info: 'blue' };
+            console.log(`[${type.toUpperCase()}]`, message);
+        }
+
+        function displayArrow(result) {
+            // Display full structure
+            const str = JSON.stringify(result, (key, value) => {
+                if (typeof value === 'bigint') return value.toString();
+                if (value instanceof Uint8Array) return `Uint8Array[${value.length}]`;
+                return value;
+            }, 2);
+            document.getElementById('arrow-structure').textContent = str.substring(0, 10000);
+
+            // Display schema
+            if (result.schema) {
+                document.getElementById('schema-info').textContent = JSON.stringify(result.schema, null, 2);
+            }
+
+            // Display batches
+            if (result.batches) {
+                document.getElementById('batches-info').textContent = JSON.stringify(result.batches, (key, value) => {
+                    if (typeof value === 'bigint') return value.toString();
+                    if (value instanceof Uint8Array) return `Uint8Array[${value.length}]`;
+                    return value;
+                }, 2).substring(0, 5000);
+            }
+
+            // Try to format result
+            const formatted = formatArrowResult(result);
+            document.getElementById('formatted-result').textContent = JSON.stringify(formatted, null, 2);
+        }
+
+        function formatArrowResult(result) {
+            const data = { columns: [], rows: [] };
+
+            if (result && result.schema) {
+                data.columns = result.schema.fields.map(f => f.name);
+
+                if (result.batches && result.batches.length > 0) {
+                    const batch = result.batches[0]; // Use first batch
+                    const numRows = result.numRows || 0;
+
+                    for (let i = 0; i < Math.min(numRows, 10); i++) {
+                        const row = {};
+
+                        data.columns.forEach((col, colIdx) => {
+                            if (batch.data && batch.data.children && batch.data.children[colIdx]) {
+                                const colData = batch.data.children[colIdx];
+                                let value = null;
+
+                                // Debug column structure
+                                console.log(`Column ${col}, Row ${i}:`, {
+                                    hasValues: !!colData.values,
+                                    valueType: typeof colData.values,
+                                    keys: colData.values ? Object.keys(colData.values).slice(0, 5) : [],
+                                    stride: colData.stride,
+                                    offset: colData.offset,
+                                    hasData: !!colData.data,
+                                    hasChildren: !!colData.children,
+                                    typeId: colData.type?.typeId,
+                                    hasValueOffsets: !!colData.valueOffsets,
+                                    hasOffsets: !!colData.offsets,
+                                    valueOffsetsKeys: colData.valueOffsets ? Object.keys(colData.valueOffsets).slice(0, 5) : []
+                                });
+
+                                // Try to get value using Arrow Utf8Vector format
+                                value = extractArrowValue(colData, i);
+
+                                if (row[col] === undefined && value !== undefined) {
+                                    row[col] = value;
+                                }
+                            }
+                        });
+
+                        if (Object.keys(row).length > 0) {
+                            data.rows.push(row);
+                        }
+                    }
+                }
+            }
+
+            return data;
+        }
+
+        function extractArrowValue(colData, rowIndex) {
+            // Method 1: Utf8Vector with offsets and values
+            if (colData.valueOffsets && colData.values) {
+                const startOffset = colData.valueOffsets[rowIndex];
+                const endOffset = colData.valueOffsets[rowIndex + 1];
+
+                // Extract substring from values using offsets
+                let str = '';
+                for (let i = startOffset; i < endOffset; i++) {
+                    const charCode = colData.values[i];
+                    if (charCode !== undefined) {
+                        str += String.fromCharCode(charCode);
+                    }
+                }
+                return str || null;
+            }
+
+            // Method 2: Direct value access (for integers, floats, etc.)
+            if (colData.values && colData.values[rowIndex] !== undefined) {
+                return colData.values[rowIndex];
+            }
+
+            // Method 3: Typed array access
+            if (colData.valueArray && colData.valueArray[rowIndex] !== undefined) {
+                return colData.valueArray[rowIndex];
+            }
+
+            return null;
+        }
+
+        window.testShowTables = async function() {
+            try {
+                log('Running SHOW TABLES...', 'info');
+                const result = await connection.query('SHOW TABLES');
+                displayArrow(result);
+                log('✅ Query completed', 'success');
+            } catch (error) {
+                log('❌ Query failed: ' + error.message, 'error');
+                console.error(error);
+            }
+        };
+
+        window.testDescribe = async function() {
+            try {
+                log('Running DESCRIBE sample_employees...', 'info');
+                const result = await connection.query('DESCRIBE sample_employees');
+                displayArrow(result);
+                log('✅ Query completed', 'success');
+            } catch (error) {
+                log('❌ Query failed: ' + error.message, 'error');
+                console.error(error);
+            }
+        };
+
+        window.testSelect = async function() {
+            try {
+                log('Running SELECT query...', 'info');
+                const result = await connection.query('SELECT * FROM sample_employees LIMIT 5');
+                displayArrow(result);
+                log('✅ Query completed', 'success');
+            } catch (error) {
+                log('❌ Query failed: ' + error.message, 'error');
+                console.error(error);
+            }
+        };
+
+        window.autoRunAll = async function() {
+            const progressLog = document.getElementById('progress-log');
+            const logProgress = (msg) => {
+                progressLog.textContent += '\n' + msg;
+                console.log('[AUTO-RUN]', msg);
+            };
+
+            try {
+                logProgress('🚀 Starting auto-run of all tests...');
+                logProgress('');
+
+                // Test 1: SHOW TABLES
+                logProgress('Test 1: SHOW TABLES');
+                await new Promise(r => setTimeout(r, 500));
+                const result1 = await connection.query('SHOW TABLES');
+                displayArrow(result1);
+                logProgress(`  ✅ Rows: ${result1.numRows}`);
+                await new Promise(r => setTimeout(r, 1000));
+
+                // Test 2: DESCRIBE
+                logProgress('');
+                logProgress('Test 2: DESCRIBE sample_employees');
+                const result2 = await connection.query('DESCRIBE sample_employees');
+                displayArrow(result2);
+                logProgress(`  ✅ Rows: ${result2.numRows}`);
+                await new Promise(r => setTimeout(r, 1000));
+
+                // Test 3: SELECT with LIMIT
+                logProgress('');
+                logProgress('Test 3: SELECT * FROM sample_employees LIMIT 5');
+                const result3 = await connection.query('SELECT * FROM sample_employees LIMIT 5');
+                displayArrow(result3);
+                logProgress(`  ✅ Rows: ${result3.numRows}`);
+                await new Promise(r => setTimeout(r, 1000));
+
+                // Test 4: COUNT query
+                logProgress('');
+                logProgress('Test 4: SELECT COUNT(*) FROM sample_employees');
+                const result4 = await connection.query('SELECT COUNT(*) as total FROM sample_employees');
+                displayArrow(result4);
+                logProgress(`  ✅ Rows: ${result4.numRows}`);
+                await new Promise(r => setTimeout(r, 1000));
+
+                logProgress('');
+                logProgress('🎉 All tests completed!');
+                logProgress('Check the "Raw Arrow Structure" section above for details');
+
+            } catch (error) {
+                logProgress('❌ Auto-run failed: ' + error.message);
+                console.error('Auto-run error:', error);
+            }
+        };
+
+        // Initialize on load
+        init();
+    </script>
+</body>
+</html>

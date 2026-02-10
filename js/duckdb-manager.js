@@ -64,63 +64,22 @@ export class DuckDBManager {
 
                 // Get rows from Arrow batches
                 if (result.batches && result.batches.length > 0) {
+                    const batch = result.batches[0]; // Use first batch
                     const numRows = result.numRows || 0;
 
                     for (let i = 0; i < numRows; i++) {
                         const row = {};
 
-                        // Process each batch
-                        for (const batch of result.batches) {
-                            if (batch.data && batch.data.children) {
-                                data.columns.forEach((col, colIdx) => {
-                                    if (batch.data.children[colIdx]) {
-                                        const columnData = batch.data.children[colIdx];
-                                        let value = null;
+                        data.columns.forEach((col, colIdx) => {
+                            if (batch.data && batch.data.children && batch.data.children[colIdx]) {
+                                const colData = batch.data.children[colIdx];
+                                const value = this.extractArrowValue(colData, i);
 
-                                        // Method 1: Check for values object with numeric string keys
-                                        if (columnData.values && typeof columnData.values === 'object') {
-                                            // Try as object with string keys
-                                            value = columnData.values[i];
-                                            if (value === undefined && columnData.values[String(i)] !== undefined) {
-                                                value = columnData.values[String(i)];
-                                            }
-                                        }
-
-                                        // Method 2: Check for Array type (flat array)
-                                        else if (Array.isArray(columnData)) {
-                                            value = columnData[i];
-                                        }
-
-                                        // Method 3: Check for stride/data (nested structure)
-                                        else if (columnData.data && columnData.stride !== undefined) {
-                                            const stride = columnData.stride || 1;
-                                            const offset = columnData.offset || 0;
-                                            if (Array.isArray(columnData.data)) {
-                                                value = columnData.data[offset + (i * stride)];
-                                            }
-                                        }
-
-                                        // Method 4: Try to get from child vectors (for struct types)
-                                        else if (columnData.children) {
-                                            // Handle nested struct types
-                                            value = {};
-                                            for (let j = 0; j < columnData.children.length; j++) {
-                                                const childData = columnData.children[j];
-                                                if (childData.values && childData.values[i] !== undefined) {
-                                                    value[`col_${j}`] = childData.values[i];
-                                                }
-                                            }
-                                            if (Object.keys(value).length === 0) value = null;
-                                        }
-
-                                        // Set the value if found
-                                        if (row[col] === undefined && value !== undefined) {
-                                            row[col] = value;
-                                        }
-                                    }
-                                });
+                                if (value !== null && value !== undefined) {
+                                    row[col] = value;
+                                }
                             }
-                        }
+                        });
 
                         // Add row if it has data
                         if (Object.keys(row).length > 0) {
@@ -131,14 +90,60 @@ export class DuckDBManager {
             }
         } catch (error) {
             console.error('Error formatting result:', error);
-            // Log full structure for debugging
-            console.log('Full result structure:', JSON.stringify(result, (key, value) => {
+            console.log('Result structure:', JSON.stringify(result, (key, value) => {
                 if (typeof value === 'bigint') return value.toString();
                 return value;
-            }, 2));
+            }, 2).substring(0, 1000));
         }
 
         return data;
+    }
+
+    extractArrowValue(colData, rowIndex) {
+        // Method 1: Utf8Vector with offsets and values (for strings)
+        if (colData.valueOffsets && colData.values) {
+            const startOffset = colData.valueOffsets[rowIndex];
+            const endOffset = colData.valueOffsets[rowIndex + 1];
+
+            // Handle null values (offsets will be equal)
+            if (startOffset === endOffset) {
+                return null;
+            }
+
+            // Extract substring from values using offsets
+            let str = '';
+            for (let i = startOffset; i < endOffset; i++) {
+                const charCode = colData.values[i];
+                if (charCode !== undefined && charCode !== null) {
+                    str += String.fromCharCode(charCode);
+                }
+            }
+            return str;
+        }
+
+        // Method 2: Direct value access (for integers, floats, etc.)
+        if (colData.values && typeof colData.values === 'object') {
+            const value = colData.values[rowIndex];
+            if (value !== undefined) {
+                return value;
+            }
+            // Try string key access
+            if (colData.values[String(rowIndex)] !== undefined) {
+                return colData.values[String(rowIndex)];
+            }
+        }
+
+        // Method 3: Array type (flat array)
+        if (Array.isArray(colData.values)) {
+            return colData.values[rowIndex];
+        }
+
+        // Method 4: Typed array access (valueArray property)
+        if (colData.valueArray && colData.valueArray.length > rowIndex) {
+            return colData.valueArray[rowIndex];
+        }
+
+        return null;
     }
 
     async registerFile(fileName, fileHandle) {
