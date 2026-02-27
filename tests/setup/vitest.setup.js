@@ -169,33 +169,4 @@ global.Blob = class MockBlob {
 global.URL.createObjectURL = vi.fn(() => 'mock-object-url');
 global.URL.revokeObjectURL = vi.fn();
 
-// Add custom matchers
-import { expect } from 'vitest';
-
-expect.extend({
-    toBeValidTableName(received) {
-        const pass = /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(received);
-        return {
-            pass,
-            message: () => pass
-                ? `Expected "${received}" not to be a valid table name`
-                : `Expected "${received}" to be a valid table name (must start with letter or underscore, contain only letters, numbers, and underscores)`
-        };
-    },
-
-    toBeValidCSV(received) {
-        const lines = received.split('\n');
-        const pass = lines.every(line => {
-            const parts = line.split(',');
-            return parts.length === lines[0].split(',').length;
-        });
-        return {
-            pass,
-            message: () => pass
-                ? `Expected "${received}" not to be valid CSV`
-                : `Expected "${received}" to be valid CSV`
-        };
-    }
-});
-
 console.log('✅ Vitest setup complete - global mocks configured');

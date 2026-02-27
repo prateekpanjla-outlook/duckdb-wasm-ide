@@ -12,7 +12,7 @@ export default defineConfig({
         ['list']
     ],
     use: {
-        baseURL: 'http://localhost:8000',
+        baseURL: 'http://localhost:8888',
         trace: 'on-first-retry',
         screenshot: 'only-on-failure',
         video: 'retain-on-failure'
@@ -32,8 +32,8 @@ export default defineConfig({
         }
     ],
     webServer: {
-        command: 'python server.py',
-        url: 'http://localhost:8000',
+        command: 'python3 server.py 8888',
+        url: 'http://localhost:8888',
         reuseExistingServer: !process.env.CI,
         timeout: 120000
     }

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manual Test - App Initialization</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1a1a2e;
+            color: #eee;
+        }
+        .log-entry {
+            padding: 5px;
+            border-left: 3px solid #333;
+            margin: 2px 0;
+            padding-left: 10px;
+        }
+        .log-entry.info { border-color: #4a9eff; }
+        .log-entry.success { border-color: #00ff88; background: rgba(0,255,136,0.1); }
+        .log-entry.error { border-color: #ff4a4a; background: rgba(255,74,74,0.1); }
+        .test-result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .test-result.pass { background: rgba(0,255,136,0.2); border: 1px solid #00ff88; }
+        .test-result.fail { background: rgba(255,74,74,0.2); border: 1px solid #ff4a4a; }
+        button {
+            padding: 10px 20px;
+            background: #4a9eff;
+            border: none;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #3a7edf; }
+    </style>
+</head>
+<body>
+    <h1>Manual App Initialization Test</h1>
+    <div id="log-container"></div>
+    <div id="test-results"></div>
+
+    <button onclick="window.location.href='/'">Open Main App</button>
+    <button onclick="testLoadingOverlay()">Test Loading Overlay</button>
+    <button onclick="clearLogs()">Clear Logs</button>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "apache-arrow": "/node_modules/apache-arrow/Arrow.dom.mjs",
+            "apache-arrow/": "/node_modules/apache-arrow/",
+            "tslib": "/node_modules/tslib/tslib.es6.js",
+            "tslib/": "/node_modules/tslib/modules/",
+            "qs": "/node_modules/qs/lib/index.js",
+            "side-channel": "/node_modules/side-channel/index.js",
+            "flatbuffers": "/node_modules/flatbuffers/mjs/flatbuffers.js"
+        }
+    }
+    </script>
+
+    <script type="module">
+        // Import app.js to test initialization
+        import '/js/app.js';
+
+        // Log all console messages
+        const originalLog = console.log;
+        const originalError = console.error;
+        const originalWarn = console.warn;
+
+        function addLogEntry(message, type = 'info') {
+            const container = document.getElementById('log-container');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            container.appendChild(entry);
+        }
+
+        console.log = (...args) => {
+            addLogEntry(args.join(' '), 'info');
+            originalLog.apply(console, args);
+        };
+
+        console.error = (...args) => {
+            addLogEntry(args.join(' '), 'error');
+            originalError.apply(console, args);
+        };
+
+        console.warn = (...args) => {
+            addLogEntry(args.join(' '), 'info');
+            originalWarn.apply(console, args);
+        };
+
+        // Listen for unhandled errors
+        window.addEventListener('error', (event) => {
+            addLogEntry(`Error: ${event.message} at ${event.filename}:${event.lineno}`, 'error');
+        });
+
+        window.addEventListener('unhandledrejection', (event) => {
+            addLogEntry(`Unhandled Promise Rejection: ${event.reason}`, 'error');
+        });
+
+        // Test functions
+        window.testLoadingOverlay = () => {
+            const results = document.getElementById('test-results');
+            results.innerHTML = '';
+
+            const tests = [
+                {
+                    name: 'Loading Overlay Hidden',
+                    test: () => {
+                        const overlay = document.getElementById('loadingOverlay');
+                        return overlay && !overlay.classList.contains('visible');
+                    }
+                },
+                {
+                    name: 'App Container Clickable',
+                    test: () => {
+                        const container = document.getElementById('appContainer');
+                        return container && container.style.pointerEvents !== 'none';
+                    }
+                },
+                {
+                    name: 'App Container Full Opacity',
+                    test: () => {
+                        const container = document.getElementById('appContainer');
+                        return container && container.style.opacity === '1';
+                    }
+                },
+                {
+                    name: 'AuthManager Modal Exists',
+                    test: () => {
+                        return !!document.getElementById('authModal');
+                    }
+                },
+                {
+                    name: 'Auth Button Exists',
+                    test: () => {
+                        return !!document.getElementById('authBtn');
+                    }
+                },
+                {
+                    name: 'window.app Defined',
+                    test: () => {
+                        return typeof window.app !== 'undefined';
+                    }
+                }
+            ];
+
+            let passCount = 0;
+            let failCount = 0;
+
+            tests.forEach(({ name, test }) => {
+                try {
+                    const passed = test();
+                    const resultDiv = document.createElement('div');
+                    resultDiv.className = `test-result ${passed ? 'pass' : 'fail'}`;
+                    resultDiv.innerHTML = `<strong>${passed ? '✅' : '❌'} ${name}</strong>`;
+                    results.appendChild(resultDiv);
+
+                    if (passed) passCount++;
+                    else failCount++;
+
+                    addLogEntry(`${passed ? 'PASS' : 'FAIL'}: ${name}`, passed ? 'success' : 'error');
+                } catch (error) {
+                    const resultDiv = document.createElement('div');
+                    resultDiv.className = 'test-result fail';
+                    resultDiv.innerHTML = `<strong>❌ ${name}</strong> - ${error.message}`;
+                    results.appendChild(resultDiv);
+                    failCount++;
+                    addLogEntry(`FAIL: ${name} - ${error.message}`, 'error');
+                }
+            });
+
+            addLogEntry(`Test Complete: ${passCount} passed, ${failCount} failed`, failCount === 0 ? 'success' : 'error');
+        };
+
+        window.clearLogs = () => {
+            document.getElementById('log-container').innerHTML = '';
+        };
+
+        addLogEntry('Manual test page loaded. Waiting for app initialization...', 'info');
+
+        // Run tests after 5 seconds
+        setTimeout(() => {
+            addLogEntry('Running automatic tests...', 'info');
+            window.testLoadingOverlay();
+        }, 5000);
+    </script>
+</body>
+</html>
