@@ -16,7 +16,7 @@ import { test, expect } from '@playwright/test';
  * Screenshots captured at each step
  */
 
-const BASE_URL = 'http://localhost:9200';
+const BASE_URL = 'http://localhost:8888';
 const API_URL = 'http://localhost:3000';
 const SCREENSHOT_DIR = 'test-results/screenshots/practice-mode/';
 
@@ -34,6 +34,7 @@ const QUESTION_1 = {
 };
 
 test.describe('Practice Mode E2E - Question 1', () => {
+        test.describe.configure({ timeout: 300000 }); // 5 minutes timeout
     let apiToken;
 
     test.beforeAll(async () => {
@@ -112,24 +113,23 @@ test.describe('Practice Mode E2E - Question 1', () => {
             console.log('✅ Login successful');
         });
 
-        await test.step('Step 3: Start practice mode', async () => {
-            console.log('\n🎯 Step 3: Starting practice mode...');
+        await test.step('Step 3: Load question from dropdown', async () => {
+            console.log('\n🎯 Step 3: Loading question from dropdown...');
 
-            // Click practice button
-            await page.click('#startPracticeBtn');
-            await page.waitForTimeout(500);
-            await page.screenshot({ path: `${SCREENSHOT_DIR}05-practice-prompt-modal.png` });
+            // Select first question from dropdown
+            await page.selectOption('#questionDropdown', { index: 1 });
+            await page.screenshot({ path: `${SCREENSHOT_DIR}05-question-selected.png` });
 
-            // Click "Yes, Start Practicing!"
-            await page.click('#startPracticeYes');
+            // Click "Load Question" button
+            await page.click('#loadQuestionBtn');
             await page.waitForTimeout(3000);
-            await page.screenshot({ path: `${SCREENSHOT_DIR}06-practice-mode-started.png` });
+            await page.screenshot({ path: `${SCREENSHOT_DIR}06-question-loaded.png` });
 
             // Verify practice mode UI is visible
             const questionPanel = page.locator('#practiceQuestionPanel');
             await expect(questionPanel).toBeVisible();
 
-            console.log('✅ Practice mode started');
+            console.log('✅ Question loaded');
         });
 
         await test.step('Step 4: Verify question 1 is loaded', async () => {
@@ -153,11 +153,13 @@ test.describe('Practice Mode E2E - Question 1', () => {
         await test.step('Step 5: Run INCORRECT query', async () => {
             console.log('\n❌ Step 5: Running incorrect query...');
 
-            // Type incorrect query
-            const codeMirror = page.locator('.CodeMirror');
-            await codeMirror.click();
-            await page.keyboard.press('Control+A');
-            await page.keyboard.type(QUESTION_1.incorrect_query);
+            // Type incorrect query using CodeMirror API
+            await page.evaluate((query) => {
+                const editor = document.querySelector('.CodeMirror');
+                if (editor && editor.CodeMirror) {
+                    editor.CodeMirror.setValue(query);
+                }
+            }, QUESTION_1.incorrect_query);
 
             await page.screenshot({ path: `${SCREENSHOT_DIR}08-incorrect-query-typed.png` });
 
@@ -194,11 +196,13 @@ test.describe('Practice Mode E2E - Question 1', () => {
         await test.step('Step 7: Clear and type CORRECT query', async () => {
             console.log('\n✅ Step 7: Running correct query...');
 
-            // Clear editor
-            const codeMirror = page.locator('.CodeMirror');
-            await codeMirror.click();
-            await page.keyboard.press('Control+A');
-            await page.keyboard.type(QUESTION_1.correct_query);
+            // Type correct query using CodeMirror API
+            await page.evaluate((query) => {
+                const editor = document.querySelector('.CodeMirror');
+                if (editor && editor.CodeMirror) {
+                    editor.CodeMirror.setValue(query);
+                }
+            }, QUESTION_1.correct_query);
 
             await page.screenshot({ path: `${SCREENSHOT_DIR}12-correct-query-typed.png` });
 

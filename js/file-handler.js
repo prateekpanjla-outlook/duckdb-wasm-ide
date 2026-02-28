@@ -11,6 +11,12 @@ export class FileHandler {
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
 
+        // If elements don't exist (question selector mode), skip setup
+        if (!dropZone || !fileInput) {
+            console.log('[FileHandler] Drop zone elements not found - skipping setup (question selector mode)');
+            return;
+        }
+
         // Click to browse
         dropZone.addEventListener('click', () => fileInput.click());
 

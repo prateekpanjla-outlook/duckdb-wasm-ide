@@ -3,6 +3,10 @@
  * Handles displaying and managing the list of practice questions
  */
 
+// Dynamic API URL - uses same hostname as frontend, just different port
+const hostname = window.location.hostname;
+const API_BASE_URL = `http://${hostname}:3000/api`;
+
 class QuestionsManager {
     constructor() {
         this.questions = [];
@@ -65,7 +69,7 @@ class QuestionsManager {
      */
     async loadQuestions() {
         try {
-            const response = await fetch(`${window.location.origin}:3000/api/practice/questions`, {
+            const response = await fetch(`${API_BASE_URL}/practice/questions`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
                 }
@@ -158,7 +162,7 @@ class QuestionsManager {
             this.hideQuestionsModal();
 
             // Load the specific question
-            const response = await fetch(`${window.location.origin}:3000/api/practice/question/${questionId}`, {
+            const response = await fetch(`${API_BASE_URL}/practice/question/${questionId}`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
                 }
@@ -168,7 +172,7 @@ class QuestionsManager {
                 throw new Error('Failed to load question');
             }
 
-            const data = await response.question;
+            const data = await response.json();
 
             // Start practice mode with this question
             if (window.practiceManager) {

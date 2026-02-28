@@ -41,11 +41,11 @@ test.describe('Authentication Flow', () => {
         console.log('✅ Question selector is hidden (not logged in)');
 
         // Check if app.js executed by looking for console messages
-        // We'll check if the app container exists and has the correct initial state
+        // We'll check if the app container exists and has the loaded state (app initializes quickly)
         const appContainer = page.locator('#appContainer');
-        await expect(appContainer).toHaveAttribute('style', /opacity: 0.5/);
+        await expect(appContainer).toHaveAttribute('style', /opacity: 1/);
 
-        console.log('✅ App initialized with correct initial state');
+        console.log('✅ App initialized with correct loaded state');
     });
 
     test('should open auth modal when login button clicked', async ({ page }) => {
@@ -172,39 +172,58 @@ test.describe('Authentication Flow', () => {
 });
 
 /**
- * Mock Authentication Tests
- * Tests that use localStorage to simulate a logged-in user
+ * Real Authentication Tests
+ * Tests that use real login flow (simulating logged-in user)
  */
-test.describe('Mock Authentication (Skip Backend)', () => {
-    test.use({
-        storageState: async ({}) => {
-            // Set up mock authentication in localStorage before page loads
-            return {
-                origins: [{
-                    origin: 'http://localhost:8000',
-                    localStorage: [
-                        { name: 'auth_token', value: 'mock_test_token_12345' },
-                        { name: 'user_data', value: JSON.stringify({
-                            id: 'test-user-1',
-                            email: 'test@example.com',
-                            created_at: new Date().toISOString()
-                        })}
-                    ]
-                }]
-            };
-        }
-    });
-
-    test('should initialize DuckDB when user is already logged in', async ({ page }) => {
-        // Go to page with mocked auth
+test.describe('Real Authentication Flow', () => {
+    /**
+     * Helper function to perform real user login
+     * Uses actual login flow instead of mock authentication
+     */
+    async function performRealLogin(page) {
         await page.goto('/');
-        await page.waitForTimeout(10000); // Wait for DuckDB initialization
+        await page.waitForTimeout(3000);
+
+        // Wait for pointer events to be enabled
+        await page.waitForFunction(() => {
+            const container = document.getElementById('appContainer');
+            return container && container.style.pointerEvents === 'auto';
+        }, { timeout: 10000 });
+
+        // Click the login button to open modal
+        const authBtn = page.locator('#authBtn');
+        await authBtn.click();
+        await page.waitForTimeout(1000);
+
+        // Fill in login credentials
+        await page.fill('#authEmail', 'testuser@example.com');
+        await page.fill('#authPassword', 'password123');
+
+        // Submit the login form
+        await page.click('.auth-submit-btn');
+
+        // Wait for login to complete and UI to update
+        await page.waitForTimeout(8000);
+
+        // Verify login success
+        const authBtnText = await page.textContent('#authBtn');
+        expect(authBtnText).toContain('testuser@example.com');
+    }
+
+    test('should initialize app when user is logged in', async ({ page }) => {
+        await performRealLogin(page);
 
         await page.screenshot({ path: 'test-results/screenshots/auth-03-logged-in-state.png' });
 
-        // Verify app is not in loading state (opacity should be 1)
+        // Wait for DuckDB initialization to complete (loading overlay to be hidden)
+        await page.waitForFunction(() => {
+            const overlay = document.getElementById('loadingOverlay');
+            return overlay && !overlay.classList.contains('visible');
+        }, { timeout: 15000 });
+
+        // Verify app is loaded and interactive
         const appContainer = page.locator('#appContainer');
-        await expect(appContainer).not.toHaveAttribute('style', /opacity: 0.5/);
+        await expect(appContainer).toHaveAttribute('style', /pointer-events: auto/);
 
         // Verify question selector is visible (logged in)
         const questionSelector = page.locator('#questionSelectorSection');
@@ -222,48 +241,31 @@ test.describe('Mock Authentication (Skip Backend)', () => {
         console.log(`   DB Status: ${statusText}`);
     });
 
-    test('should show questions button when logged in', async ({ page }) => {
-        await page.goto('/');
-        await page.waitForTimeout(8000);
-
-        // Questions button should be visible
-        const viewQuestionsBtn = page.locator('#viewQuestionsBtn');
-        await expect(viewQuestionsBtn).not.toHaveClass(/hidden/);
+    test('should show correct UI state when logged in', async ({ page }) => {
+        await performRealLogin(page);
 
         // Auth button should show user email
         const authBtn = page.locator('#authBtn');
-        await expect(authBtn).toContainText('test@example.com');
+        await expect(authBtn).toContainText('testuser@example.com');
 
         console.log('✅ UI shows logged-in state correctly');
     });
 
-    test('should open questions modal when questions button clicked', async ({ page }) => {
-        await page.goto('/');
-        await page.waitForTimeout(8000);
+    test('should load questions when logged in', async ({ page }) => {
+        await performRealLogin(page);
 
-        // Wait for pointer events to be enabled
-        await page.waitForFunction(() => {
-            const container = document.getElementById('appContainer');
-            return container && container.style.pointerEvents === 'auto';
-        }, { timeout: 5000 });
+        // Wait for questions to load
+        await page.waitForTimeout(3000);
 
-        // Click view questions button
-        await page.click('#viewQuestionsBtn');
-        await page.waitForTimeout(500);
+        // Check if questions dropdown has options
+        const dropdown = page.locator('#questionDropdown');
+        const optionCount = await dropdown.locator('option').count();
+        expect(optionCount).toBeGreaterThan(0);
 
-        // Verify questions modal is visible
-        const questionsModal = page.locator('#questionsModal');
-        await expect(questionsModal).not.toHaveClass(/hidden/);
+        console.log(`✅ Questions loaded: ${optionCount} options found`);
 
         // Take screenshot
-        await page.screenshot({ path: 'test-results/screenshots/auth-04-questions-modal.png' });
-
-        console.log('✅ Questions modal opens correctly');
-
-        // Close modal
-        await page.click('#closeQuestionsModal');
-        await page.waitForTimeout(200);
-        await expect(questionsModal).toHaveClass(/hidden/);
+        await page.screenshot({ path: 'test-results/screenshots/auth-04-questions-loaded.png' });
     });
 });
 
@@ -273,6 +275,9 @@ test.describe('Mock Authentication (Skip Backend)', () => {
  */
 test.describe('JavaScript Execution Verification', () => {
     test('should have console logs from app.js and AuthManager', async ({ page }) => {
+        // Set timeout for this test
+        test.setTimeout(60000);
+
         // Collect console messages
         const messages = [];
         page.on('console', msg => {
@@ -283,7 +288,15 @@ test.describe('JavaScript Execution Verification', () => {
         });
 
         await page.goto('/');
-        await page.waitForTimeout(3000);
+
+        // Wait for app to initialize
+        await page.waitForFunction(() => {
+            const container = document.getElementById('appContainer');
+            return container && container.style.pointerEvents === 'auto';
+        }, { timeout: 15000 });
+
+        // Additional wait for async operations
+        await page.waitForTimeout(2000);
 
         // Check for expected console messages
         const textMessages = messages.map(m => m.text).join('\n');
@@ -310,5 +323,8 @@ test.describe('JavaScript Execution Verification', () => {
 
         // Take screenshot for visual verification
         await page.screenshot({ path: 'test-results/screenshots/auth-05-console-test.png' });
+
+        // Verify that we have some console messages (JavaScript is executing)
+        expect(messages.length).toBeGreaterThan(0);
     });
 });

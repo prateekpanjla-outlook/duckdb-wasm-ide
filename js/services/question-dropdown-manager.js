@@ -3,6 +3,12 @@
  * Manages the question dropdown selector in the left panel
  */
 
+import { PracticeManager } from './practice-manager.js';
+
+// Dynamic API URL - uses same hostname as frontend, just different port
+const hostname = window.location.hostname;
+const API_BASE_URL = `http://${hostname}:3000/api`;
+
 class QuestionDropdownManager {
     constructor() {
         this.questions = [];
@@ -31,7 +37,7 @@ class QuestionDropdownManager {
      */
     async loadQuestions() {
         try {
-            const response = await fetch(`${window.location.origin}:3000/api/practice/questions`, {
+            const response = await fetch(`${API_BASE_URL}/practice/questions`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
                 }
@@ -43,6 +49,11 @@ class QuestionDropdownManager {
 
             const data = await response.json();
             this.questions = data.questions || [];
+
+            console.log('[QuestionDropdownManager] Loaded questions:', this.questions.length);
+            if (this.questions.length > 0) {
+                console.log('[QuestionDropdownManager] First question has sql_data:', this.questions[0].sql_data ? 'YES' : 'NO');
+            }
 
             this.populateDropdown();
         } catch (error) {
@@ -82,10 +93,15 @@ class QuestionDropdownManager {
      * Handle dropdown change
      */
     onQuestionChange(event) {
+        console.log('[QuestionDropdownManager] onQuestionChange called');
         const questionId = parseInt(event.target.value);
+        console.log('[QuestionDropdownManager] questionId:', questionId);
+        console.log('[QuestionDropdownManager] this.questions.length:', this.questions.length);
         const question = this.questions.find(q => q.id === questionId);
+        console.log('[QuestionDropdownManager] found question:', question ? 'YES' : 'NO');
 
         if (question) {
+            console.log('[QuestionDropdownManager] question has sql_data:', question.sql_data ? 'YES' : 'NO');
             this.showQuestionInfo(question);
             this.selectedQuestion = question;
         } else {
@@ -98,6 +114,7 @@ class QuestionDropdownManager {
      * Show question information
      */
     showQuestionInfo(question) {
+        console.log('[QuestionDropdownManager] showQuestionInfo called');
         const infoSection = document.getElementById('selectedQuestionInfo');
         const title = document.getElementById('selectedQuestionTitle');
         const category = document.getElementById('selectedQuestionCategory');
@@ -109,9 +126,76 @@ class QuestionDropdownManager {
         if (difficulty) difficulty.textContent = question.difficulty;
         if (desc) desc.textContent = `Practice your ${question.category.toLowerCase()} skills with this ${question.difficulty} level question.`;
 
+        // Display table schema
+        this.displayTableSchema(question);
+
         if (infoSection) {
             infoSection.classList.remove('hidden');
+            console.log('[QuestionDropdownManager] removed hidden class from infoSection');
         }
+    }
+
+    /**
+     * Display table schema extracted from sql_data
+     */
+    displayTableSchema(question) {
+        console.log('[QuestionDropdownManager] displayTableSchema called');
+        const infoSection = document.getElementById('selectedQuestionInfo');
+        if (!infoSection) {
+            console.log('[QuestionDropdownManager] selectedQuestionInfo not found');
+            return;
+        }
+
+        // Parse CREATE TABLE statements from sql_data (handles multi-line)
+        const sqlData = question.sql_data;
+        console.log('[QuestionDropdownManager] sqlData length:', sqlData.length);
+
+        // Match CREATE TABLE ... ( ... ); with newlines allowed
+        const createTableRegex = /CREATE TABLE\s+(\w+)\s*\(([\s\S]+?)\);/gi;
+        const createTableMatches = [...sqlData.matchAll(createTableRegex)];
+
+        console.log('[QuestionDropdownManager] createTableMatches length:', createTableMatches.length);
+
+        if (!createTableMatches || createTableMatches.length === 0) return;
+
+        // Remove existing schema if present
+        const existingSchema = infoSection.querySelector('.table-schema-container');
+        if (existingSchema) {
+            existingSchema.remove();
+        }
+
+        let schemaHTML = '<div class="table-schema-container">';
+        schemaHTML += '<h5 style="margin: 15px 0 10px 0; color: #4CAF50;">📊 Table Schema</h5>';
+
+        createTableMatches.forEach(match => {
+            // Extract table name (capture group 1)
+            const tableName = match[1] || 'unknown';
+
+            // Extract columns (capture group 2)
+            const columnsStr = match[2];
+            const columns = columnsStr.split(',').map(c => c.trim());
+
+            schemaHTML += `<div style="margin-bottom: 12px; padding: 10px; background: #1e1e1e; border-radius: 6px; border-left: 3px solid #4CAF50;">
+                <span style="color: #61dafb; font-weight: bold;">${tableName}</span>
+                <div style="margin-left: 10px; font-family: monospace; font-size: 12px; color: #ccc;">`;
+
+            columns.forEach(col => {
+                // Clean up the column definition
+                let colDef = col.replace(/^\(\d+,\s*/, ''); // Remove leading index
+                colDef = colDef.replace(/\s*PRIMARY KEY/i, ' <span style="color: #f92672;">PRIMARY KEY</span>');
+                colDef = colDef.replace(/\s*NOT NULL/i, ' <span style="color: #f92672;">NOT NULL</span>');
+                colDef = colDef.replace(/\s*NULL/i, ' <span style="color: #f92672;">NULL</span>');
+                colDef = colDef.replace(/\s*UNIQUE/i, ' <span style="color: #f92672;">UNIQUE</span>');
+                schemaHTML += `<div style="margin: 2px 0;">• ${colDef}</div>`;
+            });
+
+            schemaHTML += '</div></div>';
+        });
+
+        schemaHTML += '</div>';
+
+        // Append schema to info section
+        infoSection.insertAdjacentHTML('beforeend', schemaHTML);
     }
 
     /**
@@ -142,7 +226,7 @@ class QuestionDropdownManager {
             }
 
             // Fetch full question details
-            const response = await fetch(`${window.location.origin}:3000/api/practice/question/${this.selectedQuestion.id}`, {
+            const response = await fetch(`${API_BASE_URL}/practice/question/${this.selectedQuestion.id}`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
                 }
@@ -155,9 +239,18 @@ class QuestionDropdownManager {
             const data = await response.json();
 
             // Start practice mode with this question
-            if (window.practiceManager) {
-                await window.practiceManager.startQuestion(data.question);
+            if (!window.practiceManager) {
+                // Create PracticeManager if it doesn't exist
+                if (window.app && window.app.dbManager) {
+                    window.app.practiceManager = new PracticeManager(window.app.dbManager);
+                    window.practiceManager = window.app.practiceManager;
+                    console.log('[QuestionDropdownManager] Created PracticeManager');
+                } else {
+                    throw new Error('App or Database manager not initialized');
+                }
             }
+
+            await window.practiceManager.startQuestion(data.question);
 
             // Reset button
             if (loadBtn) {

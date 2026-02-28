@@ -114,7 +114,8 @@ router.get('/questions', authenticate, async (req, res) => {
                 order_index: q.order_index,
                 category: q.category,
                 difficulty: q.difficulty,
-                sql_question: q.sql_question
+                sql_question: q.sql_question,
+                sql_data: q.sql_data
             })),
             progress: progress
         });
@@ -353,27 +354,6 @@ router.post('/session/deactivate', authenticate, async (req, res) => {
     } catch (error) {
         console.error('Deactivate session error:', error);
         res.status(500).json({ error: 'Failed to deactivate practice mode' });
-    }
-});
-
-/**
- * GET /api/practice/questions
- * Get list of all questions (without solutions)
- */
-router.get('/questions', authenticate, async (req, res) => {
-    try {
-        const { difficulty, category } = req.query;
-
-        const filters = {};
-        if (difficulty) filters.difficulty = difficulty;
-        if (category) filters.category = category;
-
-        const questions = await Question.getAll(filters);
-
-        res.json({ questions });
-    } catch (error) {
-        console.error('Get questions error:', error);
-        res.status(500).json({ error: 'Failed to get questions' });
     }
 });
 

@@ -333,3 +333,64 @@ For debugging purposes, the following console.log statements were added:
 - `[app.js] App instance created and set to window.app`
 
 These logs help track the initialization flow and debug issues.
+
+---
+
+## Issue: FileHandler Blocking UI (2025-02-27)
+
+### Problem
+After migrating from CSV dropZone upload to question selector UI, the app showed this error in browser console:
+```
+file-handler.js:15 Uncaught TypeError: Cannot read properties of null (reading 'addEventListener')
+```
+
+This prevented users from clicking anything on the page.
+
+### Root Cause
+1. The HTML `index.html` no longer contained `#dropZone` element (replaced with `#questionSelectorSection`)
+2. `app.js` was still instantiating `FileHandler` in the constructor
+3. `FileHandler.setupDropZone()` tried to call `addEventListener` on null element
+
+**Note**: Playwright tests didn't catch this because:
+- Tests only verify UI elements are visible/clickable
+- They don't check browser console for JavaScript errors
+- The error happens silently but doesn't prevent page rendering
+
+### Fix Applied
+
+#### 1. `js/app.js` - Conditionally Create FileHandler (lines 11-18)
+```javascript
+class App {
+    constructor() {
+        this.dbManager = new DuckDBManager();
+        // Only create FileHandler if dropZone element exists (legacy CSV upload)
+        const dropZoneExists = document.getElementById('dropZone');
+        if (dropZoneExists) {
+            this.fileHandler = new FileHandler(this.dbManager);
+        }
+        this.queryEditor = new QueryEditor();
+        this.resultsView = new ResultsView();
+```
+
+#### 2. `js/file-handler.js` - Defensive Check in setupDropZone (lines 10-21)
+```javascript
+setupDropZone() {
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+
+    // If elements don't exist (question selector mode), skip setup
+    if (!dropZone || !fileInput) {
+        console.log('[FileHandler] Drop zone elements not found - skipping setup (question selector mode)');
+        return;
+    }
+
+    // Click to browse
+    dropZone.addEventListener('click', () => fileInput.click());
+```
+
+### Result
+- App now works correctly with question selector UI
+- No JavaScript errors in console
+- All UI elements are interactive
+
+---

@@ -4,6 +4,7 @@
  */
 
 import { apiClient } from './api-client.js';
+import { PracticeManager } from './practice-manager.js';
 
 export class AuthManager {
     constructor() {
@@ -135,23 +136,33 @@ export class AuthManager {
         });
 
         // Form submission
-        document.getElementById('authForm').addEventListener('submit', (e) => {
+        document.getElementById('authForm').addEventListener('submit', async (e) => {
+            console.log('[AuthManager] Form submit event fired');
             e.preventDefault();
-            this.handleSubmit();
+            await this.handleSubmit();
         });
     }
 
     /**
-     * Add auth button to header
+     * Add auth button to header (or attach to existing button)
      */
     addAuthButtonToHeader() {
-        const headerRight = document.querySelector('.header-right');
-        const loginBtn = document.createElement('button');
-        loginBtn.id = 'authBtn';
-        loginBtn.className = 'btn btn-primary';
-        loginBtn.textContent = 'Login';
-        loginBtn.addEventListener('click', () => this.openModal());
-        headerRight.insertBefore(loginBtn, headerRight.firstChild);
+        // Check if button already exists in HTML
+        let loginBtn = document.getElementById('authBtn');
+
+        if (loginBtn) {
+            // Button exists, just attach the click handler
+            loginBtn.addEventListener('click', () => this.openModal());
+        } else {
+            // Button doesn't exist, create it
+            const headerRight = document.querySelector('.header-right');
+            loginBtn = document.createElement('button');
+            loginBtn.id = 'authBtn';
+            loginBtn.className = 'btn btn-primary';
+            loginBtn.textContent = 'Login';
+            loginBtn.addEventListener('click', () => this.openModal());
+            headerRight.insertBefore(loginBtn, headerRight.firstChild);
+        }
     }
 
     /**
@@ -200,12 +211,14 @@ export class AuthManager {
      * Handle form submission
      */
     async handleSubmit() {
+        console.log('[AuthManager] handleSubmit() - STARTED');
         const email = document.getElementById('authEmail').value.trim();
         const password = document.getElementById('authPassword').value;
         const errorDiv = document.getElementById('authError');
         const submitBtn = document.querySelector('.auth-submit-btn');
         const submitText = document.getElementById('authSubmitText');
         const spinner = document.querySelector('.auth-spinner');
+        console.log('[AuthManager] Email entered:', email);
 
         // Clear previous errors
         errorDiv.classList.add('hidden');
@@ -216,12 +229,17 @@ export class AuthManager {
         spinner.classList.remove('hidden');
 
         try {
+            console.log('[AuthManager] About to call API login/register...');
             if (this.isLoginMode) {
                 // Login
-                await apiClient.login(email, password);
+                console.log('[AuthManager] Calling apiClient.login()...');
+                const result = await apiClient.login(email, password);
+                console.log('[AuthManager] apiClient.login() returned:', result);
             } else {
                 // Register
-                await apiClient.register(email, password);
+                console.log('[AuthManager] Calling apiClient.register()...');
+                const result = await apiClient.register(email, password);
+                console.log('[AuthManager] apiClient.register() returned:', result);
             }
 
             // Success - close modal and update UI
@@ -233,16 +251,46 @@ export class AuthManager {
             this.showNotification(`${this.isLoginMode ? 'Login' : 'Registration'} successful!`, 'success');
 
             // Initialize DuckDB after login and show question selector
+            console.log('[AuthManager] Checking if window.app exists for DuckDB init...');
+            console.log('[AuthManager] window.app exists:', !!window.app);
+
             if (window.app && typeof window.app.initializeDuckDB === 'function') {
-                await window.app.initializeDuckDB();
-                // Initialize Practice Manager after DuckDB is ready
-                window.app.practiceManager = new PracticeManager(window.app.dbManager);
-                window.practiceManager = window.app.practiceManager;
+                console.log('[AuthManager] Calling initializeDuckDB...');
+                try {
+                    const result = await window.app.initializeDuckDB();
+                    console.log('[AuthManager] initializeDuckDB completed, result:', result);
+                    // Initialize Practice Manager after DuckDB is ready
+                    window.app.practiceManager = new PracticeManager(window.app.dbManager);
+                    window.practiceManager = window.app.practiceManager;
+                    console.log('[AuthManager] PracticeManager created and assigned');
+                } catch (dbError) {
+                    console.error('[AuthManager] initializeDuckDB failed:', dbError);
+                    // Continue anyway - DuckDB might not be critical for questions UI
+                }
+            } else {
+                console.log('[AuthManager] initializeDuckDB not available, skipping...');
             }
 
             // Show question selector
-            if (window.app && typeof window.app.showQuestionSelector === 'function') {
-                window.app.showQuestionSelector();
+            console.log('[AuthManager] === POST-LOGIN: Checking for question selector ===');
+            console.log('[AuthManager] window.app exists:', !!window.app);
+            console.log('[AuthManager] typeof window.app:', typeof window.app);
+
+            // Try to call showQuestionSelector regardless (for debugging)
+            try {
+                if (window.app && typeof window.app.showQuestionSelector === 'function') {
+                    console.log('[AuthManager] Calling showQuestionSelector (standard path)...');
+                    window.app.showQuestionSelector();
+                } else {
+                    console.error('[AuthManager] showQuestionSelector not available! window.app:', window.app);
+                    // Force try calling anyway for debugging
+                    if (window.app) {
+                        console.log('[AuthManager] Force calling showQuestionSelector...');
+                        window.app.showQuestionSelector();
+                    }
+                }
+            } catch (e) {
+                console.error('[AuthManager] Error calling showQuestionSelector:', e);
             }
 
         } catch (error) {

@@ -61,7 +61,7 @@ export class Question {
     static async getAll(filters = {}) {
         let text = `
             SELECT
-                id, sql_question, difficulty, category, order_index
+                id, sql_question, difficulty, category, order_index, sql_data
             FROM questions
             WHERE 1=1
         `;

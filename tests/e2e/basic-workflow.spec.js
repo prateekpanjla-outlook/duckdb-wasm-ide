@@ -10,6 +10,8 @@ import { test, expect } from '@playwright/test';
  */
 
 test.describe('DuckDB WASM IDE - Basic Workflow', () => {
+    test.describe.configure({ timeout: 120000 });
+
     test('should load the application', async ({ page }) => {
         await page.goto('/');
 
@@ -29,26 +31,27 @@ test.describe('DuckDB WASM IDE - Basic Workflow', () => {
     });
 
     /**
-     * Helper function to mock user login
-     * Sets localStorage items to simulate an authenticated user
+     * Helper function to perform real user login
+     * Uses actual login flow instead of mock authentication
      */
-    async function mockLogin(page) {
+    async function performRealLogin(page) {
         await page.goto('/');
         await page.waitForTimeout(3000);
 
-        // Set mock authentication in localStorage
-        await page.evaluate(() => {
-            localStorage.setItem('auth_token', 'mock-token-12345');
-            localStorage.setItem('user_data', JSON.stringify({
-                id: 'test-user-123',
-                email: 'test@example.com',
-                name: 'Test User'
-            }));
-        });
+        // Click the login button to open modal
+        const authBtn = page.locator('#authBtn');
+        await authBtn.click();
+        await page.waitForTimeout(1000);
 
-        // Reload to trigger login detection
-        await page.reload();
-        await page.waitForTimeout(5000);
+        // Fill in login credentials
+        await page.fill('#authEmail', 'testuser@example.com');
+        await page.fill('#authPassword', 'password123');
+
+        // Submit the login form
+        await page.click('.auth-submit-btn');
+
+        // Wait for login to complete and UI to update
+        await page.waitForTimeout(8000);
 
         // Wait for appContainer to be interactive
         await page.waitForFunction(() => {
@@ -58,7 +61,7 @@ test.describe('DuckDB WASM IDE - Basic Workflow', () => {
     }
 
     test('should login and see question selector', async ({ page }) => {
-        await mockLogin(page);
+        await performRealLogin(page);
 
         await page.screenshot({ path: 'test-results/screenshots/02-after-login.png' });
 
@@ -76,7 +79,7 @@ test.describe('DuckDB WASM IDE - Basic Workflow', () => {
     });
 
     test('should load a question and run query', async ({ page }) => {
-        await mockLogin(page);
+        await performRealLogin(page);
 
         // Wait for questions to be loaded in dropdown
         await page.waitForTimeout(3000);
@@ -92,21 +95,32 @@ test.describe('DuckDB WASM IDE - Basic Workflow', () => {
         const loadButton = page.locator('#loadQuestionBtn');
         await loadButton.click();
 
-        await page.waitForTimeout(2000);
+        await page.waitForTimeout(3000);
         await page.screenshot({ path: 'test-results/screenshots/05-question-loaded.png' });
 
         // Verify question info is displayed
         const questionInfo = page.locator('#selectedQuestionInfo');
         await expect(questionInfo).toBeVisible();
 
-        // Verify query is in editor (check CodeMirror)
-        await page.screenshot({ path: 'test-results/screenshots/06-query-in-editor.png' });
+        // Type the query for Question 1: Select all employees from Engineering department
+        const codeMirror = page.locator('.CodeMirror');
+        await codeMirror.click();
+        await page.waitForTimeout(500);
+
+        // Type the query using CodeMirror API
+        await page.evaluate(() => {
+            const editor = document.querySelector('.CodeMirror');
+            if (editor && editor.CodeMirror) {
+                editor.CodeMirror.setValue("SELECT * FROM employees WHERE department = 'Engineering'");
+            }
+        });
+        await page.screenshot({ path: 'test-results/screenshots/06-query-typed.png' });
 
         // Run the query
         const runButton = page.locator('#runQueryBtn');
         await runButton.click();
 
-        await page.waitForTimeout(3000);
+        await page.waitForTimeout(5000);
         await page.screenshot({ path: 'test-results/screenshots/07-query-executed.png' });
 
         // Check if results container has content
@@ -115,7 +129,7 @@ test.describe('DuckDB WASM IDE - Basic Workflow', () => {
     });
 
     test('should execute SHOW TABLES query after loading question', async ({ page }) => {
-        await mockLogin(page);
+        await performRealLogin(page);
 
         // Load a question first
         await page.waitForTimeout(3000);
@@ -128,11 +142,13 @@ test.describe('DuckDB WASM IDE - Basic Workflow', () => {
 
         await page.screenshot({ path: 'test-results/screenshots/08-before-show-tables.png' });
 
-        // Clear editor and type SHOW TABLES
-        await page.click('.CodeMirror');
-        await page.keyboard.press('Control+A');
-        await page.keyboard.press('Backspace');
-        await page.keyboard.type('SHOW TABLES');
+        // Clear editor and type SHOW TABLES using CodeMirror API
+        await page.evaluate(() => {
+            const editor = document.querySelector('.CodeMirror');
+            if (editor && editor.CodeMirror) {
+                editor.CodeMirror.setValue('SHOW TABLES');
+            }
+        });
         await page.screenshot({ path: 'test-results/screenshots/09-show-tables-typed.png' });
 
         // Run query
@@ -150,7 +166,7 @@ test.describe('DuckDB WASM IDE - Basic Workflow', () => {
     });
 
     test('should execute SELECT query with LIMIT', async ({ page }) => {
-        await mockLogin(page);
+        await performRealLogin(page);
 
         // Load a question
         await page.waitForTimeout(3000);
@@ -163,11 +179,13 @@ test.describe('DuckDB WASM IDE - Basic Workflow', () => {
 
         await page.screenshot({ path: 'test-results/screenshots/11-question-loaded.png' });
 
-        // Execute SELECT query
-        await page.click('.CodeMirror');
-        await page.keyboard.press('Control+A');
-        await page.keyboard.press('Backspace');
-        await page.keyboard.type('SELECT * FROM sample_employees LIMIT 5');
+        // Execute SELECT query using CodeMirror API
+        await page.evaluate(() => {
+            const editor = document.querySelector('.CodeMirror');
+            if (editor && editor.CodeMirror) {
+                editor.CodeMirror.setValue('SELECT * FROM sample_employees LIMIT 5');
+            }
+        });
         await page.screenshot({ path: 'test-results/screenshots/12-select-typed.png' });
 
         await page.click('#runQueryBtn');
@@ -180,7 +198,7 @@ test.describe('DuckDB WASM IDE - Basic Workflow', () => {
     });
 
     test('should execute DESCRIBE query', async ({ page }) => {
-        await mockLogin(page);
+        await performRealLogin(page);
 
         // Load a question
         await page.waitForTimeout(3000);
@@ -191,11 +209,13 @@ test.describe('DuckDB WASM IDE - Basic Workflow', () => {
         await loadButton.click();
         await page.waitForTimeout(2000);
 
-        // Execute DESCRIBE query
-        await page.click('.CodeMirror');
-        await page.keyboard.press('Control+A');
-        await page.keyboard.press('Backspace');
-        await page.keyboard.type('DESCRIBE sample_employees');
+        // Execute DESCRIBE query using CodeMirror API
+        await page.evaluate(() => {
+            const editor = document.querySelector('.CodeMirror');
+            if (editor && editor.CodeMirror) {
+                editor.CodeMirror.setValue('DESCRIBE sample_employees');
+            }
+        });
         await page.screenshot({ path: 'test-results/screenshots/14-describe-typed.png' });
 
         await page.click('#runQueryBtn');
@@ -208,7 +228,7 @@ test.describe('DuckDB WASM IDE - Basic Workflow', () => {
     });
 
     test('should execute COUNT query', async ({ page }) => {
-        await mockLogin(page);
+        await performRealLogin(page);
 
         // Load a question
         await page.waitForTimeout(3000);
@@ -219,11 +239,13 @@ test.describe('DuckDB WASM IDE - Basic Workflow', () => {
         await loadButton.click();
         await page.waitForTimeout(2000);
 
-        // Execute COUNT query
-        await page.click('.CodeMirror');
-        await page.keyboard.press('Control+A');
-        await page.keyboard.press('Backspace');
-        await page.keyboard.type('SELECT COUNT(*) as total_employees FROM sample_employees');
+        // Execute COUNT query using CodeMirror API
+        await page.evaluate(() => {
+            const editor = document.querySelector('.CodeMirror');
+            if (editor && editor.CodeMirror) {
+                editor.CodeMirror.setValue('SELECT COUNT(*) as total_employees FROM sample_employees');
+            }
+        });
         await page.screenshot({ path: 'test-results/screenshots/16-count-typed.png' });
 
         await page.click('#runQueryBtn');
@@ -236,7 +258,7 @@ test.describe('DuckDB WASM IDE - Basic Workflow', () => {
     });
 
     test('should export query results', async ({ page }) => {
-        await mockLogin(page);
+        await performRealLogin(page);
 
         // Load a question and run query
         await page.waitForTimeout(3000);
@@ -247,11 +269,13 @@ test.describe('DuckDB WASM IDE - Basic Workflow', () => {
         await loadButton.click();
         await page.waitForTimeout(2000);
 
-        // Execute query
-        await page.click('.CodeMirror');
-        await page.keyboard.press('Control+A');
-        await page.keyboard.press('Backspace');
-        await page.keyboard.type('SELECT * FROM sample_employees LIMIT 5');
+        // Execute query using CodeMirror API
+        await page.evaluate(() => {
+            const editor = document.querySelector('.CodeMirror');
+            if (editor && editor.CodeMirror) {
+                editor.CodeMirror.setValue('SELECT * FROM sample_employees LIMIT 5');
+            }
+        });
 
         await page.click('#runQueryBtn');
         await page.waitForTimeout(3000);

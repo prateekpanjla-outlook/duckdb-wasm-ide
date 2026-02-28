@@ -11,7 +11,11 @@ import QuestionDropdownManager from './services/question-dropdown-manager.js';
 class App {
     constructor() {
         this.dbManager = new DuckDBManager();
-        this.fileHandler = new FileHandler(this.dbManager);
+        // Only create FileHandler if dropZone element exists (legacy CSV upload)
+        const dropZoneExists = document.getElementById('dropZone');
+        if (dropZoneExists) {
+            this.fileHandler = new FileHandler(this.dbManager);
+        }
         this.queryEditor = new QueryEditor();
         this.resultsView = new ResultsView();
 
@@ -133,18 +137,27 @@ class App {
      * Show question selector after login
      */
     showQuestionSelector() {
+        console.log('[app.js] showQuestionSelector() called');
+
         const loginPromptSection = document.getElementById('loginPromptSection');
         const questionSelectorSection = document.getElementById('questionSelectorSection');
 
+        console.log('[app.js] loginPromptSection exists:', !!loginPromptSection);
+        console.log('[app.js] questionSelectorSection exists:', !!questionSelectorSection);
+
         if (loginPromptSection) {
             loginPromptSection.classList.add('hidden');
+            console.log('[app.js] Added hidden class to loginPromptSection');
         }
         if (questionSelectorSection) {
             questionSelectorSection.classList.remove('hidden');
+            console.log('[app.js] Removed hidden class from questionSelectorSection');
         }
 
         // Initialize Question Dropdown Manager
+        console.log('[app.js] Creating QuestionDropdownManager...');
         this.questionDropdownManager = new QuestionDropdownManager();
+        console.log('[app.js] Calling loadQuestions()...');
         this.questionDropdownManager.loadQuestions();
     }
 

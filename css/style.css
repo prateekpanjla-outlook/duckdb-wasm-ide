@@ -1202,3 +1202,217 @@ table tbody tr.no-data td {
     margin: 0;
     line-height: 1.5;
 }
+
+/* Practice Mode Styles */
+.practice-question-panel {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-left: 4px solid #4CAF50;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.question-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.question-header h3 {
+    margin: 0;
+    color: var(--text-dark);
+    font-size: 1.1rem;
+}
+
+.question-meta {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.question-meta .badge {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 12px;
+}
+
+.question-meta .badge:first-child {
+    background: #d4edda;
+    color: #155724;
+}
+
+.question-meta .badge:last-child {
+    background: #cce5ff;
+    color: #004085;
+}
+
+/* Practice Feedback Panel */
+.practice-feedback-panel {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: white;
+    border: 2px solid #dee2e6;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    min-width: 300px;
+    max-width: 400px;
+    z-index: 1000;
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateY(100px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.feedback-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.feedback-icon {
+    font-size: 1.5rem;
+}
+
+.practice-feedback-panel.feedback-correct {
+    border-color: #27ae60;
+    background: #f0fff4;
+}
+
+.practice-feedback-panel.feedback-correct .feedback-icon {
+    color: #27ae60;
+}
+
+.practice-feedback-panel.feedback-incorrect {
+    border-color: #e74c3c;
+    background: #fff5f5;
+}
+
+.practice-feedback-panel.feedback-incorrect .feedback-icon {
+    color: #e74c3c;
+}
+
+.practice-feedback-panel.feedback-error {
+    border-color: #f39c12;
+    background: #fffbf0;
+}
+
+.practice-feedback-panel.feedback-error .feedback-icon {
+    color: #f39c12;
+}
+
+.feedback-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--text-dark);
+}
+
+.feedback-details {
+    color: var(--text-light);
+}
+
+.feedback-details p {
+    margin: 0.5rem 0;
+}
+
+.feedback-details button {
+    margin-top: 1rem;
+}
+
+/* Practice Solution Panel */
+.practice-solution-panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    border: 2px solid #dee2e6;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+    z-index: 2000;
+}
+
+.solution-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.solution-header h3 {
+    margin: 0;
+    color: var(--text-dark);
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0 0.5rem;
+    color: var(--text-light);
+}
+
+.close-btn:hover {
+    color: var(--danger-color);
+}
+
+.solution-content {
+    color: var(--text-dark);
+}
+
+.solution-code {
+    background: #1e1e1e;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.solution-code pre {
+    margin: 0;
+    color: #a5d6ff;
+    font-family: 'Monaco', 'Consolas', monospace;
+    font-size: 0.9rem;
+}
+
+.solution-explanation {
+    background: #f8f9fa;
+    padding: 1rem;
+    border-radius: 8px;
+}
+
+.solution-explanation h4 {
+    margin: 0 0 0.75rem 0;
+    color: var(--text-dark);
+}
+
+.solution-explanation ol {
+    margin: 0;
+    padding-left: 1.5rem;
+}
+
+.solution-explanation li {
+    margin: 0.5rem 0;
+}
+
+/* Practice action buttons */
+.practice-action-btn {
+    margin: 0 0.25rem;
+}

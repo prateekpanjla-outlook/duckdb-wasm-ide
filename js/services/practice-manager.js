@@ -22,8 +22,6 @@ export class PracticeManager {
     initializeUI() {
         // Create practice prompt modal
         this.createPracticePromptModal();
-        // Add start practice button to header
-        this.addStartPracticeButton();
         // Create practice mode UI components
         this.createPracticeModeUI();
     }
@@ -93,20 +91,6 @@ export class PracticeManager {
     }
 
     /**
-     * Add start practice button to header
-     */
-    addStartPracticeButton() {
-        const headerRight = document.querySelector('.header-right');
-        const practiceBtn = document.createElement('button');
-        practiceBtn.id = 'startPracticeBtn';
-        practiceBtn.className = 'btn btn-primary practice-btn';
-        practiceBtn.innerHTML = '🎯 Practice SQL';
-        practiceBtn.style.display = 'none'; // Hidden by default
-        practiceBtn.addEventListener('click', () => this.showPromptModal());
-        headerRight.insertBefore(practiceBtn, headerRight.firstChild);
-    }
-
-    /**
      * Show prompt modal
      */
     showPromptModal() {
@@ -122,61 +106,11 @@ export class PracticeManager {
 
     /**
      * Create practice mode UI components
+     * Note: Panels are now in HTML, this is kept for compatibility
      */
     createPracticeModeUI() {
-        // Question panel
-        const questionPanelHTML = `
-            <div id="practiceQuestionPanel" class="practice-panel hidden">
-                <div class="practice-panel-header">
-                    <h3>
-                        <span class="practice-icon">📝</span>
-                        Question
-                        <span id="practiceDifficulty" class="practice-badge"></span>
-                        <span id="practiceCategory" class="practice-badge"></span>
-                    </h3>
-                </div>
-                <div id="practiceQuestionText" class="practice-question-text"></div>
-                <div id="practiceTimer" class="practice-timer">⏱️ <span id="timerValue">0:00</span></div>
-            </div>
-        `;
-
-        // Solution panel (hidden by default)
-        const solutionPanelHTML = `
-            <div id="practiceSolutionPanel" class="practice-panel hidden">
-                <div class="practice-panel-header">
-                    <h3>
-                        <span class="practice-icon">💡</span>
-                        Solution
-                    </h3>
-                    <button id="closeSolutionBtn" class="btn btn-small btn-secondary">Close</button>
-                </div>
-                <div id="practiceSolutionContent"></div>
-            </div>
-        `;
-
-        // Feedback panel
-        const feedbackPanelHTML = `
-            <div id="practiceFeedbackPanel" class="practice-feedback hidden">
-                <div id="feedbackIcon" class="feedback-icon"></div>
-                <div id="feedbackMessage" class="feedback-message"></div>
-                <div id="feedbackDetails" class="feedback-details"></div>
-            </div>
-        `;
-
-        document.body.insertAdjacentHTML('beforeend', questionPanelHTML);
-        document.body.insertAdjacentHTML('beforeend', solutionPanelHTML);
-        document.body.insertAdjacentHTML('beforeend', feedbackPanelHTML);
-
-        this.attachPracticeUIListeners();
-    }
-
-    /**
-     * Attach practice UI event listeners
-     */
-    attachPracticeUIListeners() {
-        document.getElementById('closeSolutionBtn').addEventListener('click', () => {
-            document.getElementById('practiceSolutionPanel').classList.add('hidden');
-        });
+        // Panels are now in index.html, no need to create them dynamically
+        // This method is kept for compatibility with existing code
     }
 
     /**
@@ -187,7 +121,7 @@ export class PracticeManager {
 
         try {
             // Show loading
-            this.showLoading('Loading practice question...');
+            this.showLoading('Loading practice question...', '🎯 Loading Practice Mode...');
 
             // Activate practice mode on backend
             await apiClient.activatePracticeMode();
@@ -219,7 +153,7 @@ export class PracticeManager {
     async startQuestion(question) {
         try {
             // Show loading
-            this.showLoading('Loading question...');
+            this.showLoading('Loading question...', '📝 Loading Question...');
 
             // Set current question
             this.currentQuestion = question;
@@ -284,9 +218,6 @@ export class PracticeManager {
      * Show practice UI
      */
     showPracticeUI() {
-        // Hide start practice button
-        document.getElementById('startPracticeBtn').style.display = 'none';
-
         // Show question panel
         document.getElementById('practiceQuestionPanel').classList.remove('hidden');
 
@@ -585,7 +516,7 @@ export class PracticeManager {
      */
     async getNextQuestion() {
         try {
-            this.showLoading('Loading next question...');
+            this.showLoading('Loading next question...', '➡️ Loading Next Question...');
 
             const response = await apiClient.getNextQuestion();
 
@@ -672,9 +603,6 @@ export class PracticeManager {
         // Remove practice buttons
         this.removePracticeButtons();
 
-        // Show start practice button
-        document.getElementById('startPracticeBtn').style.display = 'inline-block';
-
         // Deactivate on backend
         try {
             await apiClient.deactivatePracticeMode();
@@ -686,10 +614,15 @@ export class PracticeManager {
     /**
      * Show loading state
      */
-    showLoading(message) {
+    showLoading(message, title = null) {
         const overlay = document.getElementById('loadingOverlay');
         const loadingMessage = document.getElementById('loadingMessage');
+        const loadingTitle = document.getElementById('loadingTitle');
+
         loadingMessage.textContent = message;
+        if (title && loadingTitle) {
+            loadingTitle.textContent = title;
+        }
         overlay.classList.add('visible');
     }
 
