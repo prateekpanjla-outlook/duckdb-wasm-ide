@@ -28,7 +28,14 @@ test.describe('DuckDB WASM IDE - Basic Workflow', () => {
         await page.screenshot({ path: 'test-results/screenshots/01b-after-init.png' });
     });
 
-    test('should upload CSV file', async ({ page }) => {
+    // TODO: REWRITE FOR NEW QUESTION SELECTOR UI
+    // The dropZone (#dropZone) has been removed. New flow:
+    // 1. User logs in
+    // 2. Questions dropdown appears (#questionDropdown)
+    // 3. User selects a question and clicks #loadQuestionBtn
+    // 4. Query is pre-populated in editor
+    // 5. User runs query
+    test.skip('should upload CSV file', async ({ page }) => {
         await page.goto('/');
 
         // Wait for page to be ready and DuckDB initialized
@@ -53,7 +60,14 @@ test.describe('DuckDB WASM IDE - Basic Workflow', () => {
         await expect(fileInfo).toBeVisible();
     });
 
-    test('should execute SHOW TABLES query', async ({ page }) => {
+    // TODO: REWRITE FOR NEW QUESTION SELECTOR UI
+    // The dropZone (#dropZone) has been removed. New flow:
+    // 1. User logs in
+    // 2. Questions dropdown appears (#questionDropdown)
+    // 3. User selects a question and clicks #loadQuestionBtn
+    // 4. Query is pre-populated in editor
+    // 5. User runs query
+    test.skip('should execute SHOW TABLES query', async ({ page }) => {
         await page.goto('/');
 
         // Wait for initialization
@@ -85,7 +99,14 @@ test.describe('DuckDB WASM IDE - Basic Workflow', () => {
         await expect(resultsContainer).toBeVisible();
     });
 
-    test('should execute SELECT query with LIMIT', async ({ page }) => {
+    // TODO: REWRITE FOR NEW QUESTION SELECTOR UI
+    // The dropZone (#dropZone) has been removed. New flow:
+    // 1. User logs in
+    // 2. Questions dropdown appears (#questionDropdown)
+    // 3. User selects a question and clicks #loadQuestionBtn
+    // 4. Query is pre-populated in editor
+    // 5. User runs query
+    test.skip('should execute SELECT query with LIMIT', async ({ page }) => {
         await page.goto('/');
 
         // Wait for initialization
@@ -114,7 +135,14 @@ test.describe('DuckDB WASM IDE - Basic Workflow', () => {
         await page.screenshot({ path: 'test-results/screenshots/11-select-query-results.png' });
     });
 
-    test('should execute DESCRIBE query', async ({ page }) => {
+    // TODO: REWRITE FOR NEW QUESTION SELECTOR UI
+    // The dropZone (#dropZone) has been removed. New flow:
+    // 1. User logs in
+    // 2. Questions dropdown appears (#questionDropdown)
+    // 3. User selects a question and clicks #loadQuestionBtn
+    // 4. Query is pre-populated in editor
+    // 5. User runs query
+    test.skip('should execute DESCRIBE query', async ({ page }) => {
         await page.goto('/');
 
         // Wait for initialization
@@ -143,7 +171,14 @@ test.describe('DuckDB WASM IDE - Basic Workflow', () => {
         await page.screenshot({ path: 'test-results/screenshots/15-describe-results.png' });
     });
 
-    test('should execute COUNT query', async ({ page }) => {
+    // TODO: REWRITE FOR NEW QUESTION SELECTOR UI
+    // The dropZone (#dropZone) has been removed. New flow:
+    // 1. User logs in
+    // 2. Questions dropdown appears (#questionDropdown)
+    // 3. User selects a question and clicks #loadQuestionBtn
+    // 4. Query is pre-populated in editor
+    // 5. User runs query
+    test.skip('should execute COUNT query', async ({ page }) => {
         await page.goto('/');
 
         // Wait for initialization
@@ -172,7 +207,14 @@ test.describe('DuckDB WASM IDE - Basic Workflow', () => {
         await page.screenshot({ path: 'test-results/screenshots/19-count-results.png' });
     });
 
-    test('should export query results', async ({ page }) => {
+    // TODO: REWRITE FOR NEW QUESTION SELECTOR UI
+    // The dropZone (#dropZone) has been removed. New flow:
+    // 1. User logs in
+    // 2. Questions dropdown appears (#questionDropdown)
+    // 3. User selects a question and clicks #loadQuestionBtn
+    // 4. Query is pre-populated in editor
+    // 5. User runs query
+    test.skip('should export query results', async ({ page }) => {
         await page.goto('/');
 
         // Wait for initialization

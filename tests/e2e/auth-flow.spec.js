@@ -52,6 +52,12 @@ test.describe('Authentication Flow', () => {
         await page.goto('/');
         await page.waitForTimeout(2000);
 
+        // Wait for pointer events to be enabled
+        await page.waitForFunction(() => {
+            const container = document.getElementById('appContainer');
+            return container && container.style.pointerEvents === 'auto';
+        }, { timeout: 5000 });
+
         // Click login button
         await page.click('#authBtn');
 
@@ -76,6 +82,12 @@ test.describe('Authentication Flow', () => {
     test('should have working login form with validation', async ({ page }) => {
         await page.goto('/');
         await page.waitForTimeout(2000);
+
+        // Wait for pointer events to be enabled
+        await page.waitForFunction(() => {
+            const container = document.getElementById('appContainer');
+            return container && container.style.pointerEvents === 'auto';
+        }, { timeout: 5000 });
 
         // Open modal
         await page.click('#authBtn');
@@ -106,6 +118,12 @@ test.describe('Authentication Flow', () => {
         await page.goto('/');
         await page.waitForTimeout(2000);
 
+        // Wait for pointer events to be enabled
+        await page.waitForFunction(() => {
+            const container = document.getElementById('appContainer');
+            return container && container.style.pointerEvents === 'auto';
+        }, { timeout: 5000 });
+
         // Open modal
         await page.click('#authBtn');
         await page.waitForTimeout(500);
@@ -127,6 +145,12 @@ test.describe('Authentication Flow', () => {
     test('should close modal when backdrop clicked', async ({ page }) => {
         await page.goto('/');
         await page.waitForTimeout(2000);
+
+        // Wait for pointer events to be enabled
+        await page.waitForFunction(() => {
+            const container = document.getElementById('appContainer');
+            return container && container.style.pointerEvents === 'auto';
+        }, { timeout: 5000 });
 
         // Open modal
         await page.click('#authBtn');
@@ -216,6 +240,12 @@ test.describe('Mock Authentication (Skip Backend)', () => {
     test('should open questions modal when questions button clicked', async ({ page }) => {
         await page.goto('/');
         await page.waitForTimeout(8000);
+
+        // Wait for pointer events to be enabled
+        await page.waitForFunction(() => {
+            const container = document.getElementById('appContainer');
+            return container && container.style.pointerEvents === 'auto';
+        }, { timeout: 5000 });
 
         // Click view questions button
         await page.click('#viewQuestionsBtn');

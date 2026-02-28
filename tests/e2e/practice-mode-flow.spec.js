@@ -16,7 +16,7 @@ import { test, expect } from '@playwright/test';
  * Screenshots captured at each step
  */
 
-const BASE_URL = 'http://localhost:8000';
+const BASE_URL = 'http://localhost:9200';
 const API_URL = 'http://localhost:3000';
 const SCREENSHOT_DIR = 'test-results/screenshots/practice-mode/';
 
