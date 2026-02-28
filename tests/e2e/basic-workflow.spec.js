@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 /**
  * E2E Tests for DuckDB WASM IDE
- * Tests basic workflow: upload CSV, run queries, verify results
+ * Tests basic workflow: login, select question, run queries, verify results
  *
  * Run with: npm run test:e2e
  * Debug with: npm run test:e2e:debug
@@ -28,224 +28,243 @@ test.describe('DuckDB WASM IDE - Basic Workflow', () => {
         await page.screenshot({ path: 'test-results/screenshots/01b-after-init.png' });
     });
 
-    // TODO: REWRITE FOR NEW QUESTION SELECTOR UI
-    // The dropZone (#dropZone) has been removed. New flow:
-    // 1. User logs in
-    // 2. Questions dropdown appears (#questionDropdown)
-    // 3. User selects a question and clicks #loadQuestionBtn
-    // 4. Query is pre-populated in editor
-    // 5. User runs query
-    test.skip('should upload CSV file', async ({ page }) => {
+    /**
+     * Helper function to mock user login
+     * Sets localStorage items to simulate an authenticated user
+     */
+    async function mockLogin(page) {
         await page.goto('/');
+        await page.waitForTimeout(3000);
 
-        // Wait for page to be ready and DuckDB initialized
-        await page.waitForLoadState('networkidle');
+        // Set mock authentication in localStorage
+        await page.evaluate(() => {
+            localStorage.setItem('auth_token', 'mock-token-12345');
+            localStorage.setItem('user_data', JSON.stringify({
+                id: 'test-user-123',
+                email: 'test@example.com',
+                name: 'Test User'
+            }));
+        });
+
+        // Reload to trigger login detection
+        await page.reload();
         await page.waitForTimeout(5000);
 
-        await page.screenshot({ path: 'test-results/screenshots/02-before-upload.png' });
+        // Wait for appContainer to be interactive
+        await page.waitForFunction(() => {
+            const container = document.getElementById('appContainer');
+            return container && container.style.pointerEvents === 'auto';
+        }, { timeout: 10000 });
+    }
 
-        // Click on drop zone to trigger file input
-        await page.click('#dropZone');
+    test('should login and see question selector', async ({ page }) => {
+        await mockLogin(page);
 
-        // Upload the CSV file
-        const fileInput = page.locator('#fileInput');
-        await fileInput.setInputFiles('./sample-employees.csv');
+        await page.screenshot({ path: 'test-results/screenshots/02-after-login.png' });
 
-        // Screenshot after file selection
-        await page.waitForTimeout(2000);
-        await page.screenshot({ path: 'test-results/screenshots/03-file-selected.png' });
+        // Check that login prompt is hidden
+        const loginPrompt = page.locator('#loginPromptSection');
+        await expect(loginPrompt).toHaveClass(/hidden/);
 
-        // Check file info is visible
-        const fileInfo = page.locator('#fileInfo');
-        await expect(fileInfo).toBeVisible();
+        // Check that question selector is visible
+        const questionSelector = page.locator('#questionSelectorSection');
+        await expect(questionSelector).toBeVisible();
+
+        // Check for question dropdown
+        const dropdown = page.locator('#questionDropdown');
+        await expect(dropdown).toBeVisible();
     });
 
-    // TODO: REWRITE FOR NEW QUESTION SELECTOR UI
-    // The dropZone (#dropZone) has been removed. New flow:
-    // 1. User logs in
-    // 2. Questions dropdown appears (#questionDropdown)
-    // 3. User selects a question and clicks #loadQuestionBtn
-    // 4. Query is pre-populated in editor
-    // 5. User runs query
-    test.skip('should execute SHOW TABLES query', async ({ page }) => {
-        await page.goto('/');
+    test('should load a question and run query', async ({ page }) => {
+        await mockLogin(page);
 
-        // Wait for initialization
-        await page.waitForTimeout(5000);
+        // Wait for questions to be loaded in dropdown
+        await page.waitForTimeout(3000);
+        await page.screenshot({ path: 'test-results/screenshots/03-before-select-question.png' });
 
-        // Upload CSV first
-        await page.click('#dropZone');
-        await page.locator('#fileInput').setInputFiles('./sample-employees.csv');
+        // Select the first question (index 1, since 0 is the placeholder)
+        const dropdown = page.locator('#questionDropdown');
+        await dropdown.selectOption({ index: 1 });
+
+        await page.screenshot({ path: 'test-results/screenshots/04-question-selected.png' });
+
+        // Click Load Question button
+        const loadButton = page.locator('#loadQuestionBtn');
+        await loadButton.click();
+
         await page.waitForTimeout(2000);
+        await page.screenshot({ path: 'test-results/screenshots/05-question-loaded.png' });
 
-        await page.screenshot({ path: 'test-results/screenshots/04-before-show-tables.png' });
+        // Verify question info is displayed
+        const questionInfo = page.locator('#selectedQuestionInfo');
+        await expect(questionInfo).toBeVisible();
 
-        // Type query in CodeMirror editor
-        await page.click('.CodeMirror');
-        await page.keyboard.type('SHOW TABLES');
-        await page.screenshot({ path: 'test-results/screenshots/05-show-tables-typed.png' });
+        // Verify query is in editor (check CodeMirror)
+        await page.screenshot({ path: 'test-results/screenshots/06-query-in-editor.png' });
 
-        // Click run button
+        // Run the query
         const runButton = page.locator('#runQueryBtn');
         await runButton.click();
-        await page.screenshot({ path: 'test-results/screenshots/06-show-tables-executed.png' });
 
-        // Wait for results
         await page.waitForTimeout(3000);
-        await page.screenshot({ path: 'test-results/screenshots/07-show-tables-results.png' });
+        await page.screenshot({ path: 'test-results/screenshots/07-query-executed.png' });
 
-        // Check if results container is visible
+        // Check if results container has content
         const resultsContainer = page.locator('#resultsContainer');
         await expect(resultsContainer).toBeVisible();
     });
 
-    // TODO: REWRITE FOR NEW QUESTION SELECTOR UI
-    // The dropZone (#dropZone) has been removed. New flow:
-    // 1. User logs in
-    // 2. Questions dropdown appears (#questionDropdown)
-    // 3. User selects a question and clicks #loadQuestionBtn
-    // 4. Query is pre-populated in editor
-    // 5. User runs query
-    test.skip('should execute SELECT query with LIMIT', async ({ page }) => {
-        await page.goto('/');
+    test('should execute SHOW TABLES query after loading question', async ({ page }) => {
+        await mockLogin(page);
 
-        // Wait for initialization
-        await page.waitForTimeout(5000);
+        // Load a question first
+        await page.waitForTimeout(3000);
+        const dropdown = page.locator('#questionDropdown');
+        await dropdown.selectOption({ index: 1 });
 
-        // Upload CSV first
-        await page.click('#dropZone');
-        await page.locator('#fileInput').setInputFiles('./sample-employees.csv');
+        const loadButton = page.locator('#loadQuestionBtn');
+        await loadButton.click();
         await page.waitForTimeout(2000);
 
-        await page.screenshot({ path: 'test-results/screenshots/08-csv-loaded.png' });
+        await page.screenshot({ path: 'test-results/screenshots/08-before-show-tables.png' });
+
+        // Clear editor and type SHOW TABLES
+        await page.click('.CodeMirror');
+        await page.keyboard.press('Control+A');
+        await page.keyboard.press('Backspace');
+        await page.keyboard.type('SHOW TABLES');
+        await page.screenshot({ path: 'test-results/screenshots/09-show-tables-typed.png' });
+
+        // Run query
+        await page.click('#runQueryBtn');
+        await page.waitForTimeout(3000);
+        await page.screenshot({ path: 'test-results/screenshots/10-show-tables-results.png' });
+
+        // Verify results
+        const resultsContainer = page.locator('#resultsContainer');
+        await expect(resultsContainer).toBeVisible();
+
+        // Check for table in results
+        const resultsText = await resultsContainer.textContent();
+        expect(resultsText).toBeTruthy();
+    });
+
+    test('should execute SELECT query with LIMIT', async ({ page }) => {
+        await mockLogin(page);
+
+        // Load a question
+        await page.waitForTimeout(3000);
+        const dropdown = page.locator('#questionDropdown');
+        await dropdown.selectOption({ index: 1 });
+
+        const loadButton = page.locator('#loadQuestionBtn');
+        await loadButton.click();
+        await page.waitForTimeout(2000);
+
+        await page.screenshot({ path: 'test-results/screenshots/11-question-loaded.png' });
 
         // Execute SELECT query
         await page.click('.CodeMirror');
         await page.keyboard.press('Control+A');
+        await page.keyboard.press('Backspace');
         await page.keyboard.type('SELECT * FROM sample_employees LIMIT 5');
-        await page.screenshot({ path: 'test-results/screenshots/09-select-query-typed.png' });
+        await page.screenshot({ path: 'test-results/screenshots/12-select-typed.png' });
 
-        // Click run button
-        const runButton = page.locator('#runQueryBtn');
-        await runButton.click();
-        await page.screenshot({ path: 'test-results/screenshots/10-select-query-executed.png' });
-
-        // Wait for results
+        await page.click('#runQueryBtn');
         await page.waitForTimeout(3000);
-        await page.screenshot({ path: 'test-results/screenshots/11-select-query-results.png' });
+        await page.screenshot({ path: 'test-results/screenshots/13-select-results.png' });
+
+        // Verify results
+        const resultsContainer = page.locator('#resultsContainer');
+        await expect(resultsContainer).toBeVisible();
     });
 
-    // TODO: REWRITE FOR NEW QUESTION SELECTOR UI
-    // The dropZone (#dropZone) has been removed. New flow:
-    // 1. User logs in
-    // 2. Questions dropdown appears (#questionDropdown)
-    // 3. User selects a question and clicks #loadQuestionBtn
-    // 4. Query is pre-populated in editor
-    // 5. User runs query
-    test.skip('should execute DESCRIBE query', async ({ page }) => {
-        await page.goto('/');
+    test('should execute DESCRIBE query', async ({ page }) => {
+        await mockLogin(page);
 
-        // Wait for initialization
-        await page.waitForTimeout(5000);
+        // Load a question
+        await page.waitForTimeout(3000);
+        const dropdown = page.locator('#questionDropdown');
+        await dropdown.selectOption({ index: 1 });
 
-        // Upload CSV first
-        await page.click('#dropZone');
-        await page.locator('#fileInput').setInputFiles('./sample-employees.csv');
+        const loadButton = page.locator('#loadQuestionBtn');
+        await loadButton.click();
         await page.waitForTimeout(2000);
-
-        await page.screenshot({ path: 'test-results/screenshots/12-before-describe.png' });
 
         // Execute DESCRIBE query
         await page.click('.CodeMirror');
         await page.keyboard.press('Control+A');
+        await page.keyboard.press('Backspace');
         await page.keyboard.type('DESCRIBE sample_employees');
-        await page.screenshot({ path: 'test-results/screenshots/13-describe-typed.png' });
+        await page.screenshot({ path: 'test-results/screenshots/14-describe-typed.png' });
 
-        // Click run button
-        const runButton = page.locator('#runQueryBtn');
-        await runButton.click();
-        await page.screenshot({ path: 'test-results/screenshots/14-describe-executed.png' });
-
-        // Wait for results
+        await page.click('#runQueryBtn');
         await page.waitForTimeout(3000);
         await page.screenshot({ path: 'test-results/screenshots/15-describe-results.png' });
+
+        // Verify results
+        const resultsContainer = page.locator('#resultsContainer');
+        await expect(resultsContainer).toBeVisible();
     });
 
-    // TODO: REWRITE FOR NEW QUESTION SELECTOR UI
-    // The dropZone (#dropZone) has been removed. New flow:
-    // 1. User logs in
-    // 2. Questions dropdown appears (#questionDropdown)
-    // 3. User selects a question and clicks #loadQuestionBtn
-    // 4. Query is pre-populated in editor
-    // 5. User runs query
-    test.skip('should execute COUNT query', async ({ page }) => {
-        await page.goto('/');
+    test('should execute COUNT query', async ({ page }) => {
+        await mockLogin(page);
 
-        // Wait for initialization
-        await page.waitForTimeout(5000);
+        // Load a question
+        await page.waitForTimeout(3000);
+        const dropdown = page.locator('#questionDropdown');
+        await dropdown.selectOption({ index: 1 });
 
-        // Upload CSV first
-        await page.click('#dropZone');
-        await page.locator('#fileInput').setInputFiles('./sample-employees.csv');
+        const loadButton = page.locator('#loadQuestionBtn');
+        await loadButton.click();
         await page.waitForTimeout(2000);
-
-        await page.screenshot({ path: 'test-results/screenshots/16-before-count.png' });
 
         // Execute COUNT query
         await page.click('.CodeMirror');
         await page.keyboard.press('Control+A');
+        await page.keyboard.press('Backspace');
         await page.keyboard.type('SELECT COUNT(*) as total_employees FROM sample_employees');
-        await page.screenshot({ path: 'test-results/screenshots/17-count-typed.png' });
+        await page.screenshot({ path: 'test-results/screenshots/16-count-typed.png' });
 
-        // Click run button
-        const runButton = page.locator('#runQueryBtn');
-        await runButton.click();
-        await page.screenshot({ path: 'test-results/screenshots/18-count-executed.png' });
-
-        // Wait for results
+        await page.click('#runQueryBtn');
         await page.waitForTimeout(3000);
-        await page.screenshot({ path: 'test-results/screenshots/19-count-results.png' });
+        await page.screenshot({ path: 'test-results/screenshots/17-count-results.png' });
+
+        // Verify results
+        const resultsContainer = page.locator('#resultsContainer');
+        await expect(resultsContainer).toBeVisible();
     });
 
-    // TODO: REWRITE FOR NEW QUESTION SELECTOR UI
-    // The dropZone (#dropZone) has been removed. New flow:
-    // 1. User logs in
-    // 2. Questions dropdown appears (#questionDropdown)
-    // 3. User selects a question and clicks #loadQuestionBtn
-    // 4. Query is pre-populated in editor
-    // 5. User runs query
-    test.skip('should export query results', async ({ page }) => {
-        await page.goto('/');
+    test('should export query results', async ({ page }) => {
+        await mockLogin(page);
 
-        // Wait for initialization
-        await page.waitForTimeout(5000);
+        // Load a question and run query
+        await page.waitForTimeout(3000);
+        const dropdown = page.locator('#questionDropdown');
+        await dropdown.selectOption({ index: 1 });
 
-        // Upload CSV
-        await page.click('#dropZone');
-        await page.locator('#fileInput').setInputFiles('./sample-employees.csv');
+        const loadButton = page.locator('#loadQuestionBtn');
+        await loadButton.click();
         await page.waitForTimeout(2000);
 
         // Execute query
         await page.click('.CodeMirror');
         await page.keyboard.press('Control+A');
+        await page.keyboard.press('Backspace');
         await page.keyboard.type('SELECT * FROM sample_employees LIMIT 5');
 
-        const runButton = page.locator('#runQueryBtn');
-        await runButton.click();
+        await page.click('#runQueryBtn');
         await page.waitForTimeout(3000);
 
-        await page.screenshot({ path: 'test-results/screenshots/20-before-export.png' });
+        await page.screenshot({ path: 'test-results/screenshots/18-before-export.png' });
 
-        // Try to click export button
+        // Click export button
         const exportButton = page.locator('#exportResultsBtn');
-        const exportExists = await exportButton.count();
+        await expect(exportButton).toBeVisible();
+        await exportButton.click();
 
-        if (exportExists > 0) {
-            await exportButton.click();
-            await page.screenshot({ path: 'test-results/screenshots/21-after-export.png' });
-        } else {
-            console.log('Export button not found');
-        }
+        await page.waitForTimeout(1000);
+        await page.screenshot({ path: 'test-results/screenshots/19-after-export.png' });
     });
 });
 

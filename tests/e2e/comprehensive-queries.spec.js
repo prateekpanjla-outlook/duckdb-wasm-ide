@@ -1,13 +1,14 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * Comprehensive E2E Test: Query Validation with sample_employees.csv
+ * Comprehensive E2E Test: Query Validation with Question Selector
  *
  * This test:
- * 1. Loads sample_employees.csv file
- * 2. Executes multiple queries and validates results
- * 3. Captures screenshots at each step
- * 4. Generates test report with expected vs actual results
+ * 1. Mocks user login
+ * 2. Selects a question from the dropdown
+ * 3. Executes multiple queries and validates results
+ * 4. Captures screenshots at each step
+ * 5. Generates test report with expected vs actual results
  *
  * Queries tested:
  * - SHOW TABLES
@@ -16,44 +17,68 @@ import { test, expect } from '@playwright/test';
  * - GROUP BY with SUM and ORDER BY
  */
 
-test.describe('Comprehensive Query Testing with sample_employees.csv', () => {
-    // TODO: REWRITE FOR NEW QUESTION SELECTOR UI
-    // The dropZone (#dropZone) has been removed. New flow:
-    // 1. User logs in
-    // 2. Questions dropdown appears (#questionDropdown)
-    // 3. User selects a question and clicks #loadQuestionBtn
-    // 4. Query is pre-populated in editor
-    // 5. User runs query
-    test.skip('should load CSV and execute all test queries with validation', async ({ page }) => {
-        await page.goto('/');
+/**
+ * Helper function to mock user login
+ * Sets localStorage items to simulate an authenticated user
+ */
+async function mockLogin(page) {
+    await page.goto('/');
+    await page.waitForTimeout(3000);
 
-        // Wait for DuckDB initialization
-        await page.waitForTimeout(8000);
+    // Set mock authentication in localStorage
+    await page.evaluate(() => {
+        localStorage.setItem('auth_token', 'mock-token-12345');
+        localStorage.setItem('user_data', JSON.stringify({
+            id: 'test-user-123',
+            email: 'test@example.com',
+            name: 'Test User'
+        }));
+    });
+
+    // Reload to trigger login detection
+    await page.reload();
+    await page.waitForTimeout(5000);
+
+    // Wait for appContainer to be interactive
+    await page.waitForFunction(() => {
+        const container = document.getElementById('appContainer');
+        return container && container.style.pointerEvents === 'auto';
+    }, { timeout: 10000 });
+}
+
+test.describe('Comprehensive Query Testing with Question Selector', () => {
+    test('should load question and execute all test queries with validation', async ({ page }) => {
+        await mockLogin(page);
+
+        // Wait for questions to be loaded in dropdown
+        await page.waitForTimeout(3000);
 
         // ============================================
-        // STEP 1: Upload CSV File
+        // STEP 1: Select a Question
         // ============================================
-        await test.step('Upload sample_employees.csv', async () => {
-            await page.screenshot({ path: 'test-results/screenshots/comprehensive-01-before-upload.png' });
+        await test.step('Load sample_employees.csv question', async () => {
+            await page.screenshot({ path: 'test-results/screenshots/comprehensive-01-before-select.png' });
 
-            // Click on drop zone
-            await page.click('#dropZone');
+            // Select the first question (index 1, since 0 is the placeholder)
+            const dropdown = page.locator('#questionDropdown');
+            await dropdown.selectOption({ index: 1 });
 
-            // Upload the CSV file
-            const fileInput = page.locator('#fileInput');
-            await fileInput.setInputFiles('./sample-employees.csv');
+            await page.screenshot({ path: 'test-results/screenshots/comprehensive-02-question-selected.png' });
 
-            // Wait for file to be processed
+            // Click Load Question button
+            const loadButton = page.locator('#loadQuestionBtn');
+            await loadButton.click();
+
+            // Wait for question to load
             await page.waitForTimeout(3000);
 
-            await page.screenshot({ path: 'test-results/screenshots/comprehensive-02-file-uploaded.png' });
+            await page.screenshot({ path: 'test-results/screenshots/comprehensive-03-question-loaded.png' });
 
-            // Verify file info is visible
-            const fileInfo = page.locator('#fileInfo');
-            await expect(fileInfo).toBeVisible();
+            // Verify question info is displayed
+            const questionInfo = page.locator('#selectedQuestionInfo');
+            await expect(questionInfo).toBeVisible();
 
-            const fileName = page.locator('#fileName');
-            await expect(fileName).toContainText('sample');
+            console.log('✅ Question loaded successfully');
         });
 
         // ============================================
@@ -63,15 +88,16 @@ test.describe('Comprehensive Query Testing with sample_employees.csv', () => {
             // Clear query editor and type query
             await page.click('.CodeMirror');
             await page.keyboard.press('Control+A');
+            await page.keyboard.press('Backspace');
             await page.keyboard.type('SHOW TABLES');
 
-            await page.screenshot({ path: 'test-results/screenshots/comprehensive-03-show-tables-typed.png' });
+            await page.screenshot({ path: 'test-results/screenshots/comprehensive-04-show-tables-typed.png' });
 
             // Execute query
             await page.click('#runQueryBtn');
             await page.waitForTimeout(3000);
 
-            await page.screenshot({ path: 'test-results/screenshots/comprehensive-04-show-tables-result.png' });
+            await page.screenshot({ path: 'test-results/screenshots/comprehensive-05-show-tables-result.png' });
 
             // Validate: Should show at least one table
             const resultsContainer = page.locator('#resultsContainer');
@@ -91,15 +117,16 @@ test.describe('Comprehensive Query Testing with sample_employees.csv', () => {
         await test.step('Execute DESCRIBE sample_employees and validate result', async () => {
             await page.click('.CodeMirror');
             await page.keyboard.press('Control+A');
+            await page.keyboard.press('Backspace');
             await page.keyboard.type('DESCRIBE sample_employees');
 
-            await page.screenshot({ path: 'test-results/screenshots/comprehensive-05-describe-typed.png' });
+            await page.screenshot({ path: 'test-results/screenshots/comprehensive-06-describe-typed.png' });
 
             // Execute query
             await page.click('#runQueryBtn');
             await page.waitForTimeout(3000);
 
-            await page.screenshot({ path: 'test-results/screenshots/comprehensive-06-describe-result.png' });
+            await page.screenshot({ path: 'test-results/screenshots/comprehensive-07-describe-result.png' });
 
             // Validate: Should show column information
             const resultsContainer = page.locator('#resultsContainer');
@@ -123,15 +150,16 @@ test.describe('Comprehensive Query Testing with sample_employees.csv', () => {
         await test.step('Execute COUNT(*) and validate result', async () => {
             await page.click('.CodeMirror');
             await page.keyboard.press('Control+A');
+            await page.keyboard.press('Backspace');
             await page.keyboard.type('SELECT COUNT(*) as total_count FROM sample_employees');
 
-            await page.screenshot({ path: 'test-results/screenshots/comprehensive-07-count-typed.png' });
+            await page.screenshot({ path: 'test-results/screenshots/comprehensive-08-count-typed.png' });
 
             // Execute query
             await page.click('#runQueryBtn');
             await page.waitForTimeout(3000);
 
-            await page.screenshot({ path: 'test-results/screenshots/comprehensive-08-count-result.png' });
+            await page.screenshot({ path: 'test-results/screenshots/comprehensive-09-count-result.png' });
 
             // Validate: Should show count
             const resultsContainer = page.locator('#resultsContainer');
@@ -156,15 +184,16 @@ test.describe('Comprehensive Query Testing with sample_employees.csv', () => {
         await test.step('Execute SELECT * LIMIT 5 and validate result', async () => {
             await page.click('.CodeMirror');
             await page.keyboard.press('Control+A');
+            await page.keyboard.press('Backspace');
             await page.keyboard.type('SELECT * FROM sample_employees LIMIT 5');
 
-            await page.screenshot({ path: 'test-results/screenshots/comprehensive-09-select-typed.png' });
+            await page.screenshot({ path: 'test-results/screenshots/comprehensive-10-select-typed.png' });
 
             // Execute query
             await page.click('#runQueryBtn');
             await page.waitForTimeout(3000);
 
-            await page.screenshot({ path: 'test-results/screenshots/comprehensive-10-select-result.png' });
+            await page.screenshot({ path: 'test-results/screenshots/comprehensive-11-select-result.png' });
 
             // Validate: Should show 5 rows with employee data
             const resultsContainer = page.locator('#resultsContainer');
@@ -184,6 +213,7 @@ test.describe('Comprehensive Query Testing with sample_employees.csv', () => {
         await test.step('Execute GROUP BY with SUM and ORDER BY and validate result', async () => {
             await page.click('.CodeMirror');
             await page.keyboard.press('Control+A');
+            await page.keyboard.press('Backspace');
             await page.keyboard.type(`SELECT
     department,
     COUNT(*) as employee_count,
@@ -195,13 +225,13 @@ FROM sample_employees
 GROUP BY department
 ORDER BY department`);
 
-            await page.screenshot({ path: 'test-results/screenshots/comprehensive-11-groupby-typed.png' });
+            await page.screenshot({ path: 'test-results/screenshots/comprehensive-12-groupby-typed.png' });
 
             // Execute query
             await page.click('#runQueryBtn');
             await page.waitForTimeout(3000);
 
-            await page.screenshot({ path: 'test-results/screenshots/comprehensive-12-groupby-result.png' });
+            await page.screenshot({ path: 'test-results/screenshots/comprehensive-13-groupby-result.png' });
 
             // Validate: Should show grouped department data
             const resultsContainer = page.locator('#resultsContainer');
@@ -227,6 +257,7 @@ ORDER BY department`);
         await test.step('Execute performance rating aggregation and validate result', async () => {
             await page.click('.CodeMirror');
             await page.keyboard.press('Control+A');
+            await page.keyboard.press('Backspace');
             await page.keyboard.type(`SELECT
     performance_rating,
     COUNT(*) as num_employees,
@@ -237,13 +268,13 @@ WHERE active = true
 GROUP BY performance_rating
 ORDER BY performance_rating DESC`);
 
-            await page.screenshot({ path: 'test-results/screenshots/comprehensive-13-aggregation-typed.png' });
+            await page.screenshot({ path: 'test-results/screenshots/comprehensive-14-aggregation-typed.png' });
 
             // Execute query
             await page.click('#runQueryBtn');
             await page.waitForTimeout(3000);
 
-            await page.screenshot({ path: 'test-results/screenshots/comprehensive-14-aggregation-result.png' });
+            await page.screenshot({ path: 'test-results/screenshots/comprehensive-15-aggregation-result.png' });
 
             // Validate: Should show aggregated data by performance rating
             const resultsContainer = page.locator('#resultsContainer');
@@ -261,7 +292,7 @@ ORDER BY performance_rating DESC`);
         // STEP 8: Final Screenshot and Summary
         // ============================================
         await test.step('Capture final state and generate summary', async () => {
-            await page.screenshot({ path: 'test-results/screenshots/comprehensive-15-final-state.png', fullPage: true });
+            await page.screenshot({ path: 'test-results/screenshots/comprehensive-16-final-state.png', fullPage: true });
 
             // Check query execution time
             const queryTimeElement = page.locator('#queryTime');
@@ -270,7 +301,7 @@ ORDER BY performance_rating DESC`);
             console.log('\n========================================');
             console.log('📊 COMPREHENSIVE TEST SUMMARY');
             console.log('========================================');
-            console.log('✅ File Upload: sample_employees.csv');
+            console.log('✅ Question Selection: Passed');
             console.log('✅ SHOW TABLES: Passed');
             console.log('✅ DESCRIBE sample_employees: Passed');
             console.log('✅ SELECT COUNT(*): Passed');
@@ -284,9 +315,9 @@ ORDER BY performance_rating DESC`);
             const fs = await import('fs');
             const report = {
                 timestamp: new Date().toISOString(),
-                test: 'Comprehensive Query Validation',
+                test: 'Comprehensive Query Validation with Question Selector',
                 results: {
-                    fileUpload: 'PASS',
+                    questionSelection: 'PASS',
                     showTables: 'PASS',
                     describe: 'PASS',
                     countQuery: 'PASS',
@@ -303,15 +334,16 @@ ORDER BY performance_rating DESC`);
                     'GROUP BY performance_rating with WHERE clause'
                 ],
                 screenshots: [
-                    'comprehensive-01-before-upload.png',
-                    'comprehensive-02-file-uploaded.png',
-                    'comprehensive-04-show-tables-result.png',
-                    'comprehensive-06-describe-result.png',
-                    'comprehensive-08-count-result.png',
-                    'comprehensive-10-select-result.png',
-                    'comprehensive-12-groupby-result.png',
-                    'comprehensive-14-aggregation-result.png',
-                    'comprehensive-15-final-state.png'
+                    'comprehensive-01-before-select.png',
+                    'comprehensive-02-question-selected.png',
+                    'comprehensive-03-question-loaded.png',
+                    'comprehensive-05-show-tables-result.png',
+                    'comprehensive-07-describe-result.png',
+                    'comprehensive-09-count-result.png',
+                    'comprehensive-11-select-result.png',
+                    'comprehensive-13-groupby-result.png',
+                    'comprehensive-15-aggregation-result.png',
+                    'comprehensive-16-final-state.png'
                 ]
             };
 
@@ -324,25 +356,22 @@ ORDER BY performance_rating DESC`);
         });
     });
 
-    // TODO: REWRITE FOR NEW QUESTION SELECTOR UI
-    // The dropZone (#dropZone) has been removed. New flow:
-    // 1. User logs in
-    // 2. Questions dropdown appears (#questionDropdown)
-    // 3. User selects a question and clicks #loadQuestionBtn
-    // 4. Query is pre-populated in editor
-    // 5. User runs query
-    test.skip('should handle query errors gracefully', async ({ page }) => {
-        await page.goto('/');
-        await page.waitForTimeout(8000);
+    test('should handle query errors gracefully', async ({ page }) => {
+        await mockLogin(page);
 
-        // Upload CSV first
-        await page.click('#dropZone');
-        await page.locator('#fileInput').setInputFiles('./sample-employees.csv');
+        // Load a question first
         await page.waitForTimeout(3000);
+        const dropdown = page.locator('#questionDropdown');
+        await dropdown.selectOption({ index: 1 });
+
+        const loadButton = page.locator('#loadQuestionBtn');
+        await loadButton.click();
+        await page.waitForTimeout(2000);
 
         // Try invalid query
         await page.click('.CodeMirror');
         await page.keyboard.press('Control+A');
+        await page.keyboard.press('Backspace');
         await page.keyboard.type('SELECT * FROM nonexistent_table');
 
         await page.screenshot({ path: 'test-results/screenshots/comprehensive-error-01-invalid-query.png' });
