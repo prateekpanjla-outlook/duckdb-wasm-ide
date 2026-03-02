@@ -121,6 +121,53 @@ These items are marked **HIGH PRIORITY** because they:
 
 ---
 
+## GCP Free Tier & $300 Credit Coverage
+
+### Always Free (Does NOT consume $300 credit)
+
+| Service | Free Tier Limit | Our Usage | Covered? |
+|---------|----------------|-----------|----------|
+| **Cloud Run** | 2M requests/month | Expected < 100K | ✅ Yes |
+| **Cloud Functions** | 2M invocations/month | < 1K (DB init only) | ✅ Yes |
+| **Cloud Build** | 120 minutes/day | ~5 min per build | ✅ Yes |
+| **Artifact Registry** | 0.5 GB storage | ~200 MB | ✅ Yes |
+| **Cloud Logging** | 50 GB ingest/month | < 1 GB | ✅ Yes |
+| **Cloud Monitoring** | Basic metrics | Default metrics | ✅ Yes |
+| **Pub/Sub** | 10 GB throughput | Not using | N/A |
+| **Cloud Scheduler** | 3 jobs | Not using | N/A |
+| **Cloudflare CDN** | Not applicable | Not using | N/A |
+
+### Consumes $300 Trial Credit (Not Always Free)
+
+| Service | Estimated Monthly Cost | After Credit Expires |
+|---------|----------------------|----------------------|
+| **Cloud SQL (db-f1-micro)** | ~$10-15/month | 💳 **Paid service** - No Always Free tier |
+| **Secret Manager** | $0-0.18 (6 secrets × $0.03) | 💳 **Paid service** - After 6 secrets |
+| **Cloud Storage** | $0 | Not using |
+| **Static IP** | $0 | Not using |
+
+### ⚠️ Important: Cloud SQL is the Primary Cost Driver
+
+**Cloud SQL has NO Always Free tier.** Even with the smallest instance (db-f1-micro):
+- **us-central1**: ~$10-13/month
+- **Storage**: ~$0.10/GB/month
+- **Backup storage**: Additional cost
+
+**After $300 credit expires (90 days), you will pay approximately:**
+- Cloud SQL db-f1-micro: **$10-15/month**
+- Secret Manager (6 secrets): **$0.18/month**
+- **Total estimated recurring cost: ~$12-16/month**
+
+### Cost-Saving Tips
+
+1. **Delete Cloud SQL instance** when not actively developing to save ~$10-15/month
+2. **Use Cloud SQL proxy** with local PostgreSQL for development
+3. **Keep database small** - delete unused data regularly
+4. **Set backups retention** to 7 days instead of default (if enabled)
+5. **Monitor usage** in Google Cloud Console → Billing
+
+---
+
 ## Compliance Summary
 
 ```
