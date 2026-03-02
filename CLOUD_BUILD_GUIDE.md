@@ -5,6 +5,121 @@
 
 ---
 
+## Prerequisites (ONE-TIME MANUAL SETUP)
+
+**IMPORTANT:** Before Cloud Build can deploy, you must manually set up these resources ONCE:
+
+### 1. Create Google Cloud Project
+
+```bash
+# Create new project or use existing
+gcloud projects create duckdb-ide-project
+gcloud config set project duckdb-ide-project
+```
+
+### 2. Create Cloud SQL Instance (PostgreSQL)
+
+```bash
+gcloud sql instances create duckdb-ide-db \
+    --database-version=POSTGRES_15 \
+    --tier=db-f1-micro \
+    --region=us-central1 \
+    --storage-auto-increase \
+    --backup-start-time=03:00
+
+# Set root password
+gcloud sql users set-password postgres \
+    --instance=duckdb-ide-db \
+    --password=YOUR_SECURE_PASSWORD
+```
+
+### 3. Create Database and Run Migrations
+
+```bash
+# Option A: Using Cloud SQL Proxy (RECOMMENDED)
+# Download proxy
+wget https://dl.google.com/cloudsql/cloud_sql_proxy.linux.amd64
+mv cloud_sql_proxy.linux.amd64 cloud-sql-proxy
+chmod +x cloud-sql-proxy
+
+# Start proxy
+./cloud-sql-proxy duckdb-ide-project:us-central1:duckdb-ide-db &
+
+# Run migrations
+cd server
+node utils/initDatabase.js
+
+# Seed questions
+node seed/seedQuestions.js
+```
+
+```bash
+# Option B: Using gcloud sql connect
+gcloud sql connect duckdb-ide-db --user=postgres
+# Then run the SQL from initDatabase.js manually
+```
+
+### 4. Create Secrets in Secret Manager
+
+```bash
+# Enable Secret Manager API
+gcloud services enable secretmanager.googleapis.com
+
+# Create database password secret
+echo "YOUR_DB_PASSWORD" | \
+    gcloud secrets create db-password --data-file=-
+
+# Create JWT secret
+openssl rand -base64 32 | \
+    gcloud secrets create jwt-secret --data-file=-
+
+# Grant Cloud Build service account access to secrets
+PROJECT_NUMBER=$(gcloud projects describe duckdb-ide-project --format='value(projectNumber)')
+gcloud secrets add-iam-policy-binding db-password \
+    --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
+    --role="roles/secretmanager.secretAccessor"
+gcloud secrets add-iam-policy-binding jwt-secret \
+    --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
+    --role="roles/secretmanager.secretAccessor"
+```
+
+### 5. Enable Required APIs
+
+```bash
+gcloud services enable cloudbuild.googleapis.com \
+    run.googleapis.com \
+    artifactregistry.googleapis.com \
+    sqladmin.googleapis.com
+```
+
+### 6. Create Artifact Registry Repository
+
+```bash
+gcloud artifacts repositories create duckdb-ide-repo \
+    --repository-format=docker \
+    --location=us-central1
+```
+
+### 7. Create GitHub Trigger
+
+```bash
+# Replace with your values
+REPO_OWNER=prateekpanjla-outlook
+PROJECT_ID=duckdb-ide-project
+
+gcloud builds triggers create github \
+    --name="deploy-gcp-deployment" \
+    --branch-pattern="^gcp-deployment$" \
+    --build-config="cloudbuild.yaml" \
+    --repo="${REPO_OWNER}/duckdb-wasm-ide"
+
+# Update trigger with substitution variables
+gcloud builds triggers update deploy-gcp-deployment \
+    --substitutions=_CLOUDSQL_CONNECTION=duckdb-ide-project:us-central1:duckdb-ide-db,_DB_NAME=duckdb_ide,_DB_USER=postgres,_DB_PASSWORD_SECRET=db-password,_JWT_SECRET_SECRET=jwt-secret
+```
+
+---
+
 ## What is Cloud Build?
 
 Google Cloud Build is a serverless CI/CD platform. When you push code to GitHub, Cloud Build:
@@ -90,6 +205,13 @@ Each step runs in sequence. If one fails, the pipeline stops.
     - '10'
     - '--timeout'
     - '300'
+    # Connect to Cloud SQL
+    - '--set-cloudsql-instances=$_CLOUDSQL_CONNECTION'
+    # Environment variables (use --set-secrets for sensitive values)
+    - '--set-env-vars'
+    - 'NODE_ENV=production,DB_NAME=$_DB_NAME,DB_USER=$_DB_USER,DB_HOST=/cloudsql/$_CLOUDSQL_CONNECTION'
+    - '--set-secrets'
+    - 'DB_PASSWORD=$_DB_PASSWORD_SECRET:latest,JWT_SECRET=$_JWT_SECRET_SECRET:latest'
 ```
 
 | Argument | Value | Purpose |
@@ -104,6 +226,9 @@ Each step runs in sequence. If one fails, the pipeline stops.
 | `--cpu` | `1` | CPU cores per instance |
 | `--max-instances` | `10` | Max concurrent instances |
 | `--timeout` | `300` | Request timeout (seconds) |
+| `--set-cloudsql-instances` | `$_CLOUDSQL_CONNECTION` | Connect Cloud Run to Cloud SQL |
+| `--set-env-vars` | `NODE_ENV,DB_*` | Non-sensitive environment variables |
+| `--set-secrets` | `DB_PASSWORD,JWT_SECRET` | Sensitive values from Secret Manager |
 
 ---
 
@@ -126,11 +251,19 @@ substitutions:
   _MEMORY: '512Mi'
   _CPU: '1'
   _MAX_INSTANCES: '10'
+  # Cloud SQL connection (format: PROJECT:REGION:INSTANCE)
+  _CLOUDSQL_CONNECTION: 'your-project:us-central1:duckdb-ide-db'
+  # Database configuration
+  _DB_NAME: 'duckdb_ide'
+  _DB_USER: 'postgres'
+  # Secret Manager references (create these secrets before deploying)
+  _DB_PASSWORD_SECRET: 'db-password'
+  _JWT_SECRET_SECRET: 'jwt-secret'
 ```
 
 **Purpose:** Default values that can be overridden in the trigger UI. Variables prefixed with `_` are user-defined (not reserved).
 
-**Usage:** Not currently used in steps, but can be referenced as `$_DEPLOY_REGION`.
+These values are used in the deploy step to configure the service.
 
 ---
 
@@ -195,6 +328,8 @@ Cloud Build automatically provides these variables:
 ┌─────────────────────────────────────┐
 │ Step 3: Deploy to Cloud Run         │
 │ - Creates/updates service           │
+│ - Sets environment variables        │
+│ - Connects to Cloud SQL             │
 │ - Routes traffic to new revision    │
 └────────┬────────────────────────────┘
          │
@@ -207,76 +342,23 @@ Cloud Build automatically provides these variables:
 
 ---
 
-## One-Time Setup Instructions
+## Grant Cloud Build Permissions
 
-### 1. Enable Required APIs
-
-```bash
-gcloud services enable cloudbuild.googleapis.com \
-    run.googleapis.com \
-    artifactregistry.googleapis.com
-```
-
-### 2. Create Artifact Registry Repository
-
-```bash
-gcloud artifacts repositories create duckdb-ide-repo \
-    --repository-format=docker \
-    --location=us-central1
-```
-
-### 3. Create GitHub Trigger
-
-```bash
-# Replace with your values
-REPO_OWNER=prateekpanjla-outlook
-PROJECT_ID=your-project-id
-
-gcloud builds triggers create github \
-    --name="deploy-gcp-deployment" \
-    --branch-pattern="^gcp-deployment$" \
-    --build-config="cloudbuild.yaml" \
-    --repo="${REPO_OWNER}/duckdb-wasm-ide"
-```
-
-### 4. Grant Cloud Build Permissions
+After creating the trigger, grant permissions:
 
 ```bash
 # Get project number
 PROJECT_NUMBER=$(gcloud projects describe PROJECT_ID --format='value(projectNumber)')
 
-# Grant Cloud Run Admin role
+# Grant Cloud Run Admin role (needed for deployment)
 gcloud projects add-iam-policy-binding PROJECT_ID \
     --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
     --role="roles/run.admin"
 
-# Grant Service Account User role (for Cloud SQL)
+# Grant Cloud SQL Client role (needed for Cloud SQL connection)
 gcloud projects add-iam-policy-binding PROJECT_ID \
     --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
-    --role="roles/iam.serviceAccountUser"
-```
-
-### 5. Set Environment Variables (Optional)
-
-You can set secrets directly in the trigger UI instead of in code:
-
-```bash
-# Navigate to: Cloud Build > Triggers > Edit your trigger
-# Add these variables in "Substitution variables":
-
-NODE_ENV=production
-DB_HOST=/cloudsql/PROJECT:us-central1:INSTANCE
-DB_NAME=duckdb_ide
-DB_USER=postgres
-DB_PASSWORD=***  # Use Secret Manager reference
-JWT_SECRET=***   # Use Secret Manager reference
-CORS_ORIGINS=https://duckdb-ide-xxxxx.run.app
-```
-
-For Secret Manager references:
-```bash
---set-secrets="DB_PASSWORD=db-password:latest"
---set-secrets="JWT_SECRET=jwt-secret:latest"
+    --role="roles/cloudsql.client"
 ```
 
 ---
@@ -296,10 +378,12 @@ For Secret Manager references:
 - Verify Cloud Run API enabled
 - Check service account permissions
 - Verify region matches your Cloud SQL region
+- Verify secrets exist in Secret Manager
 
 ### Service Deployed but Returns Errors
-- Check environment variables are set
+- Check environment variables are set correctly
 - Verify Cloud SQL connection string format
+- Check secrets are accessible by Cloud Build service account
 - Check logs: `gcloud tail logs duckdb-ide`
 
 ---
@@ -311,5 +395,6 @@ For Secret Manager references:
 | Cloud Build | 120 min/day | $0.003/minute after |
 | Artifact Registry | 0.5 GB | $0.10/GB/month after |
 | Cloud Run | 2M requests/month | Varies by usage |
+| Cloud SQL (db-f1-micro) | ~$10/month | ~$10-50/month depending on tier |
 
-**Typical monthly cost for small app:** $10-30
+**Typical monthly cost for small app:** $20-60
