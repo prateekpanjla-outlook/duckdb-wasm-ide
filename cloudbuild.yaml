@@ -1,12 +1,16 @@
 # Cloud Build configuration for automatic deployment to Cloud Run
 # Trigger: Push to gcp-deployment branch
 #
-# IMPORTANT: This handles DEPLOYMENT only. One-time setup must be done manually first.
-# See CLOUD_BUILD_GUIDE.md for complete setup instructions.
+# This file handles:
+# 1. Building the Docker image
+# 2. Running database migrations (automatic)
+# 3. Seeding database questions (automatic)
+# 4. Deploying to Cloud Run
 
 steps:
   # Step 1: Build the Docker image
   - name: 'gcr.io/cloud-builders/docker'
+    id: 'build'
     args:
       - 'build'
       - '-t'
@@ -17,12 +21,43 @@ steps:
 
   # Step 2: Push to Artifact Registry
   - name: 'gcr.io/cloud-builders/docker'
+    id: 'push'
     args:
       - 'push'
       - 'us-central1-docker.pkg.dev/$PROJECT_ID/duckdb-ide-repo/duckdb-ide:$COMMIT_SHA'
 
-  # Step 3: Deploy to Cloud Run
+  # Step 3: Run Database Migrations (Automatic)
+  # Uses the migration script to create tables and indexes
+  - name: 'us-central1-docker.pkg.dev/$PROJECT_ID/duckdb-ide-repo/duckdb-ide:$COMMIT_SHA'
+    id: 'migrate'
+    entrypoint: 'node'
+    args:
+      - 'server/scripts/migrateDatabase.js'
+    env:
+      - 'NODE_ENV=production'
+      - 'DB_HOST=/cloudsql/$_CLOUDSQL_CONNECTION'
+      - 'DB_PORT=5432'
+      - 'DB_NAME=$_DB_NAME'
+      - 'DB_USER=$_DB_USER'
+      - 'DB_PASSWORD=$_DB_PASSWORD'
+
+  # Step 4: Seed Database Questions (Automatic)
+  - name: 'us-central1-docker.pkg.dev/$PROJECT_ID/duckdb-ide-repo/duckdb-ide:$COMMIT_SHA'
+    id: 'seed'
+    entrypoint: 'node'
+    args:
+      - 'server/seed/seedQuestions.js'
+    env:
+      - 'NODE_ENV=production'
+      - 'DB_HOST=/cloudsql/$_CLOUDSQL_CONNECTION'
+      - 'DB_PORT=5432'
+      - 'DB_NAME=$_DB_NAME'
+      - 'DB_USER=$_DB_USER'
+      - 'DB_PASSWORD=$_DB_PASSWORD'
+
+  # Step 5: Deploy to Cloud Run
   - name: 'gcr.io/cloud-builders/gcloud'
+    id: 'deploy'
     args:
       - 'run'
       - 'deploy'
@@ -46,7 +81,7 @@ steps:
       - '300'
       # Connect to Cloud SQL
       - '--set-cloudsql-instances=$_CLOUDSQL_CONNECTION'
-      # Environment variables (use --set-secrets for sensitive values)
+      # Environment variables
       - '--set-env-vars'
       - 'NODE_ENV=production,DB_NAME=$_DB_NAME,DB_USER=$_DB_USER,DB_HOST=/cloudsql/$_CLOUDSQL_CONNECTION'
       - '--set-secrets'
@@ -67,7 +102,9 @@ substitutions:
   # Database configuration
   _DB_NAME: 'duckdb_ide'
   _DB_USER: 'postgres'
-  # Secret Manager references (create these secrets before deploying)
+  # Database password - set in trigger via --substitutions
+  _DB_PASSWORD: 'your-password-here'
+  # Secret Manager references
   _DB_PASSWORD_SECRET: 'db-password'
   _JWT_SECRET_SECRET: 'jwt-secret'
 
