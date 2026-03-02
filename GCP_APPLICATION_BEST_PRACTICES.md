@@ -22,6 +22,30 @@ This project prioritizes **cost optimization** over some automation features. Th
 
 ---
 
+## 💰 Cost-Saving Opportunity: Cloud SQL Free Trial Instance
+
+> **⚠️ IMPORTANT: Use Cloud SQL Free Trial for development!**
+
+Google Cloud offers a **Free Trial Instance** for Cloud SQL that is significantly more powerful than the paid db-f1-micro tier:
+
+| Feature | Free Trial Instance | Paid Instance (db-f1-micro) |
+|---------|--------------------|------------------------------|
+| **Duration** | 30 days + 90-day grace | Ongoing |
+| **Cost** | **FREE** | ~$10-15/month |
+| **Configuration** | N2: 8 vCPUs, 64 GB RAM, 100 GB storage | 1 vCPU, ~0.6 GB RAM, 10-30 GB storage |
+| **Limitations** | One per project, no SLA, not for production | Has SLA, production-ready |
+
+**Strategy:**
+1. Use the **Free Trial Instance** for initial development and testing (30 days)
+2. Before trial ends, **upgrade to db-f1-micro** for production (~$10-15/month)
+3. The free trial is much more powerful - great for development!
+
+**Note:** After the $300 credit + free trial expire, estimated recurring cost is **~$12-16/month** (Cloud SQL + Secret Manager).
+
+---
+
+---
+
 ## 🔥 HIGH PRIORITY - Quick Wins (Low Complexity, Free/Low Cost)
 
 These items are marked **HIGH PRIORITY** because they:
