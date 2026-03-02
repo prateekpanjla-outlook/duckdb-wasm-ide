@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import config from '../config/index.js';
 import { User } from '../models/User.js';
 
 /**
@@ -16,7 +17,7 @@ export const authenticate = async (req, res, next) => {
         const token = authHeader.substring(7); // Remove 'Bearer ' prefix
 
         // Verify token
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const decoded = jwt.verify(token, config.jwt.secret);
 
         // Get user from database
         const user = await User.findById(decoded.userId);
@@ -51,7 +52,7 @@ export const optionalAuth = async (req, res, next) => {
         }
 
         const token = authHeader.substring(7);
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const decoded = jwt.verify(token, config.jwt.secret);
         const user = await User.findById(decoded.userId);
 
         if (user) {

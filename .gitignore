@@ -34,5 +34,12 @@ playwright/.cache/
 # Temporary files
 *.tmp
 *.temp
+
+# Environment files (keep .env.*.example files)
 .env
 .env.local
+.env.*.local
+.env.development
+.env.production
+.env.test
+server/.env

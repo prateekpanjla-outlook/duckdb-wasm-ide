@@ -1,50 +1,111 @@
-import pg from 'pg';
-import dotenv from 'dotenv';
+/**
+ * Database Connection Configuration
+ * Works with local PostgreSQL and Cloud SQL
+ * Just change .env file to switch
+ */
 
-dotenv.config();
+import pg from 'pg';
+import config from './index.js';
 
 const { Pool } = pg;
 
 // Create connection pool
-const pool = new Pool({
-    host: process.env.DB_HOST || 'localhost',
-    port: process.env.DB_PORT || 5432,
-    database: process.env.DB_NAME || 'duckdb_ide',
-    user: process.env.DB_USER || 'postgres',
-    password: process.env.DB_PASSWORD || 'postgres',
-    max: 20, // Maximum number of clients in the pool
-    idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
-    connectionTimeoutMillis: 2000, // Return an error after 2 seconds if connection could not be established
-});
+// Works with both local PostgreSQL and Cloud SQL
+const poolConfig = {
+    // For local: host + port
+    // For Cloud SQL: Unix socket path (host contains the full path)
+    host: config.database.host,
+    database: config.database.name,
+    user: config.database.user,
+    password: config.database.password,
+    max: config.database.poolMax,
+    idleTimeoutMillis: config.database.poolIdleTimeout,
+    connectionTimeoutMillis: config.database.poolConnectionTimeout,
+};
 
-// Test database connection
+// Add port only if NOT using Cloud SQL (Cloud SQL uses Unix socket)
+if (!config.database.isCloudSQL) {
+    poolConfig.port = config.database.port;
+}
+
+// Use connection string if provided (overrides individual settings)
+if (config.database.connectionString) {
+    poolConfig.connectionString = config.database.connectionString;
+}
+
+const pool = new Pool(poolConfig);
+
+// Connection event handlers
 pool.on('connect', () => {
-    console.log('✅ Connected to PostgreSQL database');
+    if (config.isDevelopment) {
+        console.log('✅ Connected to PostgreSQL database');
+        console.log(`   Database: ${config.database.name}`);
+        console.log(`   Host: ${config.database.isCloudSQL ? 'Cloud SQL' : config.database.host}`);
+    }
 });
 
 pool.on('error', (err) => {
-    console.error('❌ Unexpected error on idle client', err);
-    process.exit(-1);
+    console.error('❌ Unexpected database error:', err);
+    if (config.isProduction) {
+        // Don't exit in production, let the request fail gracefully
+        console.error('Database connection error - will retry on next request');
+    } else {
+        // In development, exit to show the error immediately
+        process.exit(-1);
+    }
 });
 
-// Query helper function
+/**
+ * Execute a query
+ */
 export const query = async (text, params) => {
     const start = Date.now();
     try {
         const res = await pool.query(text, params);
         const duration = Date.now() - start;
-        console.log('Executed query', { text, duration, rows: res.rowCount });
+
+        if (config.isDevelopment) {
+            console.log('🔍 Query executed', {
+                duration: `${duration}ms`,
+                rows: res.rowCount,
+            });
+        }
+
         return res;
     } catch (error) {
-        console.error('Database query error:', error);
+        if (config.isDevelopment) {
+            console.error('❌ Database query error:', error.message);
+        }
         throw error;
     }
 };
 
-// Get a client from the pool for transactions
+/**
+ * Get a client from the pool for transactions
+ */
 export const getClient = async () => {
     const client = await pool.connect();
     return client;
+};
+
+/**
+ * Health check for database connection
+ */
+export const healthCheck = async () => {
+    try {
+        const result = await query('SELECT 1 as health');
+        return { healthy: true, message: 'Database connection OK' };
+    } catch (error) {
+        return { healthy: false, message: error.message };
+    }
+};
+
+/**
+ * Close all connections (graceful shutdown)
+ */
+export const closePool = async () => {
+    await pool.end();
+    console.log('🔌 Database connection pool closed');
 };
 
 export default pool;

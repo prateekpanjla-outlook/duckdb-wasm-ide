@@ -1,5 +1,6 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
+import config from '../config/index.js';
 import { User } from '../models/User.js';
 import { authenticate } from '../middleware/auth.js';
 import { validateRegister, validateLogin } from '../middleware/validate.js';
@@ -20,8 +21,8 @@ router.post('/register', validateRegister, async (req, res) => {
         // Generate JWT token
         const token = jwt.sign(
             { userId: user.id, email: user.email },
-            process.env.JWT_SECRET,
-            { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+            config.jwt.secret,
+            { expiresIn: config.jwt.expiresIn }
         );
 
         res.status(201).json({
@@ -69,8 +70,8 @@ router.post('/login', validateLogin, async (req, res) => {
         // Generate JWT token
         const token = jwt.sign(
             { userId: user.id, email: user.email },
-            process.env.JWT_SECRET,
-            { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+            config.jwt.secret,
+            { expiresIn: config.jwt.expiresIn }
         );
 
         res.json({
