@@ -4,6 +4,24 @@
 
 ---
 
+## Cost-Optimization Strategy
+
+This project prioritizes **cost optimization** over some automation features. The following decisions have been made:
+
+| Practice | Standard Approach | Our Approach | Rationale |
+|----------|-------------------|--------------|-----------|
+| **Testing** | Run in CI/CD pipeline | Local environment only | Saves Cloud Build minutes (~$0.003/minute) |
+| **Vulnerability Scanning** | Enable immediately | Added later (Phase 2) | Free on Artifact Registry, deferring for initial deployment |
+| **Multi-Environment** | Dev → Staging → Prod | Production only | Reduced infrastructure complexity and cost |
+| **Monitoring** | Full observability stack | Basic logging only | Start minimal, add as needed |
+
+**Planned Phase 2 additions:**
+- Vulnerability scanning in CI/CD
+- Error reporting and alerting
+- Cloud Audit Logs (data access)
+
+---
+
 ## 🔥 HIGH PRIORITY - Quick Wins (Low Complexity, Free/Low Cost)
 
 These items are marked **HIGH PRIORITY** because they:
@@ -15,7 +33,7 @@ These items are marked **HIGH PRIORITY** because they:
 |---|----------|----------|--------|------------|------|
 | 3 | Enable IAM Authentication for Cloud SQL | 🔥 **HIGH** | ❌ Not done | Low | Free |
 | 4 | Use Private IP for Cloud SQL (no public IP) | 🔥 **HIGH** | ❌ Not done | Low | Free (saves money) |
-| 6 | Enable vulnerability scanning on Artifact Registry | 🔥 **HIGH** | ❌ Not done | Low | Free |
+| 6 | Enable vulnerability scanning on Artifact Registry | 🔥 **HIGH** | 📋 Phase 2 | Low | Free |
 | 12 | Configure connection timeout & idle timeout | 🔥 **HIGH** | ❌ Not done | Low | Free |
 | 13 | Use SSL/TLS for database connections | 🔥 **HIGH** | ❌ Not done | Low | Free |
 | 18 | Set appropriate concurrency limits | 🔥 **HIGH** | ❌ Not done | Low | Free |
@@ -37,7 +55,7 @@ These items are marked **HIGH PRIORITY** because they:
 | 3 | Enable IAM Authentication for Cloud SQL | 🔥 **HIGH** | ❌ Not done | Low | **Free** |
 | 4 | Use Private IP for Cloud SQL (no public IP) | 🔥 **HIGH** | ❌ Not done | Low | **Free** (saves ~$0.018/GB for public egress) |
 | 5 | Enable Binary Authorization (image verification) | Medium | ❌ Not done | High | **Marginal** (~$0.003 per container image scanned) |
-| 6 | Enable vulnerability scanning on Artifact Registry | 🔥 **HIGH** | ❌ Not done | Low | **Free** (included with Artifact Registry) |
+| 6 | Enable vulnerability scanning on Artifact Registry | 🔥 **HIGH** | 📋 Phase 2 | Low | **Free** (included with Artifact Registry) |
 | 7 | Use Cloud Armor for DDoS protection | Medium | ❌ Not done | Medium | **Potentially** ($0.75/million requests after free tier) |
 | 8 | Restrict `.run.app` URL, use custom domain only | Low | ❌ Not done | Medium | **Marginal** (domain ~$10-20/year, SSL free) |
 | **Database** | | | | | |
@@ -74,10 +92,21 @@ These items are marked **HIGH PRIORITY** because they:
 
 | Priority | Description | Count |
 |----------|-------------|-------|
-| 🔥 **HIGH** | Quick Wins - Low complexity, free/low cost, high impact | **11 items** |
+| 🔥 **HIGH** | Quick Wins - Low complexity, free/low cost, high impact | **10 items** |
 | **Medium** | Moderate complexity or cost, good to have | 6 items |
 | **Low** | Nice to have, lower priority or high complexity | 5 items |
 | ✅ **Done** | Already implemented | 8 items |
+| 📋 **Phase 2** | Planned for later (vulnerability scanning, monitoring) | 1 item |
+
+## Status Legend
+
+| Symbol | Description |
+|--------|-------------|
+| ✅ Implemented | Feature is complete |
+| ⚠️ Partial | Partially implemented (hardcoded values) |
+| ❌ Not done | Not yet implemented |
+| 📋 Phase 2 | Planned for Phase 2 |
+| ⏭️ Skipped | Skipped by design for cost optimization |
 
 ---
 
@@ -97,13 +126,51 @@ These items are marked **HIGH PRIORITY** because they:
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  IMPLEMENTED:  8/30  (27%)                                  │
+│  Phase 2 Planned:   1 item (vulnerability scanning)        │
+│  Local Only:       Testing (cost optimization)              │
 │                                                             │
 │  ███████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░   │
 │                                                             │
-│  🔥 HIGH Priority:  11/30 available to implement           │
-│  ✅ 8 Implemented   ⚠️ 2 Partial   ❌ 20 Not Done           │
+│  🔥 HIGH Priority:  10/30 available to implement           │
+│  ✅ 8 Implemented   ⚠️ 2 Partial   ❌ 19 Not Done   📋 1 Phase 2│
 └─────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Cloud Build & Deployment Compliance
+
+**Overall: 14/30 practices followed (47%)**
+
+### ✅ Following
+
+| Practice | Evidence |
+|----------|----------|
+| Multi-stage builds | Dockerfile uses 3 stages (dependencies, build, production) |
+| Lightweight base image | `node:18-alpine` |
+| Non-root user | Container runs as `nodejs` user |
+| Proper signal handling | Uses `dumb-init` |
+| .dockerignore | Comprehensive exclusions configured |
+| Secret Manager integration | Credentials via `--set-secrets` |
+| Dedicated service accounts | `cloud-run-sa@` configured |
+| Artifact Registry | Using modern registry (not deprecated Container Registry) |
+| Image tagging with commit SHA | `$COMMIT_SHA` for traceability |
+| Rolling updates | Cloud Run zero-downtime deployments |
+| Health check endpoint | `/api/health` with DB status |
+| Graceful shutdown | SIGTERM handling |
+| Alpine Linux minimal image | Reduced attack surface |
+| Least privilege IAM | Dedicated SAs with minimal permissions |
+
+### ❌ Not Following (By Design - Cost Optimization)
+
+| Practice | Status | Note |
+|----------|--------|------|
+| **Automated testing in CI/CD** | ⏭️ Skipped | Testing in local environment only to save build minutes |
+| **Vulnerability scanning** | 📋 Phase 2 | Free on Artifact Registry, adding later |
+| **Multi-environment strategy** | ⏭️ Skipped | Production only to reduce infrastructure cost |
+| **Cloud Deploy** | ⏭️ Skipped | Direct Cloud Run deploy (simpler, no extra cost) |
+| **Manual approval for prod** | ⏭️ Skipped | Automatic deployment (faster, lower cost) |
+| **Cloud Audit Logs (data access)** | 📋 Phase 2 | Admin activity logging free, data access deferred |
 
 ### By Category
 
