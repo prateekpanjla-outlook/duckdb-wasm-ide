@@ -135,25 +135,44 @@ These items are marked **HIGH PRIORITY** because they:
 | **Cloud Monitoring** | Basic metrics | Default metrics | ✅ Yes |
 | **Pub/Sub** | 10 GB throughput | Not using | N/A |
 | **Cloud Scheduler** | 3 jobs | Not using | N/A |
-| **Cloudflare CDN** | Not applicable | Not using | N/A |
+
+### Free Trial Instances (Time-Limited, Per Project)
+
+| Service | Trial Duration | Configuration | Limitations |
+|---------|----------------|---------------|-------------|
+| **Cloud SQL Free Trial** | 30 days + 90-day grace | N2: 8 vCPUs, 64 GB RAM, 100 GB storage | ⚠️ **One per project**, **No SLA**, **Not for production** |
 
 ### Consumes $300 Trial Credit (Not Always Free)
 
 | Service | Estimated Monthly Cost | After Credit Expires |
 |---------|----------------------|----------------------|
-| **Cloud SQL (db-f1-micro)** | ~$10-15/month | 💳 **Paid service** - No Always Free tier |
+| **Cloud SQL (after trial)** | ~$10-15/month (db-f1-micro) | 💳 **Paid service** - Upgrade required |
 | **Secret Manager** | $0-0.18 (6 secrets × $0.03) | 💳 **Paid service** - After 6 secrets |
 | **Cloud Storage** | $0 | Not using |
-| **Static IP** | $0 | Not using |
 
-### ⚠️ Important: Cloud SQL is the Primary Cost Driver
+### ⚠️ Important: Cloud SQL Free Trial vs Paid
 
-**Cloud SQL has NO Always Free tier.** Even with the smallest instance (db-f1-micro):
-- **us-central1**: ~$10-13/month
-- **Storage**: ~$0.10/GB/month
-- **Backup storage**: Additional cost
+**Cloud SQL has TWO options:**
 
-**After $300 credit expires (90 days), you will pay approximately:**
+| Option | Duration | Cost | Use Case |
+|--------|----------|------|----------|
+| **Free Trial Instance** | 30 days (+ 90 grace) | FREE | Testing/development only |
+| **Paid Instance (db-f1-micro)** | Ongoing | ~$10-15/month | Production (has SLA) |
+
+**Free Trial Instance Details:**
+- N2 machine with **8 vCPUs, 64 GB RAM, 100 GB storage** (very generous!)
+- **One per project lifecycle** - cannot recreate
+- **No SLA** - not recommended for production
+- After 30 days: instance stops serving data
+- After 90-day grace period: data is deleted
+- You can upgrade to paid anytime without data loss
+
+**Recommended Strategy:**
+1. Use **Free Trial Instance** for initial development (30 days)
+2. Before trial ends, **upgrade to db-f1-micro** for production (~$10-15/month)
+3. Or delete and recreate data locally using PostgreSQL
+
+**After $300 credit + free trial expire, you will pay approximately:**
 - Cloud SQL db-f1-micro: **$10-15/month**
 - Secret Manager (6 secrets): **$0.18/month**
 - **Total estimated recurring cost: ~$12-16/month**
