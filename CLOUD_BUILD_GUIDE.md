@@ -72,16 +72,9 @@ echo "YOUR_DB_PASSWORD" | \
 # Create JWT secret
 openssl rand -base64 32 | \
     gcloud secrets create jwt-secret --data-file=-
-
-# Grant Cloud Build service account access to secrets
-PROJECT_NUMBER=$(gcloud projects describe duckdb-ide-project --format='value(projectNumber)')
-gcloud secrets add-iam-policy-binding db-password \
-    --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
-    --role="roles/secretmanager.secretAccessor"
-gcloud secrets add-iam-policy-binding jwt-secret \
-    --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
-    --role="roles/secretmanager.secretAccessor"
 ```
+
+**Note:** Service account permissions for secrets are configured in SERVICE_ACCOUNTS_SETUP.md
 
 ### 5. Enable Required APIs
 
@@ -344,22 +337,14 @@ Cloud Build automatically provides these variables:
 
 ## Grant Cloud Build Permissions
 
-After creating the trigger, grant permissions:
+After creating the trigger, configure service accounts:
 
-```bash
-# Get project number
-PROJECT_NUMBER=$(gcloud projects describe PROJECT_ID --format='value(projectNumber)')
+**IMPORTANT:** This project uses dedicated service accounts for security. See [SERVICE_ACCOUNTS_SETUP.md](SERVICE_ACCOUNTS_SETUP.md) for complete setup instructions.
 
-# Grant Cloud Run Admin role (needed for deployment)
-gcloud projects add-iam-policy-binding PROJECT_ID \
-    --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
-    --role="roles/run.admin"
-
-# Grant Cloud SQL Client role (needed for Cloud SQL connection)
-gcloud projects add-iam-policy-binding PROJECT_ID \
-    --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
-    --role="roles/cloudsql.client"
-```
+Quick reference:
+- Create service accounts: `cloud-build-deployer-sa@`, `cloud-run-sa@`, `db-init-sa@`
+- Update Cloud Build trigger to use `cloud-build-deployer-sa@`
+- Grant minimal permissions to each service account
 
 ---
 

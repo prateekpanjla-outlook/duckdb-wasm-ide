@@ -56,6 +56,9 @@ steps:
       # Secrets from Secret Manager
       - '--set-secrets'
       - 'DB_PASSWORD=$_DB_PASSWORD_SECRET:latest,JWT_SECRET=$_JWT_SECRET_SECRET:latest'
+      # Service account for the Cloud Run service
+      - '--service-account'
+      - 'cloud-run-sa@$PROJECT_ID.iam.gserviceaccount.com'
 
 # Images to be pushed to Artifact Registry
 images:

@@ -152,7 +152,8 @@ gcloud functions deploy db-init-service \
     --timeout=300s \
     --set-cloudsql-instances=PROJECT_ID:us-central1:duckdb-ide-db \
     --set-env-vars=DB_NAME=duckdb_ide,DB_USER=postgres \
-    --set-secrets=DB_PASSWORD=db-password:latest
+    --set-secrets=DB_PASSWORD=db-password:latest \
+    --service-account=db-init-sa@PROJECT_ID.iam.gserviceaccount.com
 ```
 
 ### 2. Get Function URL
