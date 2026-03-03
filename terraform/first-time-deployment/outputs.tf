@@ -19,9 +19,19 @@ output "cloudsql_connection_name" {
   value       = "${var.project_id}:${var.region}:${google_sql_database_instance.duckdb_ide.name}"
 }
 
+output "vpc_connector_name" {
+  description = "Serverless VPC Access connector name (for Cloud Functions)"
+  value       = google_vpc_access_connector.cloud_sql_connector.name
+}
+
 output "cloudsql_instance_name" {
   description = "Cloud SQL instance name"
   value       = google_sql_database_instance.duckdb_ide.name
+}
+
+output "db_name" {
+  description = "Database name"
+  value       = var.db_name
 }
 
 output "artifact_registry_repository" {

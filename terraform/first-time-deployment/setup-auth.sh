@@ -121,6 +121,24 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --condition=None \
     --quiet 2>/dev/null || echo "    (Already has permissions)"
 
+# Compute Network Admin - required to create VPC networks and subnets
+# determined this was required beacuse our run failed
+echo "  - roles/compute.networkAdmin (create VPC networks)"
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+    --member="serviceAccount:$SA_EMAIL" \
+    --role="roles/compute.networkAdmin" \
+    --condition=None \
+    --quiet 2>/dev/null || echo "    (Already has permissions)"
+
+# VPC Access Admin - required to create Serverless VPC Access connectors
+# determined this was required for Cloud Functions to connect to Cloud SQL
+echo "  - roles/vpcaccess.admin (create VPC connectors)"
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+    --member="serviceAccount:$SA_EMAIL" \
+    --role="roles/vpcaccess.admin" \
+    --condition=None \
+    --quiet 2>/dev/null || echo "    (Already has permissions)"
+
 # Project IAM Viewer - to view existing IAM policies
 echo "  - roles/resourcemanager.projectIamAdmin (manage project IAM)"
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \

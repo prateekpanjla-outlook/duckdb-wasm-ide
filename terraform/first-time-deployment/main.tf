@@ -50,6 +50,9 @@ resource "google_project_service" "apis" {
     "secretmanager.googleapis.com",
     "cloudfunctions.googleapis.com",
     "iam.googleapis.com",
+    "compute.googleapis.com",           # Required for VPC network
+    "servicenetworking.googleapis.com", # Required for private service connection
+    "vpcaccess.googleapis.com",         # Required for Serverless VPC Access connector
   ])
 
   project            = var.project_id
@@ -73,7 +76,72 @@ resource "google_artifact_registry_repository" "duckdb_ide" {
 
 /**
  * ============================================================
- * STEP 3: Cloud SQL Instance
+ * STEP 3: VPC Network (for Cloud SQL private IP)
+ * ============================================================
+ */
+resource "google_compute_network" "vpc_network" {
+  project                 = var.project_id
+  name                    = "duckdb-ide-vpc"
+  auto_create_subnetworks = false
+  depends_on              = [google_project_service.apis]
+}
+
+resource "google_compute_subnetwork" "subnet" {
+  name          = "duckdb-ide-subnet"
+  ip_cidr_range = "10.0.0.0/24"
+  region        = var.region
+  network       = google_compute_network.vpc_network.id
+  project       = var.project_id
+
+  depends_on = [google_compute_network.vpc_network]
+}
+
+/**
+ * Serverless VPC Access Connector
+ * Required for Cloud Functions and Cloud Run to connect to Cloud SQL via private IP
+ */
+resource "google_vpc_access_connector" "cloud_sql_connector" {
+  name          = "duckdb-ide-vpc-connector"
+  region        = var.region
+  ip_cidr_range = "10.8.0.0/28"
+  network       = google_compute_network.vpc_network.id
+  project       = var.project_id
+
+  depends_on = [google_project_service.apis, google_compute_subnetwork.subnet]
+}
+
+/**
+ * Private IP Allocation for Cloud SQL
+ * Required for private IP connectivity - allocates IP range for Google services
+ */
+resource "google_compute_global_address" "private_ip_alloc" {
+  name          = "duckdb-ide-private-ip"
+  purpose       = "VPC_PEERING"
+  address_type  = "INTERNAL"
+  prefix_length = 16
+  network       = google_compute_network.vpc_network.id
+  project       = var.project_id
+
+  depends_on = [google_compute_network.vpc_network]
+}
+
+/**
+ * Private Services Connection
+ * Establishes VPC peering between your VPC and Google's service network
+ * Required for Cloud SQL private IP connectivity
+ */
+resource "google_service_networking_connection" "private_vpc_connection" {
+  network                 = google_compute_network.vpc_network.id
+  service                 = "servicenetworking.googleapis.com"
+  reserved_peering_ranges = [google_compute_global_address.private_ip_alloc.name]
+  deletion_policy         = "ABANDON"  # Allow removal without destroying connection
+
+  depends_on = [google_compute_global_address.private_ip_alloc]
+}
+
+/**
+ * ============================================================
+ * STEP 4: Cloud SQL Instance
  * ============================================================
  */
 resource "google_sql_database_instance" "duckdb_ide" {
@@ -99,7 +167,7 @@ resource "google_sql_database_instance" "duckdb_ide" {
     ip_configuration {
       # Private IP only (recommended)
       ipv4_enabled    = false
-      private_network = null  # Set to VPC self link for private IP
+      private_network = google_compute_network.vpc_network.id
       enable_private_path_for_google_cloud_services = true
 
       # Require SSL connections
@@ -112,7 +180,7 @@ resource "google_sql_database_instance" "duckdb_ide" {
 
   deletion_protection = var.deletion_protection
 
-  depends_on = [google_project_service.apis]
+  depends_on = [google_project_service.apis, google_service_networking_connection.private_vpc_connection]
 }
 
 /**
