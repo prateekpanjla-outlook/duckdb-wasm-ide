@@ -6,31 +6,52 @@ Automates the initial setup of all GCP resources for the DuckDB WASM IDE applica
 
 ## How Terraform Connects to Google Cloud
 
-Terraform uses the **Google Cloud SDK authentication** to connect to your project. You have several options:
+Terraform uses **Google Cloud credentials** to authenticate. You have three options:
 
-### Option 1: Google Cloud Application Default Credentials (Recommended)
+### Option 1: Dedicated Service Account (Recommended for Production)
+
+**Why use a service account?**
+- ✅ Security: Separate from personal account
+- ✅ Audit: Clear trail of Terraform actions
+- ✅ CI/CD: Can be automated without personal credentials
+- ✅ Rotation: Can be rotated without affecting your account
+
+**Quick setup with the provided script:**
 
 ```bash
-# Authenticate using your Google account
-gcloud auth application-default login
+cd terraform/first-time-deployment
 
-# This opens a browser window for authentication
-# After successful login, Terraform can use these credentials
+# Run the setup script
+./setup-auth.sh
+
+# This will:
+# - Create a terraform-deployer service account
+# - Grant required permissions
+# - Download terraform-key.json
+# - Show you how to set the environment variable
+
+# Set the environment variable
+export GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/terraform-key.json
+
+# Run Terraform
+terraform init
+terraform plan
 ```
 
-### Option 2: Service Account Key File
+**Manual setup:**
 
 ```bash
-# Create a service account for Terraform
+# Create service account
 gcloud iam service-accounts create terraform-deployer \
+    --project=sql-practice-project-489106 \
     --display-name="Terraform Deployer"
 
-# Grant required permissions
+# Grant Editor role (required for creating all resources)
 gcloud projects add-iam-policy-binding sql-practice-project-489106 \
     --member="serviceAccount:terraform-deployer@sql-practice-project-489106.iam.gserviceaccount.com" \
-    --role="roles/owner"
+    --role="roles/editor"
 
-# Download key file
+# Create and download key
 gcloud iam service-accounts keys create terraform-key.json \
     --iam-account=terraform-deployer@sql-practice-project-489106.iam.gserviceaccount.com
 
@@ -38,7 +59,17 @@ gcloud iam service-accounts keys create terraform-key.json \
 export GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/terraform-key.json
 ```
 
-### Option 3: gcloud auth login (Personal Account)
+### Option 2: Google Cloud Application Default Credentials (Quick for Development)
+
+```bash
+# Authenticate using your Google account (opens browser)
+gcloud auth application-default login
+
+# Terraform automatically uses these credentials
+# No environment variable needed
+```
+
+### Option 3: Personal gcloud Auth
 
 ```bash
 # Authenticate with your personal Google account
@@ -46,8 +77,6 @@ gcloud auth login
 
 # Set your project
 gcloud config set project sql-practice-project-489106
-
-# Terraform will automatically pick up these credentials
 ```
 
 ---
