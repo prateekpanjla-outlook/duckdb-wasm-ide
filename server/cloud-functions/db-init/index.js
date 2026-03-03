@@ -11,7 +11,8 @@
  * Runtime: Node.js 18
  */
 
-import { migrateDatabase } from '../../scripts/migrateDatabase.js';
+import { migrateDatabase } from './migrate.js';
+import { seedQuestions } from './seed.js';
 
 // Simple HTTP request handler
 export async function initDatabase(request, response) {
@@ -58,10 +59,7 @@ export async function initDatabase(request, response) {
 
         if (path === '/seed' && request.method === 'POST') {
             console.log('🌱 Seeding database...');
-            // Import and run seed script
-            const seedModule = await import('../../seed/seedQuestions.js');
-            // The seed script runs automatically when imported
-            // We need to call its main function if it has one, or just importing it
+            await seedQuestions();
             console.log('✅ Database seeded');
 
             response.writeHead(200, { 'Content-Type': 'application/json' });
@@ -80,7 +78,7 @@ export async function initDatabase(request, response) {
             console.log('✅ Migrations completed');
 
             // Seed database
-            const seedModule = await import('../../seed/seedQuestions.js');
+            await seedQuestions();
             console.log('✅ Seeding completed');
 
             response.writeHead(200, { 'Content-Type': 'application/json' });
