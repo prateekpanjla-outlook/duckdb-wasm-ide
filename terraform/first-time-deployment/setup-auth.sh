@@ -155,7 +155,7 @@ echo "🔑 Creating service account key..."
 gcloud iam service-accounts keys create "$KEY_FILE" \
     --project="$PROJECT_ID" \
     --iam-account="$SA_EMAIL" \
-    --key-type="TYPE_GOOGLE_CREDENTIALS_FILE"
+    --key-file-type="TYPE_GOOGLE_CREDENTIALS_FILE"
 
 # Set permissions on key file
 chmod 600 "$KEY_FILE"
