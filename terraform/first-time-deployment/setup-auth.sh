@@ -55,35 +55,82 @@ fi
 
 SA_EMAIL="$SA_NAME@$PROJECT_ID.iam.gserviceaccount.com"
 
-# Grant permissions
+# Grant permissions (least privilege approach)
 echo ""
-echo "🔐 Granting permissions..."
+echo "🔐 Granting permissions (least privilege)..."
 
-# Editor role (broad but required for creating resources)
-echo "  - roles/editor"
-gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-    --member="serviceAccount:$SA_EMAIL" \
-    --role="roles/editor" \
-    --condition=None \
-    --quiet 2>/dev/null || echo "    (Already has permissions)"
-
-# Service Account User (to manage other service accounts)
-echo "  - roles/iam.serviceAccountUser"
-gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-    --member="serviceAccount:$SA_EMAIL" \
-    --role="roles/iam.serviceAccountUser" \
-    --condition=None \
-    --quiet 2>/dev/null || echo "    (Already has permissions)"
-
-# Service Usage Admin (to enable APIs)
-echo "  - roles/serviceusage.serviceUsageAdmin"
+# Service Usage Admin - required to enable APIs
+echo "  - roles/serviceusage.serviceUsageAdmin (enable APIs)"
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member="serviceAccount:$SA_EMAIL" \
     --role="roles/serviceusage.serviceUsageAdmin" \
     --condition=None \
     --quiet 2>/dev/null || echo "    (Already has permissions)"
 
-echo "✅ Permissions granted"
+# IAM permissions - to create and manage service accounts
+echo "  - roles/iam.serviceAccountAdmin (create service accounts)"
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+    --member="serviceAccount:$SA_EMAIL" \
+    --role="roles/iam.serviceAccountAdmin" \
+    --condition=None \
+    --quiet 2>/dev/null || echo "    (Already has permissions)"
+
+echo "  - roles/iam.serviceAccountKeyAdmin (create SA keys)"
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+    --member="serviceAccount:$SA_EMAIL" \
+    --role="roles/iam.serviceAccountKeyAdmin" \
+    --condition=None \
+    --quiet 2>/dev/null || echo "    (Already has permissions)"
+
+echo "  - roles/iam.securityAdmin (manage IAM policies)"
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+    --member="serviceAccount:$SA_EMAIL" \
+    --role="roles/iam.securityAdmin" \
+    --condition=None \
+    --quiet 2>/dev/null || echo "    (Already has permissions)"
+
+# Cloud SQL Admin - to create and manage Cloud SQL instances
+echo "  - roles/cloudsql.admin (manage Cloud SQL)"
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+    --member="serviceAccount:$SA_EMAIL" \
+    --role="roles/cloudsql.admin" \
+    --condition=None \
+    --quiet 2>/dev/null || echo "    (Already has permissions)"
+
+# Secret Manager Admin - to create and manage secrets
+echo "  - roles/secretmanager.admin (manage secrets)"
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+    --member="serviceAccount:$SA_EMAIL" \
+    --role="roles/secretmanager.admin" \
+    --condition=None \
+    --quiet 2>/dev/null || echo "    (Already has permissions)"
+
+# Artifact Registry Admin - to create repository
+echo "  - roles/artifactregistry.admin (manage Artifact Registry)"
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+    --member="serviceAccount:$SA_EMAIL" \
+    --role="roles/artifactregistry.admin" \
+    --condition=None \
+    --quiet 2>/dev/null || echo "    (Already has permissions)"
+
+# Compute Network Viewer - required for Cloud SQL VPC setup
+echo "  - roles/compute.networkViewer (view network config)"
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+    --member="serviceAccount:$SA_EMAIL" \
+    --role="roles/compute.networkViewer" \
+    --condition=None \
+    --quiet 2>/dev/null || echo "    (Already has permissions)"
+
+# Project IAM Viewer - to view existing IAM policies
+echo "  - roles/resourcemanager.projectIamAdmin (manage project IAM)"
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+    --member="serviceAccount:$SA_EMAIL" \
+    --role="roles/resourcemanager.projectIamAdmin" \
+    --condition=None \
+    --quiet 2>/dev/null || echo "    (Already has permissions)"
+
+echo ""
+echo "✅ Permissions granted (using least privilege)"
 
 # Check if key file already exists
 if [ -f "$KEY_FILE" ]; then

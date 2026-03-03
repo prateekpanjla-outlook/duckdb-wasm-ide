@@ -46,10 +46,26 @@ gcloud iam service-accounts create terraform-deployer \
     --project=sql-practice-project-489106 \
     --display-name="Terraform Deployer"
 
-# Grant Editor role (required for creating all resources)
+# Grant required permissions (least privilege)
 gcloud projects add-iam-policy-binding sql-practice-project-489106 \
     --member="serviceAccount:terraform-deployer@sql-practice-project-489106.iam.gserviceaccount.com" \
-    --role="roles/editor"
+    --role="roles/serviceusage.serviceUsageAdmin"
+
+gcloud projects add-iam-policy-binding sql-practice-project-489106 \
+    --member="serviceAccount:terraform-deployer@sql-practice-project-489106.iam.gserviceaccount.com" \
+    --role="roles/iam.serviceAccountAdmin"
+
+gcloud projects add-iam-policy-binding sql-practice-project-489106 \
+    --member="serviceAccount:terraform-deployer@sql-practice-project-489106.iam.gserviceaccount.com" \
+    --role="roles/cloudsql.admin"
+
+gcloud projects add-iam-policy-binding sql-practice-project-489106 \
+    --member="serviceAccount:terraform-deployer@sql-practice-project-489106.iam.gserviceaccount.com" \
+    --role="roles/secretmanager.admin"
+
+gcloud projects add-iam-policy-binding sql-practice-project-489106 \
+    --member="serviceAccount:terraform-deployer@sql-practice-project-489106.iam.gserviceaccount.com" \
+    --role="roles/artifactregistry.admin"
 
 # Create and download key
 gcloud iam service-accounts keys create terraform-key.json \
