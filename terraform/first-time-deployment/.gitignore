@@ -1,0 +1,23 @@
+# Terraform files
+*.tfstate
+*.tfstate.*
+*.tfvars
+!example.tfvars
+
+# Terraform plan files
+*.plan
+
+# Terraform lock file
+.terraform.lock.hcl
+
+# Terraform provider directory
+.terraform/
+
+# Google Cloud credentials
+terraform-key.json
+*.p12
+*.pem
+
+# OS files
+.DS_Store
+Thumbs.db
