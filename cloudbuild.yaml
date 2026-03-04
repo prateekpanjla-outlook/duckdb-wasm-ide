@@ -51,7 +51,6 @@ steps:
       # VPC Connector for Cloud SQL access
       - '--vpc-egress=private-ranges-only'
       - '--vpc-connector=duckdb-ide-vpc-connector'
-      - '--vpc-connector-location=us-central1'
       # Connect to Cloud SQL
       - '--set-cloudsql-instances=$_CLOUDSQL_CONNECTION'
       # Environment variables

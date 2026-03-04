@@ -3164,3 +3164,239 @@ gcloud builds submit --config=cloudbuild.yaml \
 **https://duckdb-ide-frxi6yk4jq-uc.a.run.app**
 
 ---
+
+---
+
+# Cloud SQL Connection Issue - VPC Peering Required (2026-03-04)
+
+## Build ID: 0b36e39b-35ac-472c-b59f-c7a4eedac196
+
+## Issue: Registration Fails with 500 Error
+
+### Error Message
+```
+Registration failed
+Connection terminated due to connection timeout
+dial error: failed to dial (connection name = "sql-practice-project-489106:us-central1:duckdb-ide-db")
+```
+
+### Root Cause Analysis
+
+**The Cloud SQL instance only has a PRIVATE IP address (10.61.0.5)**. Cloud Run cannot directly connect to private IP Cloud SQL instances without proper VPC networking setup.
+
+### Current (Broken) Setup
+```
+Cloud Run (no VPC connector) 
+    ↓
+[CANNOT REACH]
+    ↓
+Cloud SQL (private IP only: 10.61.0.5)
+```
+
+### Required Setup
+
+```
+Cloud Run → VPC Access Connector → VPC Network → Private Service Peering → Cloud SQL
+```
+
+## Investigation Steps
+
+1. ✅ Checked Cloud SQL instance type - **PostgreSQL 15, Private IP only**
+2. ✅ Verified `--set-cloudsql-instances` flag is set in Cloud Run deployment
+3. ✅ Confirmed authorized networks were cleared (no public IP access)
+4. ✅ Discovered VPC peering exists: `duckdb-ide-private-ip: 10.61.0.0/16`
+5. ✅ **Missing**: Serverless VPC Access connector between Cloud Run and VPC network
+
+## Solution: Serverless VPC Access Connector
+
+### What is Serverless VPC Access?
+
+Serverless VPC Access enables Cloud Run (and other serverless services) to connect to private Cloud SQL instances through a VPC connector, without exposing the database to the public internet.
+
+### Required Infrastructure
+
+| Component | Purpose |
+|-----------|---------|
+| **VPC Access Connector** | Bridges Cloud Run to VPC network |
+| **VPC Network** | `default` network in project |
+| **Private Service Peering** | Already exists for Cloud SQL |
+| **Cloud SQL Instance** | Private IP only (10.61.0.5) |
+
+### Cost Considerations
+
+| Resource | Cost |
+|----------|------|
+| **VPC Access Connector** | ~$0.007/GB-hour + $0.032/GB-month egress |
+| **Cloud SQL (db-f1-micro)** | ~$4-15/month |
+| **Cloud Run** | Free tier + compute time |
+
+**Estimated Additional Cost**: ~$5-10/month for VPC connector (depending on traffic)
+
+### Implementation Steps
+
+1. Create VPC Access connector
+2. Update Cloud Run deployment to use the connector
+3. Redeploy and test registration flow
+
+---
+
+
+# VPC Connector Investigation & Configuration (2026-03-04)
+
+## Issue Summary
+
+Production registration fails with 500 error due to Cloud SQL connection timeout. The Cloud SQL instance has only PRIVATE IP (10.61.0.5) and Cloud Run cannot reach it without a VPC connector.
+
+## Investigation Findings
+
+### 1. Existing VPC Connector Discovered
+
+Ran `gcloud compute networks vpc-access connectors list` and found:
+
+```bash
+NAME                         REGION      IP_RANGE         NETWORK                STATE
+duckdb-ide-vpc-connector     us-central1 10.10.0.0/28    duckdb-ide-vpc          READY
+```
+
+**Key Details:**
+- **Name**: `duckdb-ide-vpc-connector`
+- **Region**: `us-central1` (matches Cloud Run service)
+- **Network**: `duckdb-ide-vpc` (peered with `servicenetworking-googleapis-com`)
+- **State**: `READY` (operational)
+
+### 2. VPC Peering Confirmed
+
+The `duckdb-ide-vpc` network is properly peered with Google's service networking:
+
+```bash
+gcloud compute networks peerings list --network=duckdb-ide-vpc
+
+NAME                            NETWORK                PEER_PROJECT                    PEER_NETWORK
+servicenetworking-googleapis-com  duckdb-ide-vpc      sql-practice-project-489106   servicenetworking-googleapis-com
+```
+
+This peering enables access to Cloud SQL's private IP range (10.61.0.0/16).
+
+### 3. Connection Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        CORRECTED FLOW                                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌──────────────┐     ┌──────────────────────┐     ┌──────────────────┐   │
+│  │   Cloud Run  │────▶│  VPC Access          │────▶│  VPC Network      │   │
+│  │              │     │  Connector           │     │  duckdb-ide-vpc  │   │
+│  │  (duckdb-ide │     │  (duckdb-ide-vpc-    │     │                  │   │
+│  │   service)   │     │   connector)         │     │                  │   │
+│  └──────────────┘     └──────────────────────┘     └────────┬─────────┘   │
+│                                                           │               │
+│                                                           │ (peering)     │
+│                                                           ▼               │
+│                                                ┌──────────────────────┐   │
+│                                                │ Private Service      │   │
+│                                                │ Networking (Google)  │   │
+│                                                └──────────┬───────────┘   │
+│                                                           │               │
+│                                                           ▼               │
+│                                                ┌──────────────────────┐   │
+│                                                │  Cloud SQL           │   │
+│                                                │  (10.61.0.5:5432)    │   │
+│                                                │  PostgreSQL          │   │
+│                                                └──────────────────────┘   │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+## Google Cloud Documentation Verification
+
+### Official Documentation Reviewed
+
+- **Source**: [Google Cloud Run VPC Connectors](https://cloud.google.com/run/docs/configuring/vpc-connectors)
+- **Last Updated**: 2025-11-04 UTC
+
+### Verified Flags
+
+From official documentation, the correct `gcloud run deploy` flags are:
+
+```bash
+gcloud run deploy SERVICE \
+  --image IMAGE_URL \
+  --vpc-connector CONNECTOR_NAME \
+  --vpc-egress EGRESS_SETTING
+```
+
+**Important Notes:**
+1. **No `--vpc-connector-location` flag exists** - location is implicit in connector name
+2. **Only `--vpc-connector` and `--vpc-egress` flags are required**
+3. **Egress settings**:
+   - `private-ranges-only`: Route only private IP traffic through VPC (recommended for Cloud SQL)
+   - `all-traffic`: Route ALL traffic through VPC
+
+### Configuration Applied to cloudbuild.yaml
+
+```yaml
+# VPC Connector for Cloud SQL access
+- '--vpc-egress=private-ranges-only'
+- '--vpc-connector=duckdb-ide-vpc-connector'
+```
+
+## Files Modified
+
+### cloudbuild.yaml
+
+**Lines 51-53**: Added VPC connector configuration
+
+```yaml
+# VPC Connector for Cloud SQL access
+- '--vpc-egress=private-ranges-only'
+- '--vpc-connector=duckdb-ide-vpc-connector'
+```
+
+**Previous invalid flag removed**: `--vpc-connector-location=us-central1` (this flag does not exist)
+
+## Next Steps
+
+1. **Commit and push changes**
+   ```bash
+   git add cloudbuild.yaml
+   git commit -m "Fix: Add VPC connector configuration for Cloud SQL access"
+   git push origin gcp-deployment
+   ```
+
+2. **Deploy to Cloud Run**
+   ```bash
+   gcloud builds submit --project=sql-practice-project-489106 \
+     --config=cloudbuild.yaml \
+     --substitutions=_CLOUDSQL_CONNECTION=sql-practice-project-489106:us-central1:duckdb-ide-db,_DB_NAME=duckdb_ide,_DB_USER=postgres,_DB_PASSWORD_SECRET=db-password,_JWT_SECRET_SECRET=jwt-secret
+   ```
+
+3. **Verify deployment**
+   - Check Cloud Run logs for successful database connections
+   - Look for "Connected to PostgreSQL database" message
+
+4. **Test registration flow**
+   ```bash
+   npx playwright test tests/e2e/production-register.spec.js --project=chromium
+   ```
+
+## Expected Results After Deployment
+
+| Check | Expected Value |
+|-------|----------------|
+| **Database Connection** | "Connected to PostgreSQL database" in logs |
+| **Registration API** | 200 OK response with token |
+| **UI After Register** | Button shows user's email |
+| **Database Entry** | User record created in `users` table |
+
+## Cost Impact Summary
+
+| Resource | Monthly Cost |
+|----------|--------------|
+| VPC Connector (e2-micro, 2-10 instances) | ~$5-10 |
+| Cloud SQL (db-f1-micro) | ~$4-15 |
+| Cloud Run (pay-as-you-go) | Free tier + ~$0-5 |
+
+**Total Estimated**: ~$10-30/month depending on usage
+
+---
