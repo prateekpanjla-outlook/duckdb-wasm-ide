@@ -40,6 +40,19 @@ const limiter = rateLimit({
     max: config.security.rateLimitMax,
     standardHeaders: true,
     legacyHeaders: false,
+    // Skip trust proxy validation for Cloud Run (we handle it via trust proxy setting)
+    validate: { trustProxy: false },
+    // Use X-Forwarded-For for IP when behind proxy
+    // In Cloud Run, the first IP in X-Forwarded-For is the client IP
+    keyGenerator: (req) => {
+        // Get IP from X-Forwarded-For if available (Cloud Run), otherwise use remoteAddress
+        const forwarded = req.headers['x-forwarded-for'];
+        if (forwarded) {
+            // X-Forwarded-For can contain multiple IPs, take the first one (client)
+            return forwarded.split(',')[0].trim();
+        }
+        return req.ip || req.socket.remoteAddress;
+    },
 });
 app.use('/api/', limiter);
 
