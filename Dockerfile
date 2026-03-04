@@ -25,6 +25,7 @@ COPY index.html ./
 COPY css ./css
 COPY js ./js
 COPY libs ./libs
+COPY public ./public
 COPY server ./server
 
 # Stage 3: Production image
@@ -45,6 +46,7 @@ COPY --from=build --chown=nodejs:nodejs /app/index.html ./
 COPY --from=build --chown=nodejs:nodejs /app/css ./css
 COPY --from=build --chown=nodejs:nodejs /app/js ./js
 COPY --from=build --chown=nodejs:nodejs /app/libs ./libs
+COPY --from=build --chown=nodejs:nodejs /app/public ./public
 
 # Set environment variables
 ENV NODE_ENV=production
