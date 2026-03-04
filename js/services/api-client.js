@@ -3,10 +3,18 @@
  * Handles all HTTP requests to the backend server
  */
 
-// Dynamic API URL - uses same hostname as frontend, just different port
-// This works for localhost, 127.0.0.1, or any IP address automatically
+// Dynamic API URL - works for both local development and production
+// Local: Backend runs on port 3000 separately
+// Production: Backend and frontend are on same origin
 const hostname = window.location.hostname;
-const API_BASE_URL = `http://${hostname}:3000/api`;
+const port = window.location.port;
+const isLocalDev = (hostname === 'localhost' || hostname === '127.0.0.1') && (port === '8888' || port === '8080');
+
+const API_BASE_URL = isLocalDev
+    ? `http://${hostname}:3000/api`
+    : `/api`; // Use relative path for same-origin requests in production
+
+console.log('[APIClient] Init:', { hostname, port, isLocalDev, API_BASE_URL });
 
 class APIClient {
     constructor() {
@@ -58,6 +66,7 @@ class APIClient {
      */
     async request(endpoint, options = {}) {
         const url = `${API_BASE_URL}${endpoint}`;
+        console.log('[APIClient] Request:', { url, endpoint, options });
         const config = {
             ...options,
             headers: {
@@ -68,7 +77,9 @@ class APIClient {
 
         try {
             const response = await fetch(url, config);
+            console.log('[APIClient] Response status:', response.status, response.statusText);
             const data = await response.json();
+            console.log('[APIClient] Response data:', data);
 
             if (!response.ok) {
                 throw new Error(data.error || 'Request failed');
@@ -76,7 +87,8 @@ class APIClient {
 
             return data;
         } catch (error) {
-            console.error(`API Error [${endpoint}]:`, error);
+            console.error(`[APIClient] API Error [${endpoint}]:`, error);
+            console.error('[APIClient] Error details:', { message: error.message, stack: error.stack });
             throw error;
         }
     }
@@ -87,10 +99,12 @@ class APIClient {
      * Register new user
      */
     async register(email, password) {
+        console.log('[APIClient] Register called:', { email, API_BASE_URL });
         const data = await this.request('/auth/register', {
             method: 'POST',
             body: JSON.stringify({ email, password })
         });
+        console.log('[APIClient] Register response:', data);
 
         this.setToken(data.token);
         this.setUser(data.user);
