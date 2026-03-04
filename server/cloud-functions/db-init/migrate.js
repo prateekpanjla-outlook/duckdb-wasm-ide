@@ -27,6 +27,10 @@ export async function migrateDatabase() {
         database: process.env.DB_NAME || 'duckdb_ide',
         user: process.env.DB_USER || 'postgres',
         password: process.env.DB_PASSWORD,
+        // Enable SSL for private IP connections
+        ssl: {
+            rejectUnauthorized: false, // Cloud SQL certificates are self-signed
+        },
     });
 
     try {

@@ -24,7 +24,18 @@ coverage
 .env
 .env.local
 .env.*.local
+.env.development
+.env.production
+.env.test
 server/.env
+server/.env.development
+server/.env.production
+
+# Terraform / Service Account keys
+terraform/
+*-key.json
+*.tfvars
+*.pem
 
 # Build artifacts
 dist

@@ -22,7 +22,11 @@ const pool = new Pool({
     port: process.env.DB_PORT || 5432,
     database: process.env.DB_NAME || 'duckdb_ide',
     user: process.env.DB_USER || 'postgres',
-    password: process.env.DB_PASSWORD || 'postgres'
+    password: process.env.DB_PASSWORD || 'postgres',
+    // Enable SSL for private IP connections
+    ssl: {
+        rejectUnauthorized: false, // Cloud SQL certificates are self-signed
+    },
 });
 
 const questions = [

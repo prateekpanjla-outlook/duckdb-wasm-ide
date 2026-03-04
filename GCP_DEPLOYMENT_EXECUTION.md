@@ -3400,3 +3400,198 @@ gcloud run deploy SERVICE \
 **Total Estimated**: ~$10-30/month depending on usage
 
 ---
+
+# Cloud Function Database Initialization - Multiple Issues Fixed (2026-03-04)
+
+## Summary
+
+The database initialization via Cloud Function encountered multiple issues that were systematically identified and resolved.
+
+## Issue 1: URL Parsing Error in Cloud Function
+
+### Error
+```
+TypeError: Invalid URL
+at new URL (node:internal/url:806:29)
+at initDatabase (file:///workspace/index.js:29:17)
+```
+
+### Root Cause
+Cloud Functions Gen 2 passes `request.url` as a relative path (e.g., `"/init"`), not a full URL. The code was trying to parse it with `new URL(request.url)` which requires a full URL.
+
+### Solution
+**File**: `server/cloud-functions/db-init/index.js`
+
+Changed from:
+```javascript
+const url = new URL(request.url);
+const path = url.pathname;
+```
+
+To:
+```javascript
+// Cloud Functions Gen 2 passes request.url as a path (e.g., "/init")
+// not a full URL, so use it directly
+const path = request.url || '/';
+```
+
+---
+
+## Issue 2: DB_HOST Environment Variable Not Set
+
+### Error
+```
+{"status":"error","error":"connect ECONNREFUSED 127.0.0.1:5432"}
+```
+
+### Root Cause
+The Cloud Function was deployed without the `DB_HOST` environment variable, defaulting to `localhost`.
+
+### Solution
+Added `DB_HOST` to the deployment command:
+
+```bash
+--set-env-vars=DB_NAME=duckdb_ide,DB_USER=postgres,DB_HOST=/cloudsql/sql-practice-project-489106:us-central1:duckdb-ide-db
+```
+
+This revealed the next issue...
+
+---
+
+## Issue 3: Unix Socket Not Available for Private IP Cloud SQL
+
+### Error
+```
+{"status":"error","error":"connect ENOENT /cloudsql/sql-practice-project-489106:us-central1:duckdb-ide-db/.s.PGSQL.5432"}
+```
+
+### Root Cause
+The Cloud SQL instance only has **PRIVATE IP** (10.61.0.5). The Unix socket connection method (`/cloudsql/...`) only works for:
+- Public IP Cloud SQL instances
+- Cloud Run with `--set-cloudsql-instances` flag
+
+For Cloud Functions with private IP, direct TCP connection to the private IP is required.
+
+### Research Source: [Google Cloud Documentation](https://cloud.google.com/sql/docs/postgres/connect-functions)
+
+> "Connect using your instance's **private IP address** and port 5432"
+
+### Solution
+Changed connection method from Unix socket to private IP:
+
+```bash
+--set-env-vars=DB_NAME=duckdb_ide,DB_USER=postgres,DB_HOST=10.61.0.5,DB_PORT=5432
+```
+
+---
+
+## Issue 4: SSL Required for Private IP Connections
+
+### Error
+```
+{"status":"error","error":"pg_hba.conf rejects connection for host \"10.8.0.2\", user \"postgres\", database \"duckdb_ide\", no encryption"}
+```
+
+### Root Cause
+Cloud SQL requires SSL/TLS encryption for connections via private IP.
+
+### Solution
+Added SSL configuration to database connections:
+
+**File**: `server/cloud-functions/db-init/migrate.js`
+```javascript
+const client = new Client({
+    host: process.env.DB_HOST,
+    port: process.env.DB_PORT || 5432,
+    database: process.env.DB_NAME || 'duckdb_ide',
+    user: process.env.DB_USER || 'postgres',
+    password: process.env.DB_PASSWORD,
+    // Enable SSL for private IP connections
+    ssl: {
+        rejectUnauthorized: false, // Cloud SQL certificates are self-signed
+    },
+});
+```
+
+**File**: `server/cloud-functions/db-init/seed.js` (same change for Pool)
+
+---
+
+## Final Working Configuration
+
+### Cloud Function Deployment
+```bash
+gcloud functions deploy db-init-service \
+  --project=sql-practice-project-489106 \
+  --region=us-central1 \
+  --gen2 \
+  --runtime=nodejs20 \
+  --source=. \
+  --entry-point=initDatabase \
+  --trigger-http \
+  --allow-unauthenticated \
+  --memory=512Mi \
+  --timeout=300s \
+  --max-instances=1 \
+  --vpc-connector=duckdb-ide-vpc-connector \
+  --set-env-vars=DB_NAME=duckdb_ide,DB_USER=postgres,DB_HOST=10.61.0.5,DB_PORT=5432 \
+  --set-secrets=DB_PASSWORD=db-password:latest
+```
+
+### Connection Flow for Private IP Cloud SQL
+```
+Cloud Function → VPC Connector → Private IP (10.61.0.5:5432) → Cloud SQL
+                      ↓
+                 SSL/TLS required
+```
+
+### Key Differences: Unix Socket vs Private IP
+
+| Feature | Unix Socket | Private IP |
+|---------|-------------|------------|
+| **Connection Path** | `/cloudsql/PROJECT:REGION:INSTANCE` | `10.61.0.5:5432` |
+| **Works With** | Public IP Cloud SQL | Private IP Cloud SQL |
+| **Cloud Run Flag** | `--set-cloudsql-instances` | VPC connector required |
+| **Cloud Functions** | ❌ Not supported | ✅ Supported with VPC connector |
+| **SSL Required** | No (file socket) | Yes |
+
+---
+
+## Verification
+
+### Successful Database Initialization
+```bash
+$ curl -X POST "https://db-init-service-frxi6yk4jq-uc.a.run.app/init"
+{"status":"ok","message":"Database initialized successfully (migrated + seeded)"}
+```
+
+### Tables Created
+- `users` - User accounts
+- `questions` - Practice questions
+- `user_attempts` - User quiz attempts
+- `user_sessions` - Active practice sessions
+
+### Indexes Created
+- `idx_user_attempts_user_id`
+- `idx_user_attempts_question_id`
+- `idx_user_attempts_user_question`
+
+---
+
+## Files Modified
+
+1. **server/cloud-functions/db-init/index.js** - Fixed URL parsing
+2. **server/cloud-functions/db-init/migrate.js** - Added SSL configuration
+3. **server/cloud-functions/db-init/seed.js** - Added SSL configuration
+
+---
+
+## Cost Considerations
+
+| Resource | Cost |
+|----------|------|
+| Cloud Function (db-init-service) | Pay per invocation (minimal) |
+| VPC Connector | ~$5-10/month |
+
+The Cloud Function only runs during initialization, so ongoing costs are minimal.
+
