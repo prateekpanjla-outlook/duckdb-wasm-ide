@@ -25,7 +25,8 @@
     "vitest": "^1.1.0"
   },
   "dependencies": {
-    "@duckdb/duckdb-wasm": "^1.33.1-dev18.0"
+    "@duckdb/duckdb-wasm": "^1.33.1-dev18.0",
+    "codemirror": "^5.65.16"
   },
   "engines": {
     "node": ">=18.0.0"

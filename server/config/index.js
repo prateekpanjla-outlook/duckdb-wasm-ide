@@ -80,7 +80,21 @@ const config = {
 
         // Helmet (security headers)
         helmet: {
-            contentSecurityPolicy: process.env.NODE_ENV === 'production',
+            contentSecurityPolicy: {
+                useDefaults: true,
+                directives: {
+                    'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+                    'style-src': ["'self'", "'unsafe-inline'"],
+                    'img-src': ["'self'", 'data:', 'https:'],
+                    'connect-src': ["'self'"],
+                    'font-src': ["'self'"],
+                    'object-src': ["'none'"],
+                    'base-uri': ["'self'"],
+                    'form-action': ["'self'"],
+                    'frame-ancestors': ["'none'"],
+                    'upgrade-insecure-requests': null,
+                },
+            },
         },
     },
 
