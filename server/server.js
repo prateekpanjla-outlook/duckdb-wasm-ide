@@ -18,6 +18,13 @@ const app = express();
 const PORT = config.server.port;
 const HOST = config.server.host;
 
+// ============ TRUST PROXY (for Cloud Run) ============
+// Cloud Run sits behind a proxy, so we need to trust it
+// This fixes express-rate-limit X-Forwarded-For validation error
+if (config.isProduction) {
+    app.set('trust proxy', true);
+}
+
 // ============ SECURITY MIDDLEWARE ============
 app.use(helmet(config.security.helmet));
 
