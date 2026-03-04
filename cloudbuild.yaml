@@ -48,11 +48,15 @@ steps:
       - '10'
       - '--timeout'
       - '300'
+      # VPC Connector for Cloud SQL access
+      - '--vpc-egress=private-ranges-only'
+      - '--vpc-connector=duckdb-ide-vpc-connector'
+      - '--vpc-connector-location=us-central1'
       # Connect to Cloud SQL
       - '--set-cloudsql-instances=$_CLOUDSQL_CONNECTION'
       # Environment variables
       - '--set-env-vars'
-      - 'NODE_ENV=production,DB_NAME=$_DB_NAME,DB_USER=$_DB_USER,DB_HOST=10.61.0.5,DB_PORT=5432'
+      - 'NODE_ENV=production,DB_NAME=$_DB_NAME,DB_USER=$_DB_USER,DB_HOST=/cloudsql/$_CLOUDSQL_CONNECTION'
       # Secrets from Secret Manager
       - '--set-secrets'
       - 'DB_PASSWORD=$_DB_PASSWORD_SECRET:latest,JWT_SECRET=$_JWT_SECRET_SECRET:latest'
