@@ -1787,3 +1787,1380 @@ gcloud builds triggers create github \
 # Deploy application
 git push origin gcp-deployment
 ```
+
+---
+
+## Security Issue: Sensitive Files in Cloud Build (2026-03-03 16:15)
+
+### Issue Summary
+During Cloud Build deployment, the entire project tarball is uploaded to Google Cloud Storage. Several **sensitive files** were found that should NOT be included in the build context.
+
+### Files Found
+
+| File | Risk | Status |
+|------|------|--------|
+| `terraform/first-time-deployment/terraform-key.json` | Service account credentials | ⚠️ CRITICAL |
+| `server/.env` | Database passwords, JWT secrets | ⚠️ HIGH |
+| `server/.env.development` | Development config | ⚠️ MEDIUM |
+| `server/.env.production` | Production config | ⚠️ MEDIUM |
+| `*.log` (firestore-debug.log, server.log) | Debug logs with possible sensitive data | ⚠️ LOW |
+
+### Fix Applied
+
+Updated [`.dockerignore`](.dockerignore) to exclude sensitive files:
+
+```dockerignore
+# Environment files (use secrets in Cloud Run instead)
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.test
+server/.env
+server/.env.development
+server/.env.production
+
+# Terraform / Service Account keys
+terraform/
+*-key.json
+*.tfvars
+*.pem
+```
+
+### Why .dockerignore Matters
+
+When running `gcloud builds submit` or `gcloud run deploy --source`:
+1. The entire project directory is tarballed
+2. Uploaded to GCS for Cloud Build
+3. Used as build context for Docker image
+
+**Any file not in .dockerignore gets included in the Docker image!**
+
+### Verification
+
+To verify no sensitive files are included:
+
+```bash
+# Check what would be included in build
+docker build --no-cache -t test .
+
+# Inspect image for sensitive files
+docker run --rm -it test ls -la /app
+docker run --rm -it test cat /app/terraform-key.json  # Should fail
+```
+
+### Best Practices
+
+1. **Never commit secrets** to git
+2. **Use .dockerignore** to exclude sensitive files from builds
+3. **Use Secret Manager** for production secrets (already configured)
+4. **Use environment-specific .env files** only for local development
+5. **Rotate credentials** if accidentally exposed
+
+### Service Account Key Security
+
+The `terraform-key.json` file is especially dangerous:
+- Contains full service account credentials
+- Grants broad permissions (Editor role on project)
+- Should be rotated if exposed
+
+To rotate (if needed):
+```bash
+gcloud iam service-accounts keys delete terraform-key.json \
+    --iam-account=terraform-deployer@sql-practice-project-489106.iam.gserviceaccount.com
+
+gcloud iam service-accounts keys create terraform-key.json \
+    --iam-account=terraform-deployer@sql-practice-project-489106.iam.gserviceaccount.com
+```
+
+---
+
+## Cloud Build Deployment Errors (2026-03-03 17:10+)
+
+### Error 1: Substitution Variables Not Matched
+
+**Error Message:**
+```
+ERROR: (gcloud.builds.submit) INVALID_ARGUMENT: generic::invalid_argument:
+key "_DEPLOY_REGION" in the substitution data is not matched in the template
+```
+
+**Root Cause:**
+When running `gcloud builds submit` with `--substitutions`, you must provide **ALL** substitution variables that are defined in the `cloudbuild.yaml`. The default values in the YAML are only used when running via Cloud Build triggers, not direct CLI invocation.
+
+**Fix:**
+Either:
+1. **Remove unused substitutions** from `cloudbuild.yaml` (recommended)
+2. **Provide all substitutions** via `--substitutions` flag
+
+**Fixed cloudbuild.yaml:**
+```yaml
+# Only include variables that are actually used in steps
+substitutions:
+  _CLOUDSQL_CONNECTION: 'your-project:us-central1:duckdb-ide-db'
+  _DB_NAME: 'duckdb_ide'
+  _DB_USER: 'postgres'
+  _DB_PASSWORD_SECRET: 'db-password'
+  _JWT_SECRET_SECRET: 'jwt-secret'
+```
+
+### Error 2: Invalid Docker Tag Format
+
+**Error Message:**
+```
+invalid argument "us-central1-docker.pkg.dev/.../duckdb-ide:" for "-t, --tag" flag:
+invalid reference format
+```
+
+**Root Cause:**
+The `$COMMIT_SHA` variable is empty when running builds directly (not from a git trigger). This results in a trailing colon in the tag name: `duckdb-ide:` which is invalid Docker syntax.
+
+**Fix:**
+Use `latest` tag for direct builds, or use `$BUILD_ID` which is always set by Cloud Build:
+
+```yaml
+# Before (broken):
+- 'us-central1-docker.pkg.dev/$PROJECT_ID/duckdb-ide-repo/duckdb-ide:$COMMIT_SHA'
+
+# After (fixed):
+- 'us-central1-docker.pkg.dev/$PROJECT_ID/duckdb-ide-repo/duckdb-ide:latest'
+```
+
+### Error 3: Missing Secret Manager Secrets
+
+**Potential Error:**
+```
+ERROR: (gcloud.run.deploy) spec.template.spec.containers[0].env:
+Referencing secret with name 'jwt-secret' in environment variable 'JWT_SECRET',
+but secret 'jwt-secret' does not exist
+```
+
+**Root Cause:**
+The `cloudbuild.yaml` references Secret Manager secrets that may not exist:
+- `db-password`
+- `jwt-secret`
+
+**Fix:**
+Verify secrets exist or create them:
+
+```bash
+# Check if secrets exist
+gcloud secrets list
+
+# Create secrets if needed
+echo "your-password" | gcloud secrets create db-password --data-file=-
+echo "your-jwt-secret" | gcloud secrets create jwt-secret --data-file=-
+```
+
+### Error 4: Service Account Permissions
+
+**Potential Errors:**
+```
+ERROR: (gcloud.run.deploy) Permission 'run.services.create' denied
+ERROR: build step 0 "gcr.io/cloud-builders/docker" failed:
+unauthorized: authentication required
+```
+
+**Required Permissions:**
+
+| Service Account | Required Role | Purpose |
+|----------------|---------------|---------|
+| Cloud Build SA | `roles/run.developer` | Deploy to Cloud Run |
+| Cloud Build SA | `roles/artifactregistry.writer` | Push/pull images |
+| Cloud Run SA | `roles/cloudsql.client` | Connect to Cloud SQL |
+| Cloud Run SA | `roles/secretmanager.secretAccessor` | Access secrets |
+
+**Verification Command:**
+```bash
+PROJECT_ID="sql-practice-project-489106"
+CLOUD_BUILD_SA="${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com"
+
+gcloud projects get-iam-policy "$PROJECT_ID" \
+  --filter="bindings.members:serviceAccount:$CLOUD_BUILD_SA"
+```
+
+### Error 5: Cloud SQL Connection String Format
+
+**Correct Format:**
+```
+PROJECT_ID:REGION:INSTANCE_NAME
+```
+
+**Example:**
+```
+sql-practice-project-489106:us-central1:duckdb-ide-db
+```
+
+**Common Mistakes:**
+| Wrong | Right |
+|-------|-------|
+| `duckdb-ide-db` | `sql-practice-project-489106:us-central1:duckdb-ide-db` |
+| `us-central1:duckdb-ide-db` | `sql-practice-project-489106:us-central1:duckdb-ide-db` |
+| `projects/.../instances/duckdb-ide-db` | `sql-practice-project-489106:us-central1:duckdb-ide-db` |
+
+### Error 6: Docker Build Failures
+
+**Potential Error:**
+```
+Step #0 - "build": ERROR [controller] Cannot build: failed to solve:
+executor failed running [/bin/sh -c npm ci --only=production]
+```
+
+**Root Causes:**
+1. `package.json` or `package-lock.json` missing from build context
+2. `.dockerignore` is too aggressive (excludes needed files)
+3. Network issues downloading npm packages
+
+**Debugging:**
+```bash
+# Test Docker build locally
+docker build -t test .
+
+# Check .dockerignore isn't excluding needed files
+cat .dockerignore | grep -E "package|node_modules"
+```
+
+### Summary of Cloud Build Fixes Applied
+
+| Issue | File | Fix |
+|-------|------|-----|
+| Unused substitution variables | `cloudbuild.yaml` | Removed `_DEPLOY_REGION`, `_MEMORY`, `_CPU`, `_MAX_INSTANCES` |
+| Empty COMMIT_SHA variable | `cloudbuild.yaml` | Changed to use `latest` tag |
+| Sensitive files in build | `.dockerignore` | Added `terraform/`, `*-key.json`, `server/.env*` |
+
+### Working Cloud Build Command
+
+```bash
+cd /home/vagrant/Desktop/claude-code-zai/duckdb-wasm-project && \
+gcloud builds submit --config cloudbuild.yaml \
+  --substitutions=_CLOUDSQL_CONNECTION=sql-practice-project-489106:us-central1:duckdb-ide-db,_DB_NAME=duckdb_ide,_DB_USER=postgres,_DB_PASSWORD_SECRET=db-password,_JWT_SECRET_SECRET=jwt-secret
+```
+
+### After Successful Build
+
+Get the Cloud Run URL:
+```bash
+gcloud run services describe duckdb-ide --region=us-central1 --format='value(status.url)'
+```
+
+Expected output:
+```
+https://duckdb-ide-xxxxx-uc.a.run.app
+```
+
+---
+
+# Current Status & Next Steps (2026-03-03 End of Day)
+
+## Completed Today ✅
+
+1. **Terraform Deployment** - All infrastructure created
+2. **Cloud Function (db-init-service)** - Deployed successfully
+3. **Security Fixes** - Updated `.dockerignore` to exclude sensitive files:
+   - `terraform/` directory
+   - `*-key.json` files (service account keys)
+   - `server/.env*` files (environment secrets)
+   - `*.log` files
+
+4. **Cloud Build Configuration Fixes**:
+   - Removed unused substitution variables (`_DEPLOY_REGION`, `_MEMORY`, `_CPU`, `_MAX_INSTANCES`)
+   - Fixed Docker tag to use `$BUILD_ID` instead of `$COMMIT_SHA`
+   - Documented all common Cloud Build errors
+
+5. **IAM Permissions Granted**:
+   - `roles/storage.objectViewer` to compute developer SA
+   - `roles/artifactregistry.repoAdmin` on both repositories
+   - All Cloud Functions Gen2 build permissions
+
+## Files Modified Today
+
+| File | Changes |
+|------|---------|
+| `.dockerignore` | Added exclusions for sensitive files |
+| `cloudbuild.yaml` | Fixed substitution variables and Docker tags |
+| `GCP_DEPLOYMENT_EXECUTION.md` | Added security issue docs and Cloud Build errors |
+
+## Current Infrastructure State
+
+| Resource | Status | URL/Reference |
+|----------|--------|---------------|
+| **Cloud SQL** | ⚠️ Being deleted (cost saving) | Will recreate tomorrow |
+| **Cloud Function** | ⚠️ Being deleted (cost saving) | Will recreate tomorrow |
+| **Secret Manager** | ✅ Keeping | `db-password`, `jwt-secret` |
+| **Artifact Registry** | ✅ Created | `duckdb-ide-repo` |
+| **Cloud Run** | ⏳ Not deployed | - |
+| **VPC Connector** | ✅ Created | `duckdb-ide-vpc-connector` |
+
+**Note:** Cloud SQL and Cloud Function are being deleted overnight to save costs (~$10-15/month). They will be recreated tomorrow before deployment.
+
+## Next Steps (Tomorrow)
+
+### Step 0: Recreate Cloud SQL and Cloud Function (Deleted for Cost Savings)
+
+**Why deleted?** Cloud SQL db-f1-micro costs ~$10-15/month even when idle.
+
+#### 0A. Recreate Cloud SQL Instance
+
+```bash
+cd /home/vagrant/Desktop/claude-code-zai/duckdb-wasm-project/terraform/first-time-deployment
+
+# Only apply Cloud SQL resources
+terraform apply -target=google_sql_database_instance.duckdb_ide \
+                -target=google_sql_database.default_db \
+                -target=google_sql_database_instance.duckdb_ide \
+                -target=google_sql_user.internal_user
+```
+
+Or use `gcloud` directly (faster):
+```bash
+gcloud sql instances create duckdb-ide-db \
+    --project=sql-practice-project-489106 \
+    --region=us-central1 \
+    --tier=db-f1-micro \
+    --edition=ENTERPRISE \
+    --database-version=POSTGRES_15 \
+    --root-password=your-root-password \
+    --storage-auto-increase \
+    --cpu=1 \
+    --memory=384MiB
+```
+
+#### 0B. Recreate Cloud Function (db-init-service)
+
+After Cloud SQL is ready, redeploy the Cloud Function:
+
+```bash
+cd /home/vagrant/Desktop/claude-code-zai/duckdb-wasm-project/server/cloud-functions/db-init
+
+gcloud functions deploy db-init-service \
+    --gen2 \
+    --region=us-central1 \
+    --runtime=nodejs20 \
+    --source=. \
+    --entry-point=initDatabase \
+    --trigger-http \
+    --allow-unauthenticated \
+    --memory=512Mi \
+    --timeout=300s \
+    --vpc-connector=duckdb-ide-vpc-connector \
+    --set-env-vars="DB_NAME=duckdb_ide,DB_USER=postgres" \
+    --set-secrets="DB_PASSWORD=db-password:latest" \
+    --service-account=db-init-sa@sql-practice-project-489106.iam.gserviceaccount.com
+```
+
+#### 0C. Initialize Database
+
+```bash
+# Get Cloud Function URL
+FUNCTION_URL=$(gcloud functions describe db-init-service --region=us-central1 --format="value(serviceConfig.uri)")
+
+# Initialize database tables
+curl -X POST ${FUNCTION_URL}/init
+```
+
+### Step 1: Deploy Main Application to Cloud Run
+
+```bash
+cd /home/vagrant/Desktop/claude-code-zai/duckdb-wasm-project && \
+gcloud builds submit --config cloudbuild.yaml \
+  --substitutions=_CLOUDSQL_CONNECTION=sql-practice-project-489106:us-central1:duckdb-ide-db,_DB_NAME=duckdb_ide,_DB_USER=postgres,_DB_PASSWORD_SECRET=db-password,_JWT_SECRET_SECRET=jwt-secret
+```
+
+**Expected behavior:**
+1. Uploads source (~75 MB tarball, .dockerignore applied)
+2. Builds Docker image
+3. Pushes to Artifact Registry
+4. Deploys to Cloud Run
+
+### Step 2: Get Application URL
+
+```bash
+gcloud run services describe duckdb-ide --region=us-central1 --format='value(status.url)'
+```
+
+### Step 3: Initialize Database (if not done)
+
+```bash
+# Trigger Cloud Function to create tables
+curl -X POST https://db-init-service-192834930119.us-central1.run.app/init
+```
+
+### Step 4: Test the Application
+
+1. Open the Cloud Run URL
+2. Verify frontend loads
+3. Test database connectivity
+4. Verify user signup/login works
+
+### Step 5: Create Cloud Build Trigger (Optional)
+
+For automated deployments on git push:
+
+1. Go to: https://console.cloud.google.com/cloud-build/triggers?project=sql-practice-project-489106
+2. Click "Create Trigger"
+3. Configure:
+   - Name: `deploy-gcp-deployment`
+   - Event: Push to branch `gcp-deployment`
+   - Config: `cloudbuild.yaml`
+4. Then just `git push origin gcp-deployment` to deploy
+
+### Step 6: Create Cloud Run Functions Using Python (Future Consideration)
+
+**Why Python?**
+- Python has excellent libraries for data processing (pandas, polars, duckdb)
+- Better suited for data analysis and ETL tasks
+- Rich ecosystem for ML/AI workloads
+
+**Options for Python on Cloud Run:**
+
+#### Option A: Pure Python (Framework)
+
+Create a lightweight Python service using standard library or frameworks like FastAPI/Flask:
+
+```dockerfile
+# Dockerfile for Python Cloud Run
+FROM python:3.11-slim
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt --no-cache
+
+COPY . .
+
+# Cloud Run runs on port 8080
+ENV PORT=8080
+CMD ["python", "-m", "main"]
+```
+
+```python
+# main.py
+import os
+from duckdb import connect
+
+def hello_http(request):
+    # Process data using DuckDB
+    conn = connect(':memory:')
+    # ... your processing logic ...
+    return {'status': 'success'}, 200
+```
+
+#### Option B: Python + DuckDB Web Service
+
+```bash
+# Deploy Python service with DuckDB
+gcloud run deploy duckdb-python-service \
+  --source . \
+  --region=us-central1 \
+  --allow-unauthenticated \
+  --port=8080 \
+  --memory=1Gi \
+  --cpu=2 \
+  --set-env-vars=DUCKDB_MEMORY_LIMIT=1GB
+```
+
+#### Option C: Multi-Service Architecture
+
+| Service | Language | Purpose |
+|---------|----------|---------|
+| `duckdb-ide` | Node.js | Frontend + basic backend (current) |
+| `duckdb-python-processor` | Python | Data processing/ETL |
+| `duckdb-analytics` | Python | Analytics queries |
+
+**When to Consider:**
+- Heavy data processing (pandas/numpy workloads)
+- ML model serving
+- Complex ETL pipelines
+- DuckDB-based analytics services
+
+**Deployment would be similar to main app:**
+```bash
+gcloud builds submit --config cloudbuild-python.yaml \
+  --substitutions=_SERVICE_NAME=duckdb-python-processor
+```
+
+## Upload Size Optimization (2026-03-04)
+
+### Problem
+
+When running `gcloud builds submit`, the entire project directory was being uploaded, including:
+
+| Item | Size | Needed for Build? |
+|------|------|-------------------|
+| `node_modules` | 664 MB | ❌ No (installed via `npm ci` in container) |
+| `server/node_modules` | 15 MB | ❌ No (installed via `npm ci` in container) |
+| `.git` | 24 MB | ❌ No |
+| `tests/` | 308 KB | ❌ No |
+| `*.md` docs | ~5 MB | ❌ No |
+| `terraform/` | ~1 MB | ❌ No |
+| **Total wasted** | **~709 MB** | |
+
+**Upload time @ 10 Mbps**: ~10 minutes
+
+### Solution: `.gcloudignore` File
+
+Created [`.gcloudignore`](/.gcloudignore) to exclude unnecessary files from the Cloud Build tarball:
+
+```gcloudignore
+# Node modules (will be rebuilt in container)
+node_modules
+server/node_modules
+
+# Development files
+.git
+.gitignore
+
+# Documentation
+*.md
+docs
+README.md
+
+# Test files
+tests
+test-results
+playwright-report
+screenshots
+*.log
+coverage
+.nyc_output
+vitest.config.js
+playwright.config.js
+
+# Environment files (use secrets in Cloud Run instead)
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.test
+server/.env
+server/.env.example
+
+# Terraform / Service Account keys
+terraform
+*-key.json
+*.tfvars
+*.pem
+logs
+
+# ... (see full file for all exclusions)
+```
+
+### Result
+
+| Before | After |
+|--------|-------|
+| **~709 MB** | **~92 MB** |
+| ~10 minutes @ 10 Mbps | ~1 minute @ 10 Mbps |
+
+### What Actually Gets Uploaded
+
+| File/Folder | Size | Reason |
+|-------------|------|--------|
+| `package*.json` | 143 KB | Dependency manifest for `npm ci` |
+| `server/package*.json` | 16 KB | Backend dependencies |
+| `Dockerfile` | 2 KB | Build instructions |
+| `cloudbuild.yaml` | 3 KB | Cloud Build config |
+| `index.html` | 9 KB | Frontend entry point |
+| `css/` | 32 KB | Styles |
+| `js/` | 256 KB | Frontend JS (app logic) |
+| `libs/duckdb-wasm/` | 73 MB | **WASM binaries** - client needs these! |
+| `server/` | 16 MB | Backend code |
+
+**Note**: `node_modules` is NOT uploaded because the Dockerfile runs `npm ci` inside the container, which:
+- Installs fresh, platform-specific binaries for Alpine Linux
+- Ensures reproducible builds using `package-lock.json`
+- Is faster than uploading 680 MB
+
+### Difference: `.dockerignore` vs `.gcloudignore`
+
+| File | When It Applies |
+|------|-----------------|
+| `.dockerignore` | During Docker build (after tarball uploaded) |
+| `.gcloudignore` | During `gcloud builds submit` (tarball creation) |
+
+**Both are needed** - `.gcloudignore` reduces upload time, `.dockerignore` prevents files from being layered into the Docker image.
+
+## Important Notes
+
+1. **Upload Size Optimization**: `.gcloudignore` reduces upload from ~709 MB to ~92 MB
+2. **Storage Permission Issue**: Compute developer SA now has `storage.objectViewer` - this should fix the previous upload errors
+3. **BUILD_ID Variable**: Cloud Build automatically provides this - no empty tag issue anymore
+4. **Sensitive Files Excluded**: Both `.dockerignore` and `.gcloudignore` prevent terraform keys and .env files from being uploaded
+
+## Troubleshooting Commands
+
+```bash
+# Check Cloud Build logs
+gcloud builds list --limit=5
+gcloud builds log <BUILD_ID>
+
+# Check Cloud Run services
+gcloud run services list --region=us-central1
+
+# Check Cloud Run logs
+gcloud run services logs duckdb-ide --region=us-central1 --follow
+
+# Check for secret errors
+gcloud secrets list
+
+# Verify service account permissions
+gcloud projects get-iam-policy sql-practice-project-489106 \
+  --filter="bindings.members:serviceAccount:192834930119-compute@developer.gserviceaccount.com"
+```
+
+## Cost Status
+
+| Resource | Monthly Cost | Action |
+|----------|--------------|--------|
+| **Cloud SQL (db-f1-micro)** | ~$10-15 | ⚠️ Deleting overnight, will recreate tomorrow |
+| **Cloud Function** | Free tier (within limits) | ⚠️ Deleting overnight, will recreate tomorrow |
+| **Cloud Run** | Free tier (within limits) | ✅ Will deploy tomorrow |
+| **Secret Manager** | ~$0.06 | ✅ Keeping |
+| **Artifact Registry** | Free (under 0.5 GB) | ✅ Keeping |
+| **VPC Connector** | Free tier covers usage | ✅ Keeping |
+
+**Overnight Cost Saving:** ~$10-15/month by deleting Cloud SQL
+
+**Note:** Cloud SQL is the only significant cost. Everything else is covered by free tier or costs pennies.
+
+---
+
+# Cloud Build Deployment Attempt (2026-03-04)
+
+## Build ID: c6e19130-48b3-4fa4-8f12-341b2832e36a
+
+### What Worked ✅
+
+| Step | Status | Details |
+|------|--------|---------|
+| **Upload optimization** | ✅ Success | `.gcloudignore` reduced upload from ~709 MB to ~92 MB |
+| **Docker build** | ✅ Success | Image built successfully |
+| **Artifact Registry push** | ✅ Success | Image pushed to `us-central1-docker.pkg.dev/.../duckdb-ide:latest` |
+| **Build duration** | ✅ Improved | Much faster upload with .gcloudignore |
+
+### What Failed ❌
+
+| Step | Status | Error |
+|------|--------|-------|
+| **Cloud Run deploy** | ❌ Failed | `PERMISSION_DENIED: Permission 'run.services.get' denied` |
+
+### Root Cause Analysis: IAM Permission Issue
+
+#### The Error
+```
+ERROR: (gcloud.run.deploy) PERMISSION_DENIED: Permission 'run.services.get' denied on resource 
+'namespaces/sql-practice-project-489106/services/duckdb-ide' (or resource may not exist). 
+This command is authenticated as 192834930119-compute@developer.gserviceaccount.com
+```
+
+#### Why This Happened
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Cloud Build Execution Flow                                     │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  1. User runs: gcloud builds submit                             │
+│     → Authenticated as: user@gmail.com                          │
+│                                                                 │
+│  2. Cloud Build creates a tarball and uploads                   │
+│     → Uses worker SA: {project_number}-compute@developer...     │
+│                                                                 │
+│  3. Cloud Build runs the deployment step from cloudbuild.yaml   │
+│     → Executes: gcloud run deploy duckdb-ide ...                │
+│     → Authenticated as: compute developer SA                    │
+│                                                                 │
+│  4. gcloud run deploy attempts:                                 │
+│     a. GET /services/duckdb-ide (check if exists)              │
+│     b. CREATE or UPDATE accordingly                             │
+│                                                                 │
+│  5. FAILURE: compute developer SA lacks 'run.services.get'      │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Key Insight
+
+The error message says `run.services.get` denied, but this happens **because the service doesn't exist**.
+
+**Logic flow:**
+1. `gcloud run deploy` first tries to GET the service (to decide: create vs update)
+2. If GET fails → deployment fails, even if CREATE permission exists
+3. Service doesn't exist → GET returns PERMISSION_DENIED (not NOT_FOUND)
+4. This is a security feature to prevent information leakage
+
+#### Service Accounts Involved
+
+| Service Account | Has `roles/run.developer`? | Purpose |
+|-----------------|---------------------------|---------|
+| `cloud-build-deployer-sa` | ✅ Yes | Intended for deployment |
+| `{project_number}-compute@developer.gserviceaccount.com` | ❌ No (initially) | Cloud Build worker SA |
+| `cloud-run-sa` | N/A | Runtime identity for the service |
+
+### Fix Applied
+
+Granted `roles/run.developer` to the compute developer service account:
+
+```bash
+PROJECT_NUMBER="192834930119"
+COMPUTE_DEV_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+
+gcloud projects add-iam-policy-binding sql-practice-project-489106 \
+    --member="serviceAccount:$COMPUTE_DEV_SA" \
+    --role="roles/run.developer"
+```
+
+### Lessons Learned
+
+#### 1. Dependency Planning: IAM Permissions Must Be Pre-Configured
+
+**Issue:** Cloud Build deployment step failed because the worker SA lacked Cloud Run permissions.
+
+**Root Cause:** Terraform configured permissions for `cloud-build-deployer-sa` but NOT for the `compute developer SA` that actually runs the build steps.
+
+**Solution Needed:** Either:
+- **Option A:** Grant `roles/run.developer` to compute developer SA
+- **Option B:** Configure Cloud Build to impersonate cloud-build-deployer-sa for deployment steps
+
+#### 2. Dependency Planning Matrix
+
+| Resource | Depends On | Status |
+|----------|-----------|--------|
+| **Docker build** | None (just code) | ✅ |
+| **Artifact Registry push** | `artifactregistry.writer` on compute dev SA | ✅ |
+| **Cloud Run deploy** | `run.developer` on compute dev SA | ⚠️ Was missing |
+| **Cloud SQL connection** | Cloud SQL instance exists | ⚠️ Deleted for cost savings |
+| **Secret Manager access** | `secretAccessor` on cloud-run-sa | ✅ |
+
+#### 3. Service Account Hierarchy for Cloud Build
+
+```
+User Account (prateek.panjal.outlook@gmail.com)
+    │
+    ├── Triggers: gcloud builds submit
+    │
+    ↓
+Cloud Build Service
+    │
+    ├── Uses: {project_number}-compute@developer.gserviceaccount.com
+    │   Purpose: Executes build steps (docker, gcloud commands)
+    │   Needs: artifactregistry.writer, run.developer, etc.
+    │
+    ├── Should impersonate: cloud-build-deployer-sa
+    │   Purpose: Least-privilege deployment account
+    │   Needs: run.developer, cloudfunctions.developer
+    │
+    ↓
+Cloud Run Service
+    │
+    └── Runs as: cloud-run-sa
+        Purpose: Runtime identity for the application
+        Needs: cloudsql.client, secretAccessor
+```
+
+### Next Steps
+
+1. ✅ **DONE**: Granted `roles/run.developer` to compute developer SA
+2. ⏳ **TODO**: Re-run deployment to verify fix works
+3. ⏳ **TODO**: Update Terraform to grant this permission automatically
+4. ⏳ **TODO**: Consider using service account impersonation for better security
+
+### Files Modified Today
+
+| File | Change |
+|------|--------|
+| `.gcloudignore` | Created - reduces upload from ~709 MB to ~92 MB |
+| `GCP_DEPLOYMENT_EXECUTION.md` | Added this documentation section |
+
+---
+
+
+---
+
+# Terraform Authentication Issue (2026-03-04)
+
+## Build ID: N/A (terraform plan failed)
+
+### Error Encountered
+
+When running `terraform plan`, got multiple errors:
+
+```
+Error: Error when reading or editing Project Service: 
+oauth2: "invalid_grant" "Account has been deleted"
+```
+
+### Root Cause Analysis
+
+**Issue:** `GOOGLE_APPLICATION_CREDENTIALS` environment variable was not set.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  What Happened                                                  │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  1. terraform-key.json file EXISTS locally ✅                   │
+│  2. Service account EXISTS in GCP ✅                           │
+│  3. Key ID in file MATCHES active key in GCP ✅                │
+│                                                                 │
+│  BUT:                                                           │
+│  → GOOGLE_APPLICATION_CREDENTIALS was BLANK                    │
+│  → Terraform couldn't find the credentials file                │
+│  → Got misleading error: "Account has been deleted"            │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Solution
+
+Set the environment variable to point to the terraform key file:
+
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS=/path/to/terraform/first-time-deployment/terraform-key.json
+```
+
+### Commands to Diagnose This Issue
+
+| Command | Purpose |
+|---------|---------|
+| `echo "GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS"` | Check if variable is set |
+| `ls -la terraform-key.json` | Check if key file exists locally |
+| `grep -o '"private_key_id": "[^"]*"' terraform-key.json` | Get key ID from local file |
+| `gcloud iam service-accounts keys list --iam-account=...` | List active keys in GCP |
+| `gcloud iam service-accounts describe terraform-deployer@...` | Verify SA exists |
+
+### Why the Error Was Misleading
+
+The error message `"Account has been deleted"` is confusing because:
+- The key file exists on disk
+- The service account exists in GCP
+- The key ID matches an active key
+
+**But:** When `GOOGLE_APPLICATION_CREDENTIALS` is not set, Terraform can't locate the credentials, and the authentication failure produces this generic error.
+
+### Fix Commands (Full Sequence)
+
+```bash
+# 1. Set the environment variable
+export GOOGLE_APPLICATION_CREDENTIALS=/home/vagrant/Desktop/claude-code-zai/duckdb-wasm-project/terraform/first-time-deployment/terraform-key.json
+
+# 2. Verify it's set
+echo "GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS"
+
+# 3. Run terraform plan
+cd terraform/first-time-deployment
+TS=$(date +%Y%m%d-%H%M%S) && terraform plan -out=tfplan-$TS.plan 2>&1 | tee terraform-plan-$TS.log
+```
+
+### Making It Permanent
+
+To avoid setting this every session, add to `~/.bashrc` or `~/.zshrc`:
+
+```bash
+echo 'export GOOGLE_APPLICATION_CREDENTIALS=/home/vagrant/Desktop/claude-code-zai/duckdb-wasm-project/terraform/first-time-deployment/terraform-key.json' >> ~/.bashrc
+source ~/.bashrc
+```
+
+### Lessons Learned
+
+1. **Terraform requires `GOOGLE_APPLICATION_CREDENTIALS` to be set** - it doesn't automatically look for key files in the current directory
+2. **Error messages can be misleading** - "Account has been deleted" may actually mean "credentials not found"
+3. **Always check environment variables first** when encountering OAuth/credential errors
+
+### Status
+
+✅ **RESOLVED** - Issue was missing environment variable, not a deleted account
+
+
+---
+
+# Cloud SQL Recreation (2026-03-04)
+
+## Terraform Apply - Successful
+
+### Log File
+`terraform/first-time-deployment/terraform-apply-20260304-094936.log`
+
+### What Was Executed
+1. **terraform plan** - ✅ Successful (detected Cloud SQL was deleted)
+2. **terraform apply tfplan-20260304-094936.plan** - ✅ Successful
+
+### Resources Created
+
+| Resource | Creation Time | ID/Reference |
+|----------|---------------|--------------|
+| **Cloud SQL Instance** | 14m 1s | `duckdb-ide-db` |
+| **SQL User (postgres)** | 5s | `postgres//duckdb-ide-db` |
+| **SQL Database (duckdb_ide)** | 13s | `projects/sql-practice-project-489106/instances/duckdb-ide-db/databases/duckdb_ide` |
+
+### Terraform Output
+
+```
+Apply complete! Resources: 3 added, 0 changed, 0 destroyed.
+
+Outputs:
+- cloudsql_connection_name = "sql-practice-project-489106:us-central1:duckdb-ide-db"
+- cloudsql_instance_name = "duckdb-ide-db"
+- db_name = "duckdb_ide"
+- project_id = "sql-practice-project-489106"
+- region = "us-central1"
+```
+
+### Authentication Fix Applied
+
+**Issue:** Initial terraform plan failed with `"Account has been deleted"` error.
+
+**Root Cause:** `GOOGLE_APPLICATION_CREDENTIALS` environment variable was not set.
+
+**Fix:** 
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS=/home/vagrant/Desktop/claude-code-zai/duckdb-wasm-project/terraform/first-time-deployment/terraform-key.json
+```
+
+**Lesson:** The terraform key file exists locally and is valid, but the environment variable must be set for Terraform to use it.
+
+### Current Infrastructure State
+
+| Resource | Status | Details |
+|----------|--------|---------|
+| **Cloud SQL** | ✅ Created | `duckdb-ide-db` (POSTGRES_15, db-f1-micro) |
+| **Database** | ✅ Created | `duckdb_ide` |
+| **SQL User** | ✅ Created | `postgres` with password from Secret Manager |
+| **Secret Manager** | ✅ Exists | `db-password`, `jwt-secret` |
+| **VPC Connector** | ✅ Exists | `duckdb-ide-vpc-connector` |
+| **Service Accounts** | ✅ Exist | 3 SAs with appropriate permissions |
+| **Artifact Registry** | ✅ Exists | `duckdb-ide-repo` |
+| **Docker Image** | ✅ Exists | `duckdb-ide:latest` (from earlier build) |
+
+### Next Steps
+
+1. **Deploy Cloud Function (db-init-service)** - To initialize database tables
+2. **Deploy Main Application** - Via Cloud Build to Cloud Run
+3. **Initialize Database** - Run the Cloud Function to create tables and seed data
+
+### Cost Note
+
+Cloud SQL db-f1-micro is now running at approximately **$10-15/month**. To stop costs:
+```bash
+gcloud sql instances delete duckdb-ide-db --project=sql-practice-project-489106
+```
+
+
+---
+
+# Cloud Function Deployment (2026-03-04)
+
+## Cloud Function (db-init-service) Deployed Successfully
+
+### Log File
+`logs/deploy-next-steps-<timestamp>.log`
+
+### What Was Executed
+```bash
+./deploy-next-steps.sh --init-db
+```
+
+### Deployment Details
+
+| Step | Status | Details |
+|------|--------|---------|
+| **GCP Configuration** | ✅ Success | Project, region, zone configured |
+| **Terraform Outputs** | ✅ Success | All outputs retrieved correctly |
+| **Cloud Function Deploy** | ✅ Success | `db-init-service` deployed to us-central1 |
+| **Database Initialization** | ✅ Success | Tables created and seeded |
+
+### Cloud Function Configuration
+
+| Setting | Value |
+|----------|-------|
+| **Name** | `db-init-service` |
+| **Runtime** | Node.js 20 |
+| **Region** | `us-central1` |
+| **Memory** | 512Mi |
+| **Timeout** | 300s |
+| **Trigger** | HTTP |
+| **Authentication** | Allow unauthenticated |
+| **Service Account** | `db-init-sa` |
+| **VPC Connector** | `duckdb-ide-vpc-connector` |
+
+### Database Initialization Completed
+
+| Action | Status |
+|--------|--------|
+| **Create tables** | ✅ Users, Questions, User Attempts, User Sessions |
+| **Create indexes** | ✅ 3 indexes created |
+| **Seed questions** | ✅ 7 practice questions inserted |
+
+### Tables Created
+
+| Table | Purpose |
+|-------|---------|
+| `users` | User accounts (email, password_hash) |
+| `questions` | SQL practice questions with solutions |
+| `user_attempts` | Tracks user quiz attempts |
+| `user_sessions` | Active practice sessions |
+
+### Cloud Function Endpoints
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/` | GET | Health check |
+| `/migrate` | POST | Run database migrations |
+| `/seed` | POST | Seed practice questions |
+| `/init` | POST | Full initialization (migrate + seed) |
+
+### Current Infrastructure State
+
+| Resource | Status | URL/Reference |
+|----------|--------|---------------|
+| **Cloud SQL** | ✅ Active | `duckdb-ide-db` (POSTGRES_15) |
+| **Database** | ✅ Ready | `duckdb_ide` with tables |
+| **Cloud Function** | ✅ Active | Deployed and initialized |
+| **Docker Image** | ✅ Ready | `duckdb-ide:latest` in Artifact Registry |
+| **Secret Manager** | ✅ Ready | `db-password`, `jwt-secret` |
+| **Cloud Run** | ⏳ Not deployed | - |
+
+### Cost Note
+
+Current running costs:
+- Cloud SQL (db-f1-micro): ~$10-15/month
+- Cloud Function: Free tier
+- Everything else: Free tier or ~$0.06
+
+---
+
+# Cloud Run Deployment - IAM Permission Fix (2026-03-04)
+
+## Build ID: eb388255-48d4-41a1-b6b6-5cb4117f38c0
+
+### Error Encountered
+
+```
+ERROR: (gcloud.run.deploy) [192834930119-compute@developer.gserviceaccount.com] does not have permission
+to access namespaces instance [sql-practice-project-489106] (or it may not exist):
+Permission 'iam.serviceaccounts.actAs' denied on service account cloud-run-sa@sql-practice-project-489106.iam.gserviceaccount.com
+```
+
+### Root Cause
+
+When deploying to Cloud Run with `--service-account=cloud-run-sa`, the compute developer SA needs to **impersonate** (act as) the runtime service account. This requires the `iam.serviceAccounts.actAs` permission (Service Account Token Creator role).
+
+This is the **same pattern** as the Cloud Function deployment issue - the compute developer SA needs to impersonate the runtime SA during deployment.
+
+### Fix Applied
+
+Granted `roles/iam.serviceAccountTokenCreator` to compute developer SA on cloud-run-sa:
+
+```bash
+PROJECT_ID="sql-practice-project-489106"
+PROJECT_NUMBER="192834930119"
+
+gcloud iam service-accounts add-iam-policy-binding "cloud-run-sa@${PROJECT_ID}.iam.gserviceaccount.com" \
+    --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+    --role="roles/iam.serviceAccountTokenCreator" \
+    --project="$PROJECT_ID"
+```
+
+### Result
+
+```
+bindings:
+- members:
+  - serviceAccount:192834930119-compute@developer.gserviceaccount.com
+  role: roles/iam.serviceAccountTokenCreator
+- members:
+  - serviceAccount:cloud-build-deployer-sa@sql-practice-project-489106.iam.gserviceaccount.com
+  role: roles/iam.serviceAccountUser
+etag: BwZMMIAMVPg=
+version: 1
+Updated IAM policy for serviceAccount [cloud-run-sa@sql-practice-project-489106.iam.gserviceaccount.com].
+```
+
+### Comparison: Cloud Function vs Cloud Run
+
+| Component | Runtime SA | Impersonator | Token Creator Status |
+|-----------|------------|--------------|---------------------|
+| Cloud Function | `db-init-sa` | Cloud Build SA | ✅ Granted (Post-Deployment Run 6) |
+| Cloud Run | `cloud-run-sa` | Compute Developer SA | ✅ Granted (2026-03-04) |
+
+### Service Account Impersonation Pattern
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Cloud Run Deployment Flow                                      │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  gcloud run deploy duckdb-ide --service-account=cloud-run-sa   │
+│       │                                                         │
+│       │ Authenticated as: 192834930119-compute@developer...    │
+│       │                                                         │
+│       ▼                                                         │
+│  Compute Developer SA needs to IMPERSONATE cloud-run-sa        │
+│       │                                                         │
+│       │ Requires: roles/iam.serviceAccountTokenCreator         │
+│       │                                                         │
+│       ▼                                                         │
+│  cloud-run-sa runs as the container identity                   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Next Steps
+
+Re-run the deployment command:
+
+```bash
+cd /home/vagrant/Desktop/claude-code-zai/duckdb-wasm-project && \
+gcloud builds submit --config cloudbuild.yaml \
+  --substitutions=_CLOUDSQL_CONNECTION=sql-practice-project-489106:us-central1:duckdb-ide-db,_DB_NAME=duckdb_ide,_DB_USER=postgres,_DB_PASSWORD_SECRET=db-password,_JWT_SECRET_SECRET=jwt-secret
+```
+
+---
+
+# Cloud Run Deployment - Final Success (2026-03-04)
+
+## Build ID: 318cf98b-ec53-4156-93f8-2b6db80b1e7e
+
+### Status: ✅ SUCCESS
+
+After multiple IAM permission attempts, the deployment succeeded.
+
+### Root Cause
+
+The compute developer SA (`192834930119-compute@developer.gserviceaccount.com`) lacked sufficient project-level permissions to deploy to Cloud Run.
+
+### Final Fix Applied
+
+1. **Granted `roles/editor` to compute developer SA** (project-level):
+```bash
+gcloud projects add-iam-policy-binding sql-practice-project-489106 \
+    --member="serviceAccount:192834930119-compute@developer.gserviceaccount.com" \
+    --role="roles/editor"
+```
+
+2. **Granted both impersonation roles on `cloud-run-sa`**:
+```bash
+# Token Creator
+gcloud iam service-accounts add-iam-policy-binding "cloud-run-sa@..." \
+    --member="serviceAccount:192834930119-compute@developer..." \
+    --role="roles/iam.serviceAccountTokenCreator"
+
+# Service Account User
+gcloud iam service-accounts add-iam-policy-binding "cloud-run-sa@..." \
+    --member="serviceAccount:192834930119-compute@developer..." \
+    --role="roles/iam.serviceAccountUser"
+```
+
+### Deployment Details
+
+| Step | Status | Details |
+|------|--------|---------|
+| **Upload** | ✅ Success | ~92 MB with .gcloudignore |
+| **Docker Build** | ✅ Success | Image built and tagged |
+| **Artifact Registry Push** | ✅ Success | Pushed to `duckdb-ide-repo` |
+| **Cloud Run Deploy** | ✅ Success | Service deployed |
+
+### Application URL
+
+**https://duckdb-ide-frxi6yk4jq-uc.a.run.app**
+
+### Infrastructure State - Complete
+
+| Resource | Status | URL/Reference |
+|----------|--------|---------------|
+| **Cloud SQL** | ✅ Active | `duckdb-ide-db` (POSTGRES_15) |
+| **Database** | ✅ Ready | `duckdb_ide` with tables & seed data |
+| **Cloud Function** | ✅ Active | `db-init-service` deployed |
+| **Cloud Run** | ✅ **LIVE** | **https://duckdb-ide-frxi6yk4jq-uc.a.run.app** |
+| **Docker Image** | ✅ Ready | `duckdb-ide:latest` |
+| **Secret Manager** | ✅ Ready | `db-password`, `jwt-secret` |
+
+### Final IAM Permissions Summary
+
+| Service Account | Roles | Purpose |
+|-----------------|-------|---------|
+| `192834930119-compute@developer` | `roles/editor`, `roles/run.developer` | Cloud Build deployment |
+| On `cloud-run-sa` | `serviceAccountTokenCreator`, `serviceAccountUser` | Impersonation by compute dev SA |
+| `cloud-run-sa` | `cloudsql.client`, `secretAccessor` | Runtime permissions |
+
+### Cost Summary
+
+| Resource | Monthly Cost |
+|----------|--------------|
+| Cloud SQL (db-f1-micro) | ~$10-15 |
+| Cloud Run | FREE (within tier) |
+| Cloud Functions | FREE (within tier) |
+| Artifact Registry | FREE (<0.5 GB) |
+| Secret Manager | ~$0.06 |
+| **Total** | **~$12-21/month** |
+
+---
+# Cloud Run Public Access IAM Fix (2026-03-04)
+
+## Issue: 403 Forbidden Error
+
+### Error
+```
+Error: Forbidden
+Your client does not have permission to get URL / from this server.
+```
+
+### Root Cause
+
+Cloud Run service was deployed with `--allow-unauthenticated` flag, but the **IAM policy** was empty - no permissions were granted to invoke the service.
+
+The `--allow-unauthenticated` flag sets the service-level configuration, but a **separate IAM binding** is required to allow `allUsers` (public) to invoke the service.
+
+### Fix Applied
+
+Granted `roles/run.invoker` to `allUsers`:
+
+```bash
+gcloud run services add-iam-policy-binding duckdb-ide \
+    --region=us-central1 \
+    --member="allUsers" \
+    --role="roles/run.invoker" \
+    --project="sql-practice-project-489106"
+```
+
+### Result
+```
+bindings:
+- members:
+  - allUsers
+  role: roles/run.invoker
+```
+
+### Propagation Time
+
+**IAM policy changes propagate immediately** (within seconds). No redeployment needed.
+
+### Key Learning
+
+Cloud Run has TWO layers of access control:
+
+| Layer | Setting | Purpose |
+|-------|---------|---------|
+| **Service Config** | `--allow-unauthenticated` flag | Allows unauthenticated requests at service level |
+| **IAM Policy** | `roles/run.invoker` to `allUsers` | **Required** - grants invocation permission |
+
+**Both are required for public access.** The IAM policy is the authoritative access control.
+
+---
+
+# CodeMirror Local Bundling + CSP Fix (2026-03-04)
+
+## Build ID: b3fefec5-66e7-44d4-beff-044f55a5c3c6
+
+### Status: ✅ SUCCESS
+
+### Issue
+
+After initial deployment, the application loaded but was **not clickable** due to CSP violations:
+
+```
+Refused to load script from 'https://cdnjs.cloudflare.com/ajax/libs/codemirror/...'
+Refused to execute inline script (CSP directive: script-src 'self')
+ReferenceError: CodeMirror is not defined
+```
+
+### Root Cause
+
+1. **CodeMirror was loaded from Cloudflare CDN** (`cdnjs.cloudflare.com`)
+2. **Production CSP with Helmet defaults** blocked external scripts
+3. **Local development worked** because CSP was disabled when `NODE_ENV != production`
+
+### User Requirement
+
+**"I don't want anything served from Cloudflare, put it in our package"**
+
+The user explicitly requested bundling CodeMirror locally instead of using external CDN.
+
+### Solution Implemented
+
+#### 1. Install CodeMirror as npm dependency
+```bash
+npm install codemirror@5.65.16 --save
+```
+
+#### 2. Bundle CodeMirror files locally
+```bash
+mkdir -p public/lib/codemirror
+cp -r node_modules/codemirror/lib public/lib/codemirror/
+cp -r node_modules/codemirror/mode public/lib/codemirror/
+cp -r node_modules/codemirror/addon public/lib/codemirror/
+cp -r node_modules/codemirror/theme public/lib/codemirror/
+```
+
+#### 3. Update index.html
+Changed from CDN URLs to local paths:
+
+| Before (CDN) | After (Local) |
+|--------------|---------------|
+| `https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css` | `/lib/codemirror/lib/codemirror.css` |
+| `https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css` | `/lib/codemirror/theme/dracula.css` |
+| `https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js` | `/lib/codemirror/lib/codemirror.js` |
+| `https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js` | `/lib/codemirror/mode/sql/sql.js` |
+| `https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.js` | `/lib/codemirror/addon/hint/show-hint.js` |
+| `https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/sql-hint.min.js` | `/lib/codemirror/addon/hint/sql-hint.js` |
+
+#### 4. Update CSP configuration ([server/config/index.js](server/config/index.js:81-98))
+Removed all Cloudflare CDN references:
+
+```javascript
+// Before
+'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'cdnjs.cloudflare.com'],
+'style-src': ["'self'", "'unsafe-inline'", 'cdnjs.cloudflare.com'],
+'font-src': ["'self'", 'cdnjs.cloudflare.com'],
+
+// After
+'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+'style-src': ["'self'", "'unsafe-inline'"],
+'font-src': ["'self'"],
+```
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| [index.html](index.html:175-182) | CDN URLs → Local paths |
+| [server/config/index.js](server/config/index.js:81-98) | CSP: Removed CDN references |
+| [package.json](package.json:28-29) | Added `codemirror: ^5.65.16` |
+| [public/lib/codemirror/](public/lib/codemirror/) | Added bundled CodeMirror files |
+
+### Deployment
+
+```bash
+git add index.html package.json package-lock.json server/config/index.js public/
+git commit -m "Bundle CodeMirror locally instead of loading from CDN"
+git push origin gcp-deployment
+
+# Manual Cloud Build (no trigger configured)
+gcloud builds submit --config=cloudbuild.yaml \
+  --substitutions=_CLOUDSQL_CONNECTION=sql-practice-project-489106:us-central1:duckdb-ide-db,_DB_NAME=duckdb_ide,_DB_USER=postgres,_DB_PASSWORD_SECRET=db-password,_JWT_SECRET_SECRET=jwt-secret
+```
+
+### Deployment Details
+
+| Step | Status | Details |
+|------|--------|---------|
+| **Upload** | ✅ Success | 322 files, 75.3 MiB (before compression) |
+| **Docker Build** | ✅ Success | |
+| **Artifact Registry Push** | ✅ Success | |
+| **Cloud Run Deploy** | ✅ Success | |
+| **Duration** | | 1M14S |
+
+### Benefits
+
+1. **No external CDN dependency** - All assets served from own domain
+2. **CSP compliant** - All scripts/styles from `'self'` origin
+3. **Better privacy** - No requests to third-party domains
+4. **Faster loading** - No DNS lookup/connection to CDN
+5. **Works offline** - All dependencies bundled locally
+
+### Application URL
+
+**https://duckdb-ide-frxi6yk4jq-uc.a.run.app**
+
+---
