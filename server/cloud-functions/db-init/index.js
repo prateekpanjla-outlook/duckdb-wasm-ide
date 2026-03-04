@@ -26,8 +26,9 @@ export async function initDatabase(request, response) {
         return;
     }
 
-    const url = new URL(request.url);
-    const path = url.pathname;
+    // Cloud Functions Gen 2 passes request.url as a path (e.g., "/init")
+    // not a full URL, so use it directly
+    const path = request.url || '/';
 
     try {
         if (path === '/' || path === '/health') {
