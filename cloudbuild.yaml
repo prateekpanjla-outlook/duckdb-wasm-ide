@@ -12,7 +12,7 @@ steps:
     args:
       - 'build'
       - '-t'
-      - 'us-central1-docker.pkg.dev/$PROJECT_ID/duckdb-ide-repo/duckdb-ide:$COMMIT_SHA'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/duckdb-ide-repo/duckdb-ide:$BUILD_ID'
       - '-t'
       - 'us-central1-docker.pkg.dev/$PROJECT_ID/duckdb-ide-repo/duckdb-ide:latest'
       - '.'
@@ -22,7 +22,7 @@ steps:
     id: 'push'
     args:
       - 'push'
-      - 'us-central1-docker.pkg.dev/$PROJECT_ID/duckdb-ide-repo/duckdb-ide:$COMMIT_SHA'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/duckdb-ide-repo/duckdb-ide:latest'
 
   # Step 3: Deploy to Cloud Run
   - name: 'gcr.io/cloud-builders/gcloud'
@@ -32,7 +32,7 @@ steps:
       - 'deploy'
       - 'duckdb-ide'
       - '--image'
-      - 'us-central1-docker.pkg.dev/$PROJECT_ID/duckdb-ide-repo/duckdb-ide:$COMMIT_SHA'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/duckdb-ide-repo/duckdb-ide:latest'
       - '--region'
       - 'us-central1'
       - '--platform'
@@ -52,7 +52,7 @@ steps:
       - '--set-cloudsql-instances=$_CLOUDSQL_CONNECTION'
       # Environment variables
       - '--set-env-vars'
-      - 'NODE_ENV=production,DB_NAME=$_DB_NAME,DB_USER=$_DB_USER,DB_HOST=/cloudsql/$_CLOUDSQL_CONNECTION'
+      - 'NODE_ENV=production,DB_NAME=$_DB_NAME,DB_USER=$_DB_USER,DB_HOST=10.61.0.5,DB_PORT=5432'
       # Secrets from Secret Manager
       - '--set-secrets'
       - 'DB_PASSWORD=$_DB_PASSWORD_SECRET:latest,JWT_SECRET=$_JWT_SECRET_SECRET:latest'
@@ -65,17 +65,13 @@ images:
   - 'us-central1-docker.pkg.dev/$PROJECT_ID/duckdb-ide-repo/duckdb-ide:latest'
 
 # Substitution variables (set these in Cloud Build trigger settings)
+# Note: These are only for Cloud Build trigger. For gcloud builds submit,
+# you must provide ALL substitutions via --substitutions flag.
 substitutions:
-  _DEPLOY_REGION: 'us-central1'
-  _MEMORY: '512Mi'
-  _CPU: '1'
-  _MAX_INSTANCES: '10'
-  # Cloud SQL connection (format: PROJECT:REGION:INSTANCE)
+  # Required substitutions
   _CLOUDSQL_CONNECTION: 'your-project:us-central1:duckdb-ide-db'
-  # Database configuration
   _DB_NAME: 'duckdb_ide'
   _DB_USER: 'postgres'
-  # Secret Manager references
   _DB_PASSWORD_SECRET: 'db-password'
   _JWT_SECRET_SECRET: 'jwt-secret'
 
