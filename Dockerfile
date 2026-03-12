@@ -12,7 +12,7 @@ WORKDIR /app/server
 COPY server/package*.json ./
 RUN npm ci --only=production
 
-# Stage 2: Build (copy application files)
+# Stage 2: Build (copy application files and pre-compress WASM)
 FROM node:18-alpine AS build
 WORKDIR /app
 
@@ -26,6 +26,11 @@ COPY css ./css
 COPY js ./js
 COPY libs ./libs
 COPY server ./server
+
+# Pre-compress WASM files (38MB → ~10MB) to avoid Cloud Run 32MB HTTP/1.1 limit
+# and eliminate runtime CPU cost of compression
+RUN apk add --no-cache gzip && \
+    find libs -name "*.wasm" -size +1M -exec gzip -k -9 {} \;
 
 # Stage 3: Production image
 FROM node:18-alpine AS production

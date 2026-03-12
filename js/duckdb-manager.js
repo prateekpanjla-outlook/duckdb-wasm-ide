@@ -14,11 +14,11 @@ export class DuckDBManager {
                 // Create a new logger
                 const logger = new duckdb.ConsoleLogger();
 
-                // Select bundle with local paths (MVP bundle)
+                // Select bundle with local paths (COI bundle — multi-threaded via SharedArrayBuffer)
                 const bundle = {
-                    mainModule: '/libs/duckdb-wasm/duckdb-mvp.wasm',
-                    mainWorker: '/libs/duckdb-wasm/duckdb-browser-mvp.worker.js',
-                    pthreadWorker: '/libs/duckdb-wasm/duckdb-browser-mvp.worker.js'
+                    mainModule: '/libs/duckdb-wasm/duckdb-coi.wasm',
+                    mainWorker: '/libs/duckdb-wasm/duckdb-browser-coi.worker.js',
+                    pthreadWorker: '/libs/duckdb-wasm/duckdb-browser-coi.worker.js'
                 };
 
                 // Create worker directly

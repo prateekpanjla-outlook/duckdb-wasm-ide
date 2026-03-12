@@ -3,6 +3,9 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 
 // Import routes
 import authRoutes from './routes/auth.js';
@@ -11,11 +14,20 @@ import practiceRoutes from './routes/practice.js';
 // Load environment variables
 dotenv.config();
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Security middleware
 app.use(helmet());
+
+// Cross-Origin Isolation headers for DuckDB COI (multi-threaded) bundle
+// Enables SharedArrayBuffer → parallel query execution
+app.use((req, res, next) => {
+    res.set('Cross-Origin-Opener-Policy', 'same-origin');
+    res.set('Cross-Origin-Embedder-Policy', 'require-corp');
+    next();
+});
 
 // CORS configuration - allow all origins for external access
 app.use(cors({
@@ -43,7 +55,43 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/practice', practiceRoutes);
 
-// 404 handler
+// Serve pre-compressed WASM files (built by Docker: gzip -k -9)
+// Browser sends Accept-Encoding: gzip → we serve .wasm.gz with Content-Encoding: gzip
+// Zero runtime CPU cost, stays under Cloud Run 32MB HTTP/1.1 limit
+const staticRoot = path.join(__dirname, '..');
+app.use((req, res, next) => {
+    if (req.path.endsWith('.wasm') && req.headers['accept-encoding']?.includes('gzip')) {
+        const gzPath = path.join(staticRoot, req.path + '.gz');
+        if (fs.existsSync(gzPath)) {
+            res.set('Content-Type', 'application/wasm');
+            res.set('Content-Encoding', 'gzip');
+            res.set('Cache-Control', 'public, max-age=31536000, immutable');
+            return res.sendFile(gzPath);
+        }
+    }
+    next();
+});
+
+// Serve frontend static files (in production, Express serves everything)
+app.use(express.static(staticRoot, {
+    maxAge: '1d',
+    setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.wasm')) {
+            res.set('Content-Type', 'application/wasm');
+            res.set('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+    }
+}));
+
+// SPA fallback — serve index.html for non-API routes
+app.use((req, res, next) => {
+    if (!req.path.startsWith('/api/') && !req.path.startsWith('/health')) {
+        return res.sendFile(path.join(staticRoot, 'index.html'));
+    }
+    next();
+});
+
+// 404 handler for API routes
 app.use((req, res) => {
     res.status(404).json({ error: 'Route not found' });
 });
