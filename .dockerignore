@@ -1,0 +1,51 @@
+# Node modules (will be rebuilt in container)
+node_modules
+server/node_modules
+
+# Development files
+.git
+.gitignore
+
+# Documentation
+*.md
+docs
+README.md
+
+# Test files
+tests
+test-results
+playwright-report
+screenshots
+*.log
+coverage
+.nyc_output
+
+# Environment files (use secrets in Cloud Run instead)
+.env
+.env.local
+.env.*.local
+server/.env
+
+# Build artifacts
+dist
+build
+.cache
+
+# IDE files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Scripts
+scripts
+run-debug-test.sh
+
+# Misc
+DEBUG
+TODO.md
