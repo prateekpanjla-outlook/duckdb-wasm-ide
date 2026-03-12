@@ -3,15 +3,58 @@
  * Handles all HTTP requests to the backend server
  */
 
-// Dynamic API URL - uses same hostname as frontend, just different port
-// This works for localhost, 127.0.0.1, or any IP address automatically
-const hostname = window.location.hostname;
-const API_BASE_URL = `http://${hostname}:3000/api`;
+import { API_BASE_URL } from '../config.js';
 
 class APIClient {
     constructor() {
-        this.token = localStorage.getItem('auth_token') || null;
-        this.user = JSON.parse(localStorage.getItem('user_data') || 'null');
+        this.token = this._safeGetItem('auth_token');
+        this.user = this._safeParseJSON(this._safeGetItem('user_data'));
+    }
+
+    /**
+     * Safely get item from localStorage (handles private browsing / quota errors)
+     */
+    _safeGetItem(key) {
+        try {
+            return localStorage.getItem(key);
+        } catch (e) {
+            console.warn('localStorage not available:', e.message);
+            return null;
+        }
+    }
+
+    /**
+     * Safely set item in localStorage
+     */
+    _safeSetItem(key, value) {
+        try {
+            localStorage.setItem(key, value);
+        } catch (e) {
+            console.warn('localStorage write failed:', e.message);
+        }
+    }
+
+    /**
+     * Safely remove item from localStorage
+     */
+    _safeRemoveItem(key) {
+        try {
+            localStorage.removeItem(key);
+        } catch (e) {
+            console.warn('localStorage remove failed:', e.message);
+        }
+    }
+
+    /**
+     * Safely parse JSON, returning null on failure
+     */
+    _safeParseJSON(str) {
+        if (!str) return null;
+        try {
+            return JSON.parse(str);
+        } catch (e) {
+            return null;
+        }
     }
 
     /**
@@ -20,9 +63,9 @@ class APIClient {
     setToken(token) {
         this.token = token;
         if (token) {
-            localStorage.setItem('auth_token', token);
+            this._safeSetItem('auth_token', token);
         } else {
-            localStorage.removeItem('auth_token');
+            this._safeRemoveItem('auth_token');
         }
     }
 
@@ -32,9 +75,9 @@ class APIClient {
     setUser(user) {
         this.user = user;
         if (user) {
-            localStorage.setItem('user_data', JSON.stringify(user));
+            this._safeSetItem('user_data', JSON.stringify(user));
         } else {
-            localStorage.removeItem('user_data');
+            this._safeRemoveItem('user_data');
         }
     }
 
@@ -68,15 +111,20 @@ class APIClient {
 
         try {
             const response = await fetch(url, config);
-            const data = await response.json();
+            let data;
+            try {
+                data = await response.json();
+            } catch (parseError) {
+                throw new Error(`Server returned invalid JSON (HTTP ${response.status})`);
+            }
 
             if (!response.ok) {
-                throw new Error(data.error || 'Request failed');
+                throw new Error(data.error || `Request failed (HTTP ${response.status})`);
             }
 
             return data;
         } catch (error) {
-            console.error(`API Error [${endpoint}]:`, error);
+            console.error(`API Error [${endpoint}]:`, error.message);
             throw error;
         }
     }
@@ -92,6 +140,10 @@ class APIClient {
             body: JSON.stringify({ email, password })
         });
 
+        if (!data.token || !data.user) {
+            throw new Error('Invalid response from server: missing token or user data');
+        }
+
         this.setToken(data.token);
         this.setUser(data.user);
 
@@ -106,6 +158,10 @@ class APIClient {
             method: 'POST',
             body: JSON.stringify({ email, password })
         });
+
+        if (!data.token || !data.user) {
+            throw new Error('Invalid response from server: missing token or user data');
+        }
 
         this.setToken(data.token);
         this.setUser(data.user);

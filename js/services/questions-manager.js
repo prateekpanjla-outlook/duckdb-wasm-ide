@@ -3,9 +3,7 @@
  * Handles displaying and managing the list of practice questions
  */
 
-// Dynamic API URL - uses same hostname as frontend, just different port
-const hostname = window.location.hostname;
-const API_BASE_URL = `http://${hostname}:3000/api`;
+import { API_BASE_URL } from '../config.js';
 
 class QuestionsManager {
     constructor() {
@@ -46,6 +44,7 @@ class QuestionsManager {
      */
     async showQuestionsModal() {
         const modal = document.getElementById('questionsModal');
+        if (!modal) return;
         modal.classList.remove('hidden');
 
         // Load questions if not already loaded
@@ -61,6 +60,7 @@ class QuestionsManager {
      */
     hideQuestionsModal() {
         const modal = document.getElementById('questionsModal');
+        if (!modal) return;
         modal.classList.add('hidden');
     }
 
@@ -93,6 +93,7 @@ class QuestionsManager {
      */
     renderQuestions() {
         const container = document.getElementById('questionsList');
+        if (!container) return;
 
         if (!this.questions || this.questions.length === 0) {
             container.innerHTML = '<div class="no-questions">No questions available</div>';
@@ -189,6 +190,7 @@ class QuestionsManager {
      */
     showError(message) {
         const container = document.getElementById('questionsList');
+        if (!container) return;
         container.innerHTML = `<div class="error-message">${this.escapeHtml(message)}</div>`;
     }
 

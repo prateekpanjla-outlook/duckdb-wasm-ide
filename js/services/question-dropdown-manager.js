@@ -5,9 +5,7 @@
 
 import { PracticeManager } from './practice-manager.js';
 
-// Dynamic API URL - uses same hostname as frontend, just different port
-const hostname = window.location.hostname;
-const API_BASE_URL = `http://${hostname}:3000/api`;
+import { API_BASE_URL } from '../config.js';
 
 class QuestionDropdownManager {
     constructor() {

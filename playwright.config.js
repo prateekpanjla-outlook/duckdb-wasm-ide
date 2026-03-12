@@ -33,7 +33,7 @@ export default defineConfig({
         }
     ],
     webServer: {
-        command: 'python3 server.py 8888',
+        command: process.platform === 'win32' ? 'python server.py 8888' : 'python3 server.py 8888',
         url: 'http://localhost:8888',
         reuseExistingServer: !process.env.CI,
         timeout: 120000

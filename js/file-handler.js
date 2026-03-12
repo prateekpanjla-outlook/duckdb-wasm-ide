@@ -103,7 +103,9 @@ export class FileHandler {
 
             case 'duckdb':
                 // For .duckdb files, we attach the database
-                await this.dbManager.executeQuery(`ATTACH '${fileName}' AS imported_db`);
+                // Sanitize filename to prevent SQL injection
+                const sanitizedFileName = fileName.replace(/'/g, "''");
+                await this.dbManager.executeQuery(`ATTACH '${sanitizedFileName}' AS imported_db`);
                 break;
 
             default:

@@ -22,9 +22,14 @@ class App {
         // Initialize async and handle errors
         this.init().catch((error) => {
             console.error('[app.js] Initialization error:', error);
+            // Show user-facing error message
+            this.showInitError(error.message || 'Application failed to initialize');
             // Ensure loading overlay is hidden even if init fails
             this.showLoading(false);
         });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => this.cleanup());
     }
 
     async init() {
@@ -177,6 +182,35 @@ class App {
             overlay.classList.remove('visible');
             appContainer.style.opacity = '1';
             appContainer.style.pointerEvents = 'auto';
+        }
+    }
+
+    /**
+     * Show user-facing error when initialization fails
+     */
+    showInitError(message) {
+        const resultsContainer = document.getElementById('resultsContainer');
+        if (resultsContainer) {
+            resultsContainer.innerHTML = `<div class="results-placeholder" style="color: #f44336;">
+                <p>Failed to initialize: ${message}</p>
+                <p>Try refreshing the page. If the problem persists, check the browser console for details.</p>
+            </div>`;
+        }
+    }
+
+    /**
+     * Cleanup resources on page unload
+     */
+    cleanup() {
+        try {
+            if (this.practiceManager && this.practiceManager.practiceDuckDB) {
+                this.practiceManager.practiceDuckDB.close();
+            }
+            if (this.dbManager) {
+                this.dbManager.close();
+            }
+        } catch (e) {
+            // Ignore errors during cleanup
         }
     }
 

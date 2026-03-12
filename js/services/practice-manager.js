@@ -183,23 +183,14 @@ export class PracticeManager {
         if (this.practiceDuckDB && typeof this.practiceDuckDB.close === 'function') {
             try {
                 await this.practiceDuckDB.close();
-                // Add a delay to ensure the connection is fully closed
-                // This prevents DuckDB WASM internal errors when opening new connections
-                await new Promise(resolve => setTimeout(resolve, 1000));
             } catch (e) {
                 console.warn('Failed to close old practice connection:', e.message);
             }
+            this.practiceDuckDB = null;
         }
 
-        // Add a small delay before creating new connection
-        await new Promise(resolve => setTimeout(resolve, 200));
-
-        // Create new DuckDB instance for practice mode
-        // This is separate from the main instance
+        // Create new DuckDB connection for practice mode
         this.practiceDuckDB = await this.dbManager.getNewConnection();
-
-        // Add a delay after creating connection
-        await new Promise(resolve => setTimeout(resolve, 100));
 
         // Load the question's data
         const data = this.currentQuestion.sql_data;
@@ -591,7 +582,11 @@ export class PracticeManager {
 
         // Close practice DuckDB instance
         if (this.practiceDuckDB) {
-            // await this.practiceDuckDB.close();
+            try {
+                await this.practiceDuckDB.close();
+            } catch (e) {
+                console.warn('Failed to close practice DuckDB connection:', e.message);
+            }
             this.practiceDuckDB = null;
         }
 

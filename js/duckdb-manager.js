@@ -5,36 +5,44 @@ export class DuckDBManager {
         this.connection = null;
     }
 
-    async initialize() {
-        try {
-            // Load DuckDB WASM from local files
-            const duckdb = await import('/libs/duckdb-wasm/duckdb-browser.mjs');
+    async initialize(retries = 2) {
+        for (let attempt = 0; attempt <= retries; attempt++) {
+            try {
+                // Load DuckDB WASM from local files
+                const duckdb = await import('/libs/duckdb-wasm/duckdb-browser.mjs');
 
-            // Create a new logger
-            const logger = new duckdb.ConsoleLogger();
+                // Create a new logger
+                const logger = new duckdb.ConsoleLogger();
 
-            // Select bundle with local paths (MVP bundle)
-            const bundle = {
-                mainModule: '/libs/duckdb-wasm/duckdb-mvp.wasm',
-                mainWorker: '/libs/duckdb-wasm/duckdb-browser-mvp.worker.js',
-                pthreadWorker: '/libs/duckdb-wasm/duckdb-browser-mvp.worker.js'
-            };
+                // Select bundle with local paths (MVP bundle)
+                const bundle = {
+                    mainModule: '/libs/duckdb-wasm/duckdb-mvp.wasm',
+                    mainWorker: '/libs/duckdb-wasm/duckdb-browser-mvp.worker.js',
+                    pthreadWorker: '/libs/duckdb-wasm/duckdb-browser-mvp.worker.js'
+                };
 
-            // Create worker directly
-            const worker = new Worker(bundle.mainWorker);
+                // Create worker directly
+                const worker = new Worker(bundle.mainWorker);
 
-            // Instantiate database (logger FIRST, then worker)
-            this.db = new duckdb.AsyncDuckDB(logger, worker);
-            await this.db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+                // Instantiate database (logger FIRST, then worker)
+                this.db = new duckdb.AsyncDuckDB(logger, worker);
+                await this.db.instantiate(bundle.mainModule, bundle.pthreadWorker);
 
-            // Open connection
-            this.connection = await this.db.connect();
+                // Open connection
+                this.connection = await this.db.connect();
 
-            return true;
-        } catch (error) {
-            console.error('Failed to initialize DuckDB:', error);
-            return false;
+                return true;
+            } catch (error) {
+                console.error(`Failed to initialize DuckDB (attempt ${attempt + 1}/${retries + 1}):`, error);
+                if (attempt < retries) {
+                    console.log(`Retrying DuckDB initialization in 1 second...`);
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                } else {
+                    return false;
+                }
+            }
         }
+        return false;
     }
 
     async executeQuery(query) {
@@ -197,9 +205,12 @@ export class DuckDBManager {
         }
 
         try {
+            // Sanitize inputs to prevent SQL injection
+            const safeName = tableName.replace(/[^a-zA-Z0-9_]/g, '_');
+            const safeFile = fileName.replace(/'/g, "''");
             await this.connection.query(`
-                CREATE TABLE ${tableName} AS
-                SELECT * FROM '${fileName}'
+                CREATE TABLE ${safeName} AS
+                SELECT * FROM '${safeFile}'
             `);
             return true;
         } catch (error) {

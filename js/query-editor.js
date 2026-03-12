@@ -3,6 +3,7 @@ export class QueryEditor {
     constructor() {
         this.editor = null;
         this.history = this.loadHistory();
+        this._boundHandleHistoryChange = this.handleHistoryChange.bind(this);
         this.initEditor();
         this.populateHistorySelect();
     }
@@ -98,9 +99,9 @@ export class QueryEditor {
             select.appendChild(option);
         });
 
-        // Add event listener to load selected query
-        select.removeEventListener('change', this.handleHistoryChange);
-        select.addEventListener('change', this.handleHistoryChange.bind(this));
+        // Add event listener to load selected query (use stored bound ref to allow removal)
+        select.removeEventListener('change', this._boundHandleHistoryChange);
+        select.addEventListener('change', this._boundHandleHistoryChange);
     }
 
     handleHistoryChange(e) {
