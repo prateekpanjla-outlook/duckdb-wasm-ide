@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
-import { setupAPIMocks, performMockedLogin } from './test-helpers.js';
+
+// TODO: Replace performMockedLogin with real backend login when E2E tests are set up
 
 /**
  * E2E Tests for Bug Fixes
