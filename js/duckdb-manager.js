@@ -45,13 +45,18 @@ export class DuckDBManager {
         return false;
     }
 
-    async executeQuery(query) {
+    async executeQuery(query, timeoutMs = 30000) {
         if (!this.connection) {
             throw new Error('Database not connected');
         }
 
         try {
-            const result = await this.connection.query(query);
+            const result = await Promise.race([
+                this.connection.query(query),
+                new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Query timed out after 30 seconds')), timeoutMs)
+                )
+            ]);
             return this.formatResult(result);
         } catch (error) {
             throw new Error(`Query failed: ${error.message}`);

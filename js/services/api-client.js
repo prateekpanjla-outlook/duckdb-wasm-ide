@@ -118,6 +118,14 @@ class APIClient {
                 throw new Error(`Server returned invalid JSON (HTTP ${response.status})`);
             }
 
+            if (response.status === 401 && this.token) {
+                // Token expired — clear auth and reload to show login
+                this.setToken(null);
+                this.setUser(null);
+                window.location.reload();
+                return;
+            }
+
             if (!response.ok) {
                 throw new Error(data.error || `Request failed (HTTP ${response.status})`);
             }

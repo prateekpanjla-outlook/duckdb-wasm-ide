@@ -4,8 +4,7 @@
  */
 
 import { PracticeManager } from './practice-manager.js';
-
-import { API_BASE_URL } from '../config.js';
+import { apiClient } from './api-client.js';
 
 class QuestionDropdownManager {
     constructor() {
@@ -35,24 +34,8 @@ class QuestionDropdownManager {
      */
     async loadQuestions() {
         try {
-            const response = await fetch(`${API_BASE_URL}/practice/questions`, {
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to load questions');
-            }
-
-            const data = await response.json();
+            const data = await apiClient.getQuestions();
             this.questions = data.questions || [];
-
-            console.log('[QuestionDropdownManager] Loaded questions:', this.questions.length);
-            if (this.questions.length > 0) {
-                console.log('[QuestionDropdownManager] First question has sql_data:', this.questions[0].sql_data ? 'YES' : 'NO');
-            }
-
             this.populateDropdown();
         } catch (error) {
             console.error('Error loading questions:', error);
@@ -91,15 +74,10 @@ class QuestionDropdownManager {
      * Handle dropdown change
      */
     onQuestionChange(event) {
-        console.log('[QuestionDropdownManager] onQuestionChange called');
         const questionId = parseInt(event.target.value);
-        console.log('[QuestionDropdownManager] questionId:', questionId);
-        console.log('[QuestionDropdownManager] this.questions.length:', this.questions.length);
         const question = this.questions.find(q => q.id === questionId);
-        console.log('[QuestionDropdownManager] found question:', question ? 'YES' : 'NO');
 
         if (question) {
-            console.log('[QuestionDropdownManager] question has sql_data:', question.sql_data ? 'YES' : 'NO');
             this.showQuestionInfo(question);
             this.selectedQuestion = question;
         } else {
@@ -112,7 +90,6 @@ class QuestionDropdownManager {
      * Show question information
      */
     showQuestionInfo(question) {
-        console.log('[QuestionDropdownManager] showQuestionInfo called');
         const infoSection = document.getElementById('selectedQuestionInfo');
         const title = document.getElementById('selectedQuestionTitle');
         const category = document.getElementById('selectedQuestionCategory');
@@ -129,7 +106,6 @@ class QuestionDropdownManager {
 
         if (infoSection) {
             infoSection.classList.remove('hidden');
-            console.log('[QuestionDropdownManager] removed hidden class from infoSection');
         }
     }
 
@@ -137,22 +113,12 @@ class QuestionDropdownManager {
      * Display table schema extracted from sql_data
      */
     displayTableSchema(question) {
-        console.log('[QuestionDropdownManager] displayTableSchema called');
         const infoSection = document.getElementById('selectedQuestionInfo');
-        if (!infoSection) {
-            console.log('[QuestionDropdownManager] selectedQuestionInfo not found');
-            return;
-        }
+        if (!infoSection) return;
 
-        // Parse CREATE TABLE statements from sql_data (handles multi-line)
         const sqlData = question.sql_data;
-        console.log('[QuestionDropdownManager] sqlData length:', sqlData.length);
-
-        // Match CREATE TABLE ... ( ... ); with newlines allowed
         const createTableRegex = /CREATE TABLE\s+(\w+)\s*\(([\s\S]+?)\);/gi;
         const createTableMatches = [...sqlData.matchAll(createTableRegex)];
-
-        console.log('[QuestionDropdownManager] createTableMatches length:', createTableMatches.length);
 
         if (!createTableMatches || createTableMatches.length === 0) return;
 
@@ -224,17 +190,7 @@ class QuestionDropdownManager {
             }
 
             // Fetch full question details
-            const response = await fetch(`${API_BASE_URL}/practice/question/${this.selectedQuestion.id}`, {
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to load question');
-            }
-
-            const data = await response.json();
+            const data = await apiClient.getQuestion(this.selectedQuestion.id);
 
             // Start practice mode with this question
             if (!window.practiceManager) {
@@ -242,7 +198,6 @@ class QuestionDropdownManager {
                 if (window.app && window.app.dbManager) {
                     window.app.practiceManager = new PracticeManager(window.app.dbManager);
                     window.practiceManager = window.app.practiceManager;
-                    console.log('[QuestionDropdownManager] Created PracticeManager');
                 } else {
                     throw new Error('App or Database manager not initialized');
                 }

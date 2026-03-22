@@ -3,7 +3,7 @@
  * Handles displaying and managing the list of practice questions
  */
 
-import { API_BASE_URL } from '../config.js';
+import { apiClient } from './api-client.js';
 
 class QuestionsManager {
     constructor() {
@@ -69,17 +69,7 @@ class QuestionsManager {
      */
     async loadQuestions() {
         try {
-            const response = await fetch(`${API_BASE_URL}/practice/questions`, {
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to load questions');
-            }
-
-            const data = await response.json();
+            const data = await apiClient.getQuestions();
             this.questions = data.questions;
             this.userProgress = data.progress || {};
         } catch (error) {
@@ -163,17 +153,7 @@ class QuestionsManager {
             this.hideQuestionsModal();
 
             // Load the specific question
-            const response = await fetch(`${API_BASE_URL}/practice/question/${questionId}`, {
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to load question');
-            }
-
-            const data = await response.json();
+            const data = await apiClient.getQuestion(questionId);
 
             // Start practice mode with this question
             if (window.practiceManager) {

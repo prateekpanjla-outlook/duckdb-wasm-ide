@@ -129,6 +129,16 @@ async function initDatabase() {
             ON user_attempts(user_id, question_id)
         `);
 
+        await dbClient.query(`
+            CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id
+            ON user_sessions(user_id)
+        `);
+
+        await dbClient.query(`
+            CREATE INDEX IF NOT EXISTS idx_questions_order_index
+            ON questions(order_index)
+        `);
+
         console.log('✅ Indexes created');
 
         await dbClient.end();
