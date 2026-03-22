@@ -39,7 +39,8 @@ async function gradeAnswer(question, userQuery) {
 
         return expectedSorted.length === actualSorted.length &&
             expectedSorted.every((row, i) => row === actualSorted[i]);
-    } catch {
+    } catch (err) {
+        console.error('gradeAnswer error:', err.message);
         try { await client.query('ROLLBACK'); } catch { /* */ }
         return false;
     } finally {

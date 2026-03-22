@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__voicetree__create_graph",
+      "mcp__voicetree__spawn_agent",
+      "mcp__voicetree__wait_for_agents",
+      "Bash(echo:*)",
+      "Bash(echo VOICETREE_TERMINAL_ID: $VOICETREE_TERMINAL_ID:*)",
+      "mcp__voicetree__get_unseen_nodes_nearby"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "voicetree"
+  ]
+}
