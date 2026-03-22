@@ -2,10 +2,55 @@ import express from 'express';
 import { Question } from '../models/Question.js';
 import { UserAttempt } from '../models/UserAttempt.js';
 import { UserSession } from '../models/UserSession.js';
+import { getClient } from '../config/database.js';
 import { authenticate } from '../middleware/auth.js';
 import { validateAttempt } from '../middleware/validate.js';
 
 const router = express.Router();
+
+/**
+ * Grade a user's SQL answer server-side by running both queries
+ * in an isolated temp schema and comparing sorted JSON results.
+ */
+async function gradeAnswer(question, userQuery) {
+    const client = await getClient();
+    const schema = `grade_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+    try {
+        await client.query('BEGIN');
+        await client.query(`CREATE SCHEMA ${schema}`);
+        await client.query(`SET search_path TO ${schema}`);
+
+        // Load the question's seed data (CREATE TABLE + INSERT)
+        await client.query(question.sql_data);
+
+        // Run the expected solution
+        const expected = await client.query(question.sql_solution);
+
+        // Run the user's query (with a statement timeout to prevent abuse)
+        await client.query('SET statement_timeout = 5000');
+        const actual = await client.query(userQuery);
+
+        // Compare: sort rows as JSON strings for order-independent comparison
+        const sortRows = (rows) =>
+            rows.map(r => JSON.stringify(r, Object.keys(r).sort())).sort();
+
+        const expectedSorted = sortRows(expected.rows);
+        const actualSorted = sortRows(actual.rows);
+
+        return expectedSorted.length === actualSorted.length &&
+            expectedSorted.every((row, i) => row === actualSorted[i]);
+    } catch {
+        return false;
+    } finally {
+        // Always clean up: drop schema and rollback
+        try {
+            await client.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+            await client.query('ROLLBACK');
+        } catch { /* ignore cleanup errors */ }
+        client.release();
+    }
+}
 
 /**
  * GET /api/practice/start
@@ -210,16 +255,16 @@ router.post('/attempt', authenticate, validateAttempt, async (req, res) => {
  */
 router.post('/verify', authenticate, async (req, res) => {
     try {
-        const { questionId, userQuery, userResults, isCorrect, timeTakenSeconds } = req.body;
+        const { questionId, userQuery, timeTakenSeconds } = req.body;
 
-        // Get question to get the correct solution
         const question = await Question.getById(questionId);
-
         if (!question) {
             return res.status(404).json({ error: 'Question not found' });
         }
 
-        // Record the attempt
+        // Grade server-side: run both queries in a temp schema and compare results
+        const isCorrect = await gradeAnswer(question, userQuery);
+
         const attempt = await UserAttempt.create({
             userId: req.user.id,
             questionId,
@@ -228,11 +273,8 @@ router.post('/verify', authenticate, async (req, res) => {
             timeTakenSeconds
         });
 
-        // Check if this is the first correct answer
         const wasPreviouslyCompleted = await UserAttempt.isQuestionCompleted(req.user.id, questionId);
         const isFirstSuccess = isCorrect && !wasPreviouslyCompleted;
-
-        // Get user's attempts for this question
         const attempts = await UserAttempt.getQuestionAttempts(req.user.id, questionId);
 
         res.json({

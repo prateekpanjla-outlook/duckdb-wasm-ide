@@ -51,6 +51,7 @@ class App {
                 this.practiceManager = new PracticeManager(this.dbManager);
                 window.practiceManager = this.practiceManager;
                 this.showQuestionSelector();
+                await this.restoreSession();
             } else {
                 this.showLoginPrompt();
             }
@@ -76,6 +77,24 @@ class App {
         this.showLoading(false);
 
         return success;
+    }
+
+    /**
+     * Restore practice session if user was mid-question before refresh
+     */
+    async restoreSession() {
+        try {
+            const { apiClient } = await import('./services/api-client.js');
+            const session = await apiClient.getSession();
+            if (session.practiceModeActive && session.currentQuestionId) {
+                const data = await apiClient.getQuestion(session.currentQuestionId);
+                if (data.question) {
+                    await this.practiceManager.startQuestion(data.question);
+                }
+            }
+        } catch (e) {
+            // Session restore is best-effort — don't block the app
+        }
     }
 
     /**
