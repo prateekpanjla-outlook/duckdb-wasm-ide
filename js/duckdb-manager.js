@@ -14,11 +14,16 @@ export class DuckDBManager {
                 // Create a new logger
                 const logger = new duckdb.ConsoleLogger();
 
-                // Select bundle with local paths (COI bundle — multi-threaded via SharedArrayBuffer)
-                const bundle = {
+                // Use COI bundle (multi-threaded) when SharedArrayBuffer is available,
+                // fall back to MVP bundle (single-threaded) otherwise
+                const useCOI = typeof SharedArrayBuffer !== 'undefined';
+                const bundle = useCOI ? {
                     mainModule: '/libs/duckdb-wasm/duckdb-coi.wasm',
                     mainWorker: '/libs/duckdb-wasm/duckdb-browser-coi.worker.js',
                     pthreadWorker: '/libs/duckdb-wasm/duckdb-browser-coi.worker.js'
+                } : {
+                    mainModule: '/libs/duckdb-wasm/duckdb-mvp.wasm',
+                    mainWorker: '/libs/duckdb-wasm/duckdb-browser-mvp.worker.js',
                 };
 
                 // Create worker directly
@@ -26,7 +31,7 @@ export class DuckDBManager {
 
                 // Instantiate database (logger FIRST, then worker)
                 this.db = new duckdb.AsyncDuckDB(logger, worker);
-                await this.db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+                await this.db.instantiate(bundle.mainModule, bundle.pthreadWorker || undefined);
 
                 // Open connection
                 this.connection = await this.db.connect();

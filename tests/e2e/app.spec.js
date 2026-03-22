@@ -18,6 +18,12 @@ test.describe('DuckDB WASM IDE — E2E', () => {
             await page.goto('/');
             await page.waitForSelector('#loginPromptSection', { timeout: 30000 });
 
+            // Wait for loading overlay to clear and pointer events to be restored
+            await page.waitForFunction(() => {
+                const app = document.getElementById('appContainer');
+                return !app || app.style.pointerEvents !== 'none';
+            }, { timeout: 30000 });
+
             // Click login prompt button to open modal
             await page.click('#loginPromptBtn');
             await expect(page.locator('#authModal')).toHaveClass(/visible/);
@@ -39,17 +45,22 @@ test.describe('DuckDB WASM IDE — E2E', () => {
 
         test('login with existing account', async ({ page }) => {
             // Register via API first
+            const loginEmail = `login_${Date.now()}@test.com`;
             await fetch(`${API}/auth/register`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: `login_${Date.now()}@test.com`, password: TEST_PASSWORD })
+                body: JSON.stringify({ email: loginEmail, password: TEST_PASSWORD })
             });
 
             await page.goto('/');
             await page.waitForSelector('#loginPromptSection', { timeout: 30000 });
+            await page.waitForFunction(() => {
+                const app = document.getElementById('appContainer');
+                return !app || app.style.pointerEvents !== 'none';
+            }, { timeout: 30000 });
             await page.click('#loginPromptBtn');
 
-            await page.fill('#authEmail', `login_${Date.now()}@test.com`);
+            await page.fill('#authEmail', loginEmail);
             await page.fill('#authPassword', TEST_PASSWORD);
             await page.click('.auth-submit-btn');
 
