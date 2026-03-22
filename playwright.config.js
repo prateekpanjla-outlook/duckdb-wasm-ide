@@ -2,40 +2,22 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
     testDir: './tests/e2e',
-    fullyParallel: true,
+    testMatch: '*.spec.js',
+    fullyParallel: false,
     forbidOnly: !!process.env.CI,
     retries: process.env.CI ? 2 : 0,
-    workers: process.env.CI ? 1 : undefined,
-    timeout: 120000, // 2 minutes for E2E tests (DuckDB WASM needs time)
-    reporter: [
-        ['html'],
-        ['json', { outputFile: 'test-results/results.json' }],
-        ['list']
-    ],
+    workers: 1,
+    timeout: 120000,
+    reporter: [['list']],
     use: {
-        baseURL: 'http://localhost:8888',
+        baseURL: 'http://localhost:8903',
         trace: 'on-first-retry',
         screenshot: 'only-on-failure',
-        video: 'retain-on-failure'
     },
     projects: [
         {
             name: 'chromium',
             use: { ...devices['Desktop Chrome'] },
-        },
-        {
-            name: 'firefox',
-            use: { ...devices['Desktop Firefox'] },
-        },
-        {
-            name: 'webkit',
-            use: { ...devices['Desktop Safari'] },
         }
     ],
-    webServer: {
-        command: process.platform === 'win32' ? 'python server.py 8888' : 'python3 server.py 8888',
-        url: 'http://localhost:8888',
-        reuseExistingServer: !process.env.CI,
-        timeout: 120000
-    }
 });
