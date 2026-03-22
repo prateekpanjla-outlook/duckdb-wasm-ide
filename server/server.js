@@ -23,7 +23,7 @@ app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "'unsafe-inline'"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "'wasm-unsafe-eval'"],
             styleSrc: ["'self'", "'unsafe-inline'"],
             workerSrc: ["'self'", "blob:"],
             connectSrc: ["'self'"],
