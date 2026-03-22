@@ -34,64 +34,29 @@ class App {
 
     async init() {
         try {
-            console.log('[app.js] init() - Starting application initialization');
+            // Make app instance available globally FIRST so AuthManager can use it
+            window.app = this;
 
-            // Set up event listeners
-            console.log('[app.js] init() - Setting up event listeners');
             this.setupEventListeners();
-
-            // Initialize Authentication Manager (but don't initialize DuckDB yet!)
-            console.log('[app.js] init() - Creating AuthManager...');
             this.authManager = new AuthManager();
-            console.log('[app.js] init() - AuthManager created, checking if modal exists...');
-
-            // Check if modal was created
-            setTimeout(() => {
-                const modal = document.getElementById('authModal');
-                console.log('[app.js] init() - AuthModal exists in DOM:', !!modal);
-                console.log('[app.js] init() - window.app exists:', !!window.app);
-                console.log('[app.js] init() - window.app.authManager exists:', !!(window.app && window.app.authManager));
-            }, 100);
-
-            // Initialize Questions Manager
-            console.log('[app.js] init() - Creating QuestionsManager...');
             this.questionsManager = new QuestionsManager();
-            console.log('[app.js] init() - QuestionsManager created');
 
             // Check if user is already logged in from localStorage
             const token = localStorage.getItem('auth_token');
             const user = JSON.parse(localStorage.getItem('user_data') || 'null');
 
-            console.log('[app.js] init() - Token exists:', !!token);
-            console.log('[app.js] init() - User exists:', !!user);
-
             if (token && user) {
-                console.log('[app.js] init() - User is logged in, initializing DuckDB');
-                // User is logged in, initialize DuckDB now
                 await this.initializeDuckDB();
-
-                // Update UI for logged in user
                 this.authManager.updateUIForLoggedInUser(user);
-
-                // Initialize Practice Manager
                 this.practiceManager = new PracticeManager(this.dbManager);
                 window.practiceManager = this.practiceManager;
-
-                // Make app instance available globally
-                window.app = this;
-                console.log('[app.js] init() - App instance set to window.app');
+                this.showQuestionSelector();
             } else {
-                console.log('[app.js] init() - User not logged in, showing login prompt');
-                // User not logged in, show login prompt
                 this.showLoginPrompt();
             }
-
-            console.log('[app.js] init() - Initialization complete');
         } catch (error) {
             console.error('[app.js] Error during initialization:', error);
         } finally {
-            // Always hide loading overlay, regardless of success or failure
-            console.log('[app.js] Hiding loading overlay');
             this.showLoading(false);
         }
     }
@@ -142,27 +107,17 @@ class App {
      * Show question selector after login
      */
     showQuestionSelector() {
-        console.log('[app.js] showQuestionSelector() called');
-
         const loginPromptSection = document.getElementById('loginPromptSection');
         const questionSelectorSection = document.getElementById('questionSelectorSection');
 
-        console.log('[app.js] loginPromptSection exists:', !!loginPromptSection);
-        console.log('[app.js] questionSelectorSection exists:', !!questionSelectorSection);
-
         if (loginPromptSection) {
             loginPromptSection.classList.add('hidden');
-            console.log('[app.js] Added hidden class to loginPromptSection');
         }
         if (questionSelectorSection) {
             questionSelectorSection.classList.remove('hidden');
-            console.log('[app.js] Removed hidden class from questionSelectorSection');
         }
 
-        // Initialize Question Dropdown Manager
-        console.log('[app.js] Creating QuestionDropdownManager...');
         this.questionDropdownManager = new QuestionDropdownManager();
-        console.log('[app.js] Calling loadQuestions()...');
         this.questionDropdownManager.loadQuestions();
     }
 
@@ -310,7 +265,5 @@ class App {
 
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('[app.js] DOMContentLoaded fired, creating App instance');
-    window.app = new App();
-    console.log('[app.js] App instance created and set to window.app');
+    new App();
 });
