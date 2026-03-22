@@ -18,8 +18,19 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Security middleware
-app.use(helmet());
+// Security middleware — configure CSP to allow CDN scripts and inline scripts
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
+            styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
+            workerSrc: ["'self'", "blob:"],
+            connectSrc: ["'self'"],
+        }
+    },
+    crossOriginEmbedderPolicy: false, // We set COEP manually below
+}));
 
 // Cross-Origin Isolation headers for DuckDB COI (multi-threaded) bundle
 // Enables SharedArrayBuffer → parallel query execution

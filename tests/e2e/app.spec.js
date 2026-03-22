@@ -64,6 +64,34 @@ test.describe('DuckDB WASM IDE — E2E', () => {
         });
     });
 
+    test('DEBUG: localStorage persists after reload', async ({ page }) => {
+        const errors = [];
+        page.on('console', msg => {
+            if (msg.type() === 'error') errors.push(msg.text());
+        });
+        page.on('pageerror', err => errors.push('PAGE_ERROR: ' + err.message));
+
+        await page.goto('/');
+        await page.evaluate(() => {
+            localStorage.setItem('auth_token', 'fake_token');
+            localStorage.setItem('user_data', JSON.stringify({ id: 1, email: 'x@x.com' }));
+        });
+        await page.reload();
+        await page.waitForTimeout(10000);
+
+        const token = await page.evaluate(() => localStorage.getItem('auth_token'));
+        const hasLoginPrompt = await page.locator('#loginPromptSection').isVisible().catch(() => false);
+        const hasQuestionSelector = await page.locator('#questionSelectorSection:not(.hidden)').isVisible().catch(() => false);
+        const appPointerEvents = await page.evaluate(() => document.getElementById('appContainer')?.style.pointerEvents);
+        const appOpacity = await page.evaluate(() => document.getElementById('appContainer')?.style.opacity);
+        console.log('token after reload:', token);
+        console.log('loginPrompt visible:', hasLoginPrompt);
+        console.log('questionSelector visible:', hasQuestionSelector);
+        console.log('appContainer pointer-events:', appPointerEvents);
+        console.log('appContainer opacity:', appOpacity);
+        console.log('console errors:', JSON.stringify(errors));
+    });
+
     test.describe('Question selector', () => {
 
         test('loads questions into dropdown after login', async ({ page }) => {
