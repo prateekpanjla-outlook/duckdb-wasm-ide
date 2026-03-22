@@ -17,21 +17,18 @@ async function gradeAnswer(question, userQuery) {
     const schema = `grade_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
     try {
-        // Create isolated schema, load seed data, run both queries
+        await client.query('BEGIN');
         await client.query(`CREATE SCHEMA ${schema}`);
-        await client.query(`SET search_path TO ${schema}`);
+        await client.query(`SET LOCAL search_path TO ${schema}`);
+        await client.query('SET LOCAL statement_timeout = 5000');
+
+        // Load seed data and run both queries
         await client.query(question.sql_data);
-
         const expected = await client.query(question.sql_solution);
+        const actual = await client.query(userQuery);
 
-        // User query with timeout to prevent abuse
-        await client.query('SET statement_timeout = 5000');
-        let actual;
-        try {
-            actual = await client.query(userQuery);
-        } finally {
-            await client.query('SET statement_timeout = 0');
-        }
+        await client.query(`DROP SCHEMA ${schema} CASCADE`);
+        await client.query('COMMIT');
 
         // Compare: sort rows as JSON strings for order-independent comparison
         const sortRows = (rows) =>
@@ -43,12 +40,9 @@ async function gradeAnswer(question, userQuery) {
         return expectedSorted.length === actualSorted.length &&
             expectedSorted.every((row, i) => row === actualSorted[i]);
     } catch {
+        try { await client.query('ROLLBACK'); } catch { /* */ }
         return false;
     } finally {
-        try {
-            await client.query(`SET search_path TO public`);
-            await client.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
-        } catch { /* ignore cleanup errors */ }
         client.release();
     }
 }
