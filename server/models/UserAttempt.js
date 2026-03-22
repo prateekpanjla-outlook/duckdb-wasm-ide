@@ -16,12 +16,17 @@ export class UserAttempt {
         try {
             await client.query('BEGIN');
 
-            // Lock rows for this user+question to prevent concurrent count mismatch
+            // Lock rows then count to prevent concurrent count mismatch
+            await client.query(
+                `SELECT id FROM user_attempts
+                 WHERE user_id = $1 AND question_id = $2
+                 FOR UPDATE`,
+                [userId, questionId]
+            );
             const countResult = await client.query(
                 `SELECT COUNT(*) as attempts
                  FROM user_attempts
-                 WHERE user_id = $1 AND question_id = $2
-                 FOR UPDATE`,
+                 WHERE user_id = $1 AND question_id = $2`,
                 [userId, questionId]
             );
             const attemptsCount = parseInt(countResult.rows[0].attempts) + 1;
