@@ -36,3 +36,8 @@ playwright/.cache/
 *.temp
 .env
 .env.local
+
+# Vagrant
+.vagrant/
+*.box
+vagrant_data/

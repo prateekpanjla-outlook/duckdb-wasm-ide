@@ -95,18 +95,8 @@ router.get('/questions', authenticate, async (req, res) => {
     try {
         const questions = await Question.getAll();
 
-        // Get user progress for each question
-        const progress = {};
-        for (const question of questions) {
-            const attempts = await UserAttempt.getUserQuestionAttempts(req.user.id, question.id);
-            const completed = attempts.some(a => a.is_correct);
-
-            progress[question.id] = {
-                attempts: attempts.length,
-                completed: completed,
-                lastAttempt: attempts.length > 0 ? attempts[0].created_at : null
-            };
-        }
+        // Get user progress for all questions in a single query
+        const progress = await UserAttempt.getUserProgressByQuestion(req.user.id);
 
         res.json({
             questions: questions.map(q => ({

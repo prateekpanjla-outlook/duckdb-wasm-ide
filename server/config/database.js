@@ -23,8 +23,8 @@ pool.on('connect', () => {
 });
 
 pool.on('error', (err) => {
-    console.error('❌ Unexpected error on idle client', err);
-    process.exit(-1);
+    console.error('❌ Unexpected error on idle client:', err.message);
+    // Do not exit — pool will attempt to reconnect on next query
 });
 
 // Query helper function

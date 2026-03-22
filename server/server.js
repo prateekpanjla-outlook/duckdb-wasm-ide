@@ -29,9 +29,9 @@ app.use((req, res, next) => {
     next();
 });
 
-// CORS configuration - allow all origins for external access
+// CORS configuration — same-origin serves frontend, so only needed for dev/external access
 app.use(cors({
-    origin: '*',
+    origin: process.env.CORS_ORIGIN || true,
     credentials: true
 }));
 

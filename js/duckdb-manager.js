@@ -59,7 +59,7 @@ export class DuckDBManager {
     }
 
     formatResult(result) {
-        // Convert DuckDB Arrow result to usable format
+        // Convert DuckDB Arrow Table to {columns, rows} format
         const data = {
             columns: [],
             rows: []
@@ -67,91 +67,29 @@ export class DuckDBManager {
 
         try {
             if (result && result.schema) {
-                // Get column names
                 data.columns = result.schema.fields.map(f => f.name);
 
-                // Get rows from Arrow batches
-                if (result.batches && result.batches.length > 0) {
-                    const batch = result.batches[0]; // Use first batch
-                    const numRows = result.numRows || 0;
+                // Use Arrow Table's public API — handles all batches automatically
+                const numCols = data.columns.length;
+                const columns = [];
+                for (let j = 0; j < numCols; j++) {
+                    columns.push(result.getChildAt(j));
+                }
 
-                    for (let i = 0; i < numRows; i++) {
-                        const row = {};
-
-                        data.columns.forEach((col, colIdx) => {
-                            if (batch.data && batch.data.children && batch.data.children[colIdx]) {
-                                const colData = batch.data.children[colIdx];
-                                const value = this.extractArrowValue(colData, i);
-
-                                if (value !== null && value !== undefined) {
-                                    row[col] = value;
-                                }
-                            }
-                        });
-
-                        // Add row if it has data
-                        if (Object.keys(row).length > 0) {
-                            data.rows.push(row);
-                        }
+                for (let i = 0; i < result.numRows; i++) {
+                    const row = {};
+                    for (let j = 0; j < numCols; j++) {
+                        const value = columns[j].get(i);
+                        row[data.columns[j]] = typeof value === 'bigint' ? Number(value) : value;
                     }
+                    data.rows.push(row);
                 }
             }
         } catch (error) {
             console.error('Error formatting result:', error);
-            console.log('Result structure:', JSON.stringify(result, (key, value) => {
-                if (typeof value === 'bigint') return value.toString();
-                return value;
-            }, 2).substring(0, 1000));
         }
 
         return data;
-    }
-
-    extractArrowValue(colData, rowIndex) {
-        // Method 1: Utf8Vector with offsets and values (for strings)
-        if (colData.valueOffsets && colData.values) {
-            const startOffset = colData.valueOffsets[rowIndex];
-            const endOffset = colData.valueOffsets[rowIndex + 1];
-
-            // Handle null values (offsets will be equal)
-            if (startOffset === endOffset) {
-                return null;
-            }
-
-            // Extract substring from values using offsets
-            let str = '';
-            for (let i = startOffset; i < endOffset; i++) {
-                const charCode = colData.values[i];
-                if (charCode !== undefined && charCode !== null) {
-                    str += String.fromCharCode(charCode);
-                }
-            }
-            return str;
-        }
-
-        // Method 2: Direct value access (for integers, floats, etc.)
-        if (colData.values && typeof colData.values === 'object') {
-            const value = colData.values[rowIndex];
-            if (value !== undefined) {
-                return value;
-            }
-            // Try string key access
-            if (colData.values[String(rowIndex)] !== undefined) {
-                return colData.values[String(rowIndex)];
-            }
-        }
-
-        // Method 3: Array type (flat array)
-        if (Array.isArray(colData.values)) {
-            return colData.values[rowIndex];
-        }
-
-        // Method 4: Typed array access (valueArray property)
-        if (colData.valueArray && colData.valueArray.length > rowIndex) {
-            return colData.valueArray[rowIndex];
-        }
-
-        return null;
     }
 
     async registerFile(fileName, fileHandle) {

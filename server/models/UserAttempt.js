@@ -1,8 +1,9 @@
-import { query } from '../config/database.js';
+import { query, getClient } from '../config/database.js';
 
 export class UserAttempt {
     /**
      * Record a user's attempt at a question
+     * Uses a transaction to prevent race conditions on attempt counting
      */
     static async create({
         userId,
@@ -11,34 +12,65 @@ export class UserAttempt {
         isCorrect,
         timeTakenSeconds = null
     }) {
-        // Get previous attempt count for this question
-        const countResult = await query(
-            `SELECT COUNT(*) as attempts
-             FROM user_attempts
-             WHERE user_id = $1 AND question_id = $2`,
-            [userId, questionId]
-        );
-        const attemptsCount = parseInt(countResult.rows[0].attempts) + 1;
+        const client = await getClient();
+        try {
+            await client.query('BEGIN');
 
+            // Lock rows for this user+question to prevent concurrent count mismatch
+            const countResult = await client.query(
+                `SELECT COUNT(*) as attempts
+                 FROM user_attempts
+                 WHERE user_id = $1 AND question_id = $2
+                 FOR UPDATE`,
+                [userId, questionId]
+            );
+            const attemptsCount = parseInt(countResult.rows[0].attempts) + 1;
+
+            const result = await client.query(
+                `INSERT INTO user_attempts (
+                    user_id, question_id, user_query,
+                    is_correct, attempts_count, completed_at, time_taken_seconds
+                )
+                VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, $6)
+                RETURNING *`,
+                [userId, questionId, userQuery, isCorrect, attemptsCount, timeTakenSeconds]
+            );
+
+            await client.query('COMMIT');
+            return result.rows[0];
+        } catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+        } finally {
+            client.release();
+        }
+    }
+
+    /**
+     * Get user's progress grouped by question (single query, replaces N+1 loop)
+     */
+    static async getUserProgressByQuestion(userId) {
         const text = `
-            INSERT INTO user_attempts (
-                user_id, question_id, user_query,
-                is_correct, attempts_count, completed_at, time_taken_seconds
-            )
-            VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, $6)
-            RETURNING *
+            SELECT
+                question_id,
+                COUNT(*) as attempts,
+                BOOL_OR(is_correct) as completed,
+                MAX(completed_at) as last_attempt
+            FROM user_attempts
+            WHERE user_id = $1
+            GROUP BY question_id
         `;
 
-        const result = await query(text, [
-            userId,
-            questionId,
-            userQuery,
-            isCorrect,
-            attemptsCount,
-            timeTakenSeconds
-        ]);
-
-        return result.rows[0];
+        const result = await query(text, [userId]);
+        const progress = {};
+        for (const row of result.rows) {
+            progress[row.question_id] = {
+                attempts: parseInt(row.attempts),
+                completed: row.completed,
+                lastAttempt: row.last_attempt
+            };
+        }
+        return progress;
     }
 
     /**
