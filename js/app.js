@@ -46,12 +46,15 @@ class App {
             const user = JSON.parse(localStorage.getItem('user_data') || 'null');
 
             if (token && user) {
-                await this.initializeDuckDB();
                 this.authManager.updateUIForLoggedInUser(user);
-                this.practiceManager = new PracticeManager(this.dbManager);
-                window.practiceManager = this.practiceManager;
                 this.showQuestionSelector();
-                await this.restoreSession();
+
+                // DuckDB init is non-blocking — question selector works without it
+                this.initializeDuckDB().then(() => {
+                    this.practiceManager = new PracticeManager(this.dbManager);
+                    window.practiceManager = this.practiceManager;
+                    this.restoreSession().catch(() => {});
+                }).catch(err => console.error('DuckDB init failed:', err));
             } else {
                 this.showLoginPrompt();
             }
