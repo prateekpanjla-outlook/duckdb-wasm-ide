@@ -17,19 +17,21 @@ async function gradeAnswer(question, userQuery) {
     const schema = `grade_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
     try {
-        await client.query('BEGIN');
+        // Create isolated schema, load seed data, run both queries
         await client.query(`CREATE SCHEMA ${schema}`);
         await client.query(`SET search_path TO ${schema}`);
-
-        // Load the question's seed data (CREATE TABLE + INSERT)
         await client.query(question.sql_data);
 
-        // Run the expected solution
         const expected = await client.query(question.sql_solution);
 
-        // Run the user's query (with a statement timeout to prevent abuse)
+        // User query with timeout to prevent abuse
         await client.query('SET statement_timeout = 5000');
-        const actual = await client.query(userQuery);
+        let actual;
+        try {
+            actual = await client.query(userQuery);
+        } finally {
+            await client.query('SET statement_timeout = 0');
+        }
 
         // Compare: sort rows as JSON strings for order-independent comparison
         const sortRows = (rows) =>
@@ -43,10 +45,9 @@ async function gradeAnswer(question, userQuery) {
     } catch {
         return false;
     } finally {
-        // Always clean up: drop schema and rollback
         try {
+            await client.query(`SET search_path TO public`);
             await client.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
-            await client.query('ROLLBACK');
         } catch { /* ignore cleanup errors */ }
         client.release();
     }
