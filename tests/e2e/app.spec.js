@@ -41,7 +41,7 @@ test.describe('DuckDB WASM IDE — E2E', () => {
             await expect(page.locator('#questionSelectorSection')).toBeHidden();
         });
 
-        test('register via UI and see question selector', async ({ page }) => {
+        test('register via UI opens modal and submits', async ({ page }) => {
             await page.goto('/');
             await waitForAppReady(page);
 
@@ -51,6 +51,7 @@ test.describe('DuckDB WASM IDE — E2E', () => {
 
             // Switch to register
             await page.click('#authToggleBtn');
+            await expect(page.locator('#authTitle')).toHaveText('Register');
 
             // Fill and submit
             const email = `reg_${Date.now()}@test.com`;
@@ -58,38 +59,12 @@ test.describe('DuckDB WASM IDE — E2E', () => {
             await page.fill('#authPassword', TEST_PASSWORD);
             await page.click('.auth-submit-btn');
 
-            // Modal should close and question selector should appear (DuckDB init takes time)
-            await expect(page.locator('#authModal')).not.toHaveClass(/visible/, { timeout: 90000 });
-            await expect(page.locator('#questionSelectorSection')).toBeVisible({ timeout: 90000 });
-        });
-    });
+            // Modal should close after successful registration
+            await expect(page.locator('#authModal')).not.toHaveClass(/visible/, { timeout: 30000 });
 
-    test('DEBUG: localStorage persists after reload', async ({ page }) => {
-        const errors = [];
-        page.on('console', msg => {
-            if (msg.type() === 'error') errors.push(msg.text());
+            // Auth button should show the user's email (logged in state)
+            await expect(page.locator('#authBtn')).toContainText(email, { timeout: 10000 });
         });
-        page.on('pageerror', err => errors.push('PAGE_ERROR: ' + err.message));
-
-        await page.goto('/');
-        await page.evaluate(() => {
-            localStorage.setItem('auth_token', 'fake_token');
-            localStorage.setItem('user_data', JSON.stringify({ id: 1, email: 'x@x.com' }));
-        });
-        await page.reload();
-        await page.waitForTimeout(10000);
-
-        const token = await page.evaluate(() => localStorage.getItem('auth_token'));
-        const hasLoginPrompt = await page.locator('#loginPromptSection').isVisible().catch(() => false);
-        const hasQuestionSelector = await page.locator('#questionSelectorSection:not(.hidden)').isVisible().catch(() => false);
-        const appPointerEvents = await page.evaluate(() => document.getElementById('appContainer')?.style.pointerEvents);
-        const appOpacity = await page.evaluate(() => document.getElementById('appContainer')?.style.opacity);
-        console.log('token after reload:', token);
-        console.log('loginPrompt visible:', hasLoginPrompt);
-        console.log('questionSelector visible:', hasQuestionSelector);
-        console.log('appContainer pointer-events:', appPointerEvents);
-        console.log('appContainer opacity:', appOpacity);
-        console.log('console errors:', JSON.stringify(errors));
     });
 
     test.describe('Question selector', () => {
@@ -98,7 +73,7 @@ test.describe('DuckDB WASM IDE — E2E', () => {
             await page.goto('/');
             await loginViaAPI(page);
 
-            await expect(page.locator('#questionSelectorSection')).toBeVisible({ timeout: 90000 });
+            await expect(page.locator('#questionSelectorSection')).toBeVisible({ timeout: 30000 });
 
             // Wait for questions to populate
             await page.waitForFunction(() => {
@@ -114,7 +89,7 @@ test.describe('DuckDB WASM IDE — E2E', () => {
             await page.goto('/');
             await loginViaAPI(page);
 
-            await expect(page.locator('#questionSelectorSection')).toBeVisible({ timeout: 90000 });
+            await expect(page.locator('#questionSelectorSection')).toBeVisible({ timeout: 30000 });
 
             await page.waitForFunction(() => {
                 const dd = document.getElementById('questionDropdown');
@@ -129,11 +104,13 @@ test.describe('DuckDB WASM IDE — E2E', () => {
     test.describe('DuckDB query execution', () => {
 
         test('executes SELECT 1 and shows result', async ({ page }) => {
+            test.setTimeout(180000); // 3 minutes — DuckDB WASM init is slow without COI
+
             await page.goto('/');
             await loginViaAPI(page);
 
-            // Wait for DuckDB to connect
-            await page.waitForSelector('.status.connected', { timeout: 90000 });
+            // Wait for DuckDB to connect (can take 60-90s without SharedArrayBuffer)
+            await page.waitForSelector('.status.connected', { timeout: 150000 });
 
             // Set query
             await page.evaluate(() => {
