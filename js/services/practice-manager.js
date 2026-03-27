@@ -10,7 +10,7 @@ export class PracticeManager {
         this.dbManager = dbManager;
         this.isActive = false;
         this.currentQuestion = null;
-        this.practiceDuckDB = null; // Separate DuckDB instance for practice
+        // Practice mode uses the main DuckDB connection (this.dbManager)
         this.questionStartTime = null;
 
         this.initializeUI();
@@ -176,33 +176,22 @@ export class PracticeManager {
     }
 
     /**
-     * Initialize separate DuckDB instance for practice
+     * Load current question's tables into the main DuckDB connection.
+     * Uses CREATE OR REPLACE to handle table name conflicts across questions.
      */
     async initializePracticeDuckDB() {
-        // Close old connection if it exists
-        if (this.practiceDuckDB && typeof this.practiceDuckDB.close === 'function') {
-            try {
-                await this.practiceDuckDB.close();
-            } catch (e) {
-                console.warn('Failed to close old practice connection:', e.message);
-            }
-            this.practiceDuckDB = null;
-        }
-
-        // Create new DuckDB connection for practice mode
-        this.practiceDuckDB = await this.dbManager.getNewConnection();
-
-        // Load the question's data
         const data = this.currentQuestion.sql_data;
-        const statements = data.split(';').filter(s => s.trim());
+        // Replace CREATE TABLE with CREATE OR REPLACE TABLE so reloading works
+        const sql = data.replace(/CREATE TABLE/gi, 'CREATE OR REPLACE TABLE');
+        const statements = sql.split(';').filter(s => s.trim());
 
         for (const statement of statements) {
             if (statement.trim()) {
-                await this.practiceDuckDB.run(statement);
+                await this.dbManager.executeQuery(statement);
             }
         }
 
-        console.log(`✅ Practice DuckDB initialized with ${statements.length} SQL statements`);
+        console.log(`Practice tables loaded (${statements.length} statements)`);
     }
 
     /**
@@ -285,19 +274,19 @@ export class PracticeManager {
             const timeTaken = Math.floor((Date.now() - this.questionStartTime) / 1000);
 
             // Execute user query
-            const userResults = await this.practiceDuckDB.query(userQuery);
+            const userResults = await this.dbManager.executeQuery(userQuery);
 
             // Debug: Check what tables exist before solution query
             console.log('🔍 DEBUG: Tables before solution query');
             try {
-                const tables = await this.practiceDuckDB.query("SHOW TABLES");
+                const tables = await this.dbManager.executeQuery("SHOW TABLES");
                 console.log('   Tables:', JSON.stringify(tables, null, 2));
             } catch (e) {
                 console.log('   Error showing tables:', e.message);
             }
 
             // Get solution results for comparison
-            const solutionResults = await this.practiceDuckDB.query(this.currentQuestion.sql_solution);
+            const solutionResults = await this.dbManager.executeQuery(this.currentQuestion.sql_solution);
 
             // Debug logging (handle BigInt serialization)
             console.log('Comparing results:');
@@ -579,16 +568,6 @@ export class PracticeManager {
     async exitPracticeMode() {
         this.isActive = false;
         this.stopTimer();
-
-        // Close practice DuckDB instance
-        if (this.practiceDuckDB) {
-            try {
-                await this.practiceDuckDB.close();
-            } catch (e) {
-                console.warn('Failed to close practice DuckDB connection:', e.message);
-            }
-            this.practiceDuckDB = null;
-        }
 
         // Hide practice UI
         document.getElementById('practiceQuestionPanel').classList.add('hidden');

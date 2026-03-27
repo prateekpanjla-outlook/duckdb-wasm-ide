@@ -50,9 +50,11 @@ class App {
                 this.showQuestionSelector();
 
                 // DuckDB init is non-blocking — question selector works without it
-                this.initializeDuckDB().then(() => {
+                this.initializeDuckDB().then(async () => {
                     this.practiceManager = new PracticeManager(this.dbManager);
                     window.practiceManager = this.practiceManager;
+                    // Load first question's tables so SQL Editor has data immediately
+                    await this.loadDefaultPracticeData();
                     this.restoreSession().catch(() => {});
                 }).catch(err => console.error('DuckDB init failed:', err));
             } else {
@@ -97,6 +99,31 @@ class App {
             }
         } catch (e) {
             // Session restore is best-effort — don't block the app
+        }
+    }
+
+    /**
+     * Load all practice question tables into the main DuckDB connection.
+     * Uses CREATE OR REPLACE so switching questions just overwrites.
+     */
+    async loadDefaultPracticeData() {
+        try {
+            const { apiClient } = await import('./services/api-client.js');
+            const data = await apiClient.getQuestions();
+            const questions = data.questions || [];
+            if (!questions.length) return;
+
+            for (const q of questions) {
+                if (!q.sql_data) continue;
+                const statements = q.sql_data.split(';').filter(s => s.trim());
+                for (const stmt of statements) {
+                    if (!stmt.trim()) continue;
+                    await this.dbManager.executeQuery(stmt);
+                }
+            }
+            console.log(`Loaded practice tables from ${questions.length} questions`);
+        } catch (e) {
+            console.warn('Failed to pre-load practice data:', e.message);
         }
     }
 
@@ -180,9 +207,6 @@ class App {
      */
     cleanup() {
         try {
-            if (this.practiceManager && this.practiceManager.practiceDuckDB) {
-                this.practiceManager.practiceDuckDB.close();
-            }
             if (this.dbManager) {
                 this.dbManager.close();
             }

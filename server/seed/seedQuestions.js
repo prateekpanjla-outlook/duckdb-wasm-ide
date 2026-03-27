@@ -119,7 +119,7 @@ INSERT INTO orders VALUES
         order_index: 4
     },
     {
-        sql_data: `CREATE TABLE employees (
+        sql_data: `CREATE TABLE dept_employees (
     id INTEGER,
     name VARCHAR,
     department VARCHAR,
@@ -127,7 +127,7 @@ INSERT INTO orders VALUES
     manager_id INTEGER
 );
 
-INSERT INTO employees VALUES
+INSERT INTO dept_employees VALUES
     (1, 'Alice', 'Engineering', 90000, NULL),
     (2, 'Bob', 'Engineering', 75000, 1),
     (3, 'Charlie', 'Sales', 85000, NULL),
@@ -135,17 +135,17 @@ INSERT INTO employees VALUES
     (5, 'Eve', 'Engineering', 80000, 1);`,
         sql_question: 'Find all employees who earn more than their department average salary',
         sql_solution: `SELECT e.name, e.department, e.salary
-FROM employees e
+FROM dept_employees e
 WHERE e.salary > (
     SELECT AVG(salary)
-    FROM employees
+    FROM dept_employees
     WHERE department = e.department
 )`,
         sql_solution_explanation: [
             'SELECT e.name, e.department, e.salary - Select employee info',
-            'FROM employees e - From employees table with alias e',
+            'FROM dept_employees e - From dept_employees table with alias e',
             'WHERE e.salary > - Filter for higher than average',
-            '(SELECT AVG(salary) FROM employees WHERE department = e.department) - Subquery calculates average salary for the same department'
+            '(SELECT AVG(salary) FROM dept_employees WHERE department = e.department) - Subquery calculates average salary for the same department'
         ],
         difficulty: 'advanced',
         category: 'Subqueries',
