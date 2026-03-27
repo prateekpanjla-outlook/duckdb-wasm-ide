@@ -1,0 +1,35 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Kill Old Vikunja",
+            "type": "shell",
+            "command": "taskkill /F /IM vikunja-v2.2.0-windows-4.0-amd64.exe; exit 0",
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared",
+                "close": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Start Vikunja",
+            "type": "process",
+            "command": "C:/Users/prateek/Desktop/spark/vikunja/vikunja-v2.2.0-windows-4.0-amd64.exe",
+            "options": {
+                "cwd": "C:/Users/prateek/Desktop/spark/vikunja"
+            },
+            "dependsOn": "Kill Old Vikunja",
+            "isBackground": true,
+            "problemMatcher": [],
+            "runOptions": {
+                "runOn": "folderOpen"
+            },
+            "presentation": {
+                "reveal": "silent",
+                "panel": "dedicated",
+                "close": false
+            }
+        }
+    ]
+}

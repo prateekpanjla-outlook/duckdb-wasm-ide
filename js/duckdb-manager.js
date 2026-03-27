@@ -14,24 +14,28 @@ export class DuckDBManager {
                 // Create a new logger
                 const logger = new duckdb.ConsoleLogger();
 
-                // Use COI bundle (multi-threaded) when SharedArrayBuffer is available,
-                // fall back to MVP bundle (single-threaded) otherwise
-                const useCOI = typeof SharedArrayBuffer !== 'undefined';
-                const bundle = useCOI ? {
-                    mainModule: '/libs/duckdb-wasm/duckdb-coi.wasm',
-                    mainWorker: '/libs/duckdb-wasm/duckdb-browser-coi.worker.js',
-                    pthreadWorker: '/libs/duckdb-wasm/duckdb-browser-coi.worker.js'
-                } : {
-                    mainModule: '/libs/duckdb-wasm/duckdb-mvp.wasm',
-                    mainWorker: '/libs/duckdb-wasm/duckdb-browser-mvp.worker.js',
+                // selectBundle() picks the best bundle for this browser.
+                // EH (WASM exceptions) is preferred — fast, no threading needed.
+                // COI (multi-threaded) is disabled: hangs on instantiate() in
+                // @duckdb/duckdb-wasm 1.33.1-dev18.0 even with correct COI headers.
+                // MVP is the fallback for older browsers without WASM exceptions.
+                const base = new URL('/libs/duckdb-wasm/', window.location.origin).href;
+                const BUNDLES = {
+                    mvp: {
+                        mainModule: `${base}duckdb-mvp.wasm`,
+                        mainWorker: `${base}duckdb-browser-mvp.worker.js`,
+                    },
+                    eh: {
+                        mainModule: `${base}duckdb-eh.wasm`,
+                        mainWorker: `${base}duckdb-browser-eh.worker.js`,
+                    },
+                    coi: null,
                 };
+                const bundle = await duckdb.selectBundle(BUNDLES);
 
-                // Create worker directly
-                const worker = new Worker(bundle.mainWorker);
-
-                // Instantiate database (logger FIRST, then worker)
+                const worker = await duckdb.createWorker(bundle.mainWorker);
                 this.db = new duckdb.AsyncDuckDB(logger, worker);
-                await this.db.instantiate(bundle.mainModule, bundle.pthreadWorker || undefined);
+                await this.db.instantiate(bundle.mainModule);
 
                 // Open connection
                 this.connection = await this.db.connect();
