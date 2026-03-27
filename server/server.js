@@ -62,6 +62,20 @@ app.get('/health', (req, res) => {
     res.json({ status: 'ok', message: 'DuckDB WASM Backend Server is running' });
 });
 
+// DB connectivity test — creates temp table, inserts, reads, drops
+app.get('/health/db', async (req, res) => {
+    try {
+        const pool = (await import('./config/database.js')).default;
+        await pool.query('CREATE TABLE IF NOT EXISTS _health_check (id SERIAL, msg TEXT, ts TIMESTAMP DEFAULT NOW())');
+        await pool.query("INSERT INTO _health_check (msg) VALUES ('poc-test')");
+        const result = await pool.query('SELECT * FROM _health_check ORDER BY id DESC LIMIT 1');
+        await pool.query('DROP TABLE _health_check');
+        res.json({ status: 'ok', db: 'connected', row: result.rows[0], host: process.env.DB_HOST });
+    } catch (error) {
+        res.status(500).json({ status: 'error', message: error.message, host: process.env.DB_HOST });
+    }
+});
+
 // API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/practice', practiceRoutes);
