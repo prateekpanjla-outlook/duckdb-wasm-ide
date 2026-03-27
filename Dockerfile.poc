@@ -1,0 +1,20 @@
+# POC Dockerfile — validates Cloud Run <-> Cloud SQL connectivity
+# Starts server, then runs DB test: connect, create table, insert, read back
+FROM node:18-alpine
+WORKDIR /app
+
+# Install server dependencies only
+COPY server/package*.json ./server/
+RUN cd server && npm ci --only=production
+
+# Copy server code and startup script
+COPY server ./server
+COPY scripts/poc-db-test.mjs ./scripts/poc-db-test.mjs
+
+ENV NODE_ENV=production
+ENV PORT=8080
+
+EXPOSE 8080
+
+# Start server, then run DB connectivity test
+CMD ["node", "scripts/poc-db-test.mjs"]
