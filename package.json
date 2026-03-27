@@ -18,7 +18,7 @@
     "lint:fix": "eslint js tests --fix"
   },
   "devDependencies": {
-    "@playwright/test": "^1.40.1",
+    "@playwright/test": "^1.58.2",
     "@vitest/coverage-v8": "^1.1.0",
     "eslint": "^8.56.0",
     "jsdom": "^23.0.1",

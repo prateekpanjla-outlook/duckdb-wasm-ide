@@ -9,7 +9,6 @@ RUN cd server && npm ci --only=production
 
 # Copy server code and startup script
 COPY server ./server
-COPY scripts/poc-db-test.mjs ./scripts/poc-db-test.mjs
 
 ENV NODE_ENV=production
 ENV PORT=8080
@@ -17,4 +16,4 @@ ENV PORT=8080
 EXPOSE 8080
 
 # Start server, then run DB connectivity test
-CMD ["node", "scripts/poc-db-test.mjs"]
+CMD ["node", "server/poc-db-test.mjs"]
