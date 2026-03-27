@@ -90,11 +90,32 @@ export class DuckDBManager {
                     columns.push(result.getChildAt(j));
                 }
 
+                // Pre-compute field types for decimal handling
+                const fields = result.schema.fields;
+
                 for (let i = 0; i < result.numRows; i++) {
                     const row = {};
                     for (let j = 0; j < numCols; j++) {
-                        const value = columns[j].get(i);
-                        row[data.columns[j]] = typeof value === 'bigint' ? Number(value) : value;
+                        let value = columns[j].get(i);
+                        if (typeof value === 'bigint') {
+                            value = Number(value);
+                        } else if (value !== null && typeof value === 'object') {
+                            const field = fields[j];
+                            const typeId = field?.type?.typeId;
+                            // Arrow Decimal type (typeId 7) — stored as Uint32Array
+                            // Value is unscaled integer; divide by 10^scale
+                            if (typeId === 7 && field.type.scale != null) {
+                                const raw = Number(value[0] || 0);
+                                value = raw / Math.pow(10, field.type.scale);
+                            } else if (value instanceof Date) {
+                                value = value.toISOString().split('T')[0];
+                            } else {
+                                const str = String(value);
+                                const num = Number(str);
+                                value = !isNaN(num) && str !== '' && str !== '[object Object]' ? num : str;
+                            }
+                        }
+                        row[data.columns[j]] = value;
                     }
                     data.rows.push(row);
                 }
