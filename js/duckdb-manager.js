@@ -97,11 +97,14 @@ export class DuckDBManager {
                     const row = {};
                     for (let j = 0; j < numCols; j++) {
                         let value = columns[j].get(i);
+                        const typeId = fields[j]?.type?.typeId;
                         if (typeof value === 'bigint') {
                             value = Number(value);
+                        } else if (typeId === 8 && typeof value === 'number') {
+                            // Arrow Date32 (typeId 8) — epoch milliseconds to ISO date
+                            value = new Date(value).toISOString().split('T')[0];
                         } else if (value !== null && typeof value === 'object') {
                             const field = fields[j];
-                            const typeId = field?.type?.typeId;
                             // Arrow Decimal type (typeId 7) — stored as Uint32Array
                             // Value is unscaled integer; divide by 10^scale
                             if (typeId === 7 && field.type.scale != null) {
