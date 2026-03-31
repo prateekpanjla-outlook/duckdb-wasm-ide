@@ -34,14 +34,13 @@
         <!-- Header -->
         <header class="header">
             <div class="header-left">
-                <h1>🦆 DuckDB WebAssembly IDE</h1>
+                <h1 id="appTitle"></h1>
                 <span class="status" id="dbStatus">⚫ Not Connected</span>
             </div>
             <div class="header-right">
                 <button id="viewQuestionsBtn" class="btn btn-secondary hidden">📋 Questions</button>
                 <button id="authBtn" class="btn btn-primary">Login</button>
                 <button id="clearHistoryBtn" class="btn btn-secondary">Clear History</button>
-                <button id="exportResultsBtn" class="btn btn-secondary">Export Results</button>
             </div>
         </header>
 
@@ -86,8 +85,8 @@
                     <button id="loginPromptBtn" class="btn btn-primary">Login to Start</button>
                 </div>
 
-                <!-- Query Editor Section -->
-                <div class="query-section">
+                <!-- Query Editor Section (hidden until login) -->
+                <div class="query-section hidden" id="querySection">
                     <div class="query-header">
                         <h2>📝 SQL Editor</h2>
                         <div class="query-actions">
@@ -101,8 +100,8 @@
                 </div>
             </section>
 
-            <!-- Right Panel: Results -->
-            <section class="right-panel">
+            <!-- Right Panel: Results (hidden until login) -->
+            <section class="right-panel hidden" id="resultsPanel">
                 <div class="results-header">
                     <h2>📊 Results</h2>
                     <div class="results-info">

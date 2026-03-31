@@ -227,6 +227,8 @@ export class AuthManager {
         const authBtn = document.getElementById('authBtn');
         const practiceBtn = document.getElementById('startPracticeBtn');
         const viewQuestionsBtn = document.getElementById('viewQuestionsBtn');
+        const querySection = document.getElementById('querySection');
+        const resultsPanel = document.getElementById('resultsPanel');
 
         if (user) {
             // Create user menu
@@ -244,6 +246,10 @@ export class AuthManager {
             if (viewQuestionsBtn) {
                 viewQuestionsBtn.classList.remove('hidden');
             }
+
+            // Show query editor and results panel
+            if (querySection) querySection.classList.remove('hidden');
+            if (resultsPanel) resultsPanel.classList.remove('hidden');
         } else {
             authBtn.textContent = 'Login';
             authBtn.classList.remove('btn-secondary');
@@ -257,9 +263,10 @@ export class AuthManager {
             if (viewQuestionsBtn) {
                 viewQuestionsBtn.classList.add('hidden');
             }
-            if (practiceBtn) {
-                practiceBtn.style.display = 'none';
-            }
+
+            // Hide query editor and results panel
+            if (querySection) querySection.classList.add('hidden');
+            if (resultsPanel) resultsPanel.classList.add('hidden');
         }
     }
 

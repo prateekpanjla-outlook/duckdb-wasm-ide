@@ -226,11 +226,6 @@ class App {
             this.queryEditor.clearHistory();
         });
 
-        // Export results button
-        document.getElementById('exportResultsBtn').addEventListener('click', () => {
-            this.resultsView.exportResults();
-        });
-
         // Help toggle button
         const toggleHelpBtn = document.getElementById('toggleHelp');
         const helpContent = document.getElementById('helpContent');
