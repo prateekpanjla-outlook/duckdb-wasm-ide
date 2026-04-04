@@ -15,9 +15,8 @@ Vagrant.configure("2") do |config|
   end
 
   # Port forwarding — access services from Windows browser (guest +15)
-  config.vm.network "forwarded_port", guest: 3000, host: 3015  # Express backend
+  config.vm.network "forwarded_port", guest: 3000, host: 3015  # Express (API + static)
   config.vm.network "forwarded_port", guest: 5432, host: 5447  # PostgreSQL
-  config.vm.network "forwarded_port", guest: 8888, host: 8903  # Python static server
   config.vm.network "forwarded_port", guest: 8080, host: 8095  # Docker container test
 
   # No synced folders — everything runs on native VM filesystem

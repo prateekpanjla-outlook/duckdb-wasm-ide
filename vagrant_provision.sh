@@ -100,21 +100,15 @@ cat > /home/vagrant/start-services.sh << 'STARTEOF'
 echo "Starting PostgreSQL..."
 sudo systemctl start postgresql
 
-echo "Starting Express backend (port 3000)..."
+echo "Starting Express server (port 3000, serves both API and static files)..."
 cd /home/vagrant/duckdb-wasm-ide/server
 node server.js &
 sleep 2
 
-echo "Starting static file server (port 8888)..."
-cd /home/vagrant/duckdb-wasm-ide
-python3 server.py 8888 &
-sleep 1
-
 echo ""
 echo "=== Services running ==="
-echo "  Frontend: http://localhost:8888  (Windows: http://localhost:8903)"
-echo "  Backend:  http://localhost:3000  (Windows: http://localhost:3015)"
-echo "  PostgreSQL: localhost:5432       (Windows: localhost:5447)"
+echo "  App:        http://localhost:3000  (Windows: http://localhost:3015)"
+echo "  PostgreSQL: localhost:5432          (Windows: localhost:5447)"
 STARTEOF
 chmod +x /home/vagrant/start-services.sh
 chown vagrant:vagrant /home/vagrant/start-services.sh

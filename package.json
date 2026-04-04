@@ -4,7 +4,7 @@
   "description": "DuckDB WebAssembly IDE with comprehensive testing",
   "type": "module",
   "scripts": {
-    "dev": "python server.py",
+    "dev": "cd server && node server.js",
     "test": "vitest",
     "test:unit": "vitest tests/unit",
     "test:integration": "vitest tests/integration",

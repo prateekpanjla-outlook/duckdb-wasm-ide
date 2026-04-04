@@ -1,6 +1,5 @@
 // DuckDB WASM Browser Application
 import { DuckDBManager } from './duckdb-manager.js';
-import { FileHandler } from './file-handler.js';
 import { QueryEditor } from './query-editor.js';
 import { ResultsView } from './results-view.js';
 import { AuthManager } from './services/auth-manager.js';
@@ -11,11 +10,6 @@ import QuestionDropdownManager from './services/question-dropdown-manager.js';
 class App {
     constructor() {
         this.dbManager = new DuckDBManager();
-        // Only create FileHandler if dropZone element exists (legacy CSV upload)
-        const dropZoneExists = document.getElementById('dropZone');
-        if (dropZoneExists) {
-            this.fileHandler = new FileHandler(this.dbManager);
-        }
         this.queryEditor = new QueryEditor();
         this.resultsView = new ResultsView();
 

@@ -10,7 +10,6 @@ A browser-based SQL learning platform. Practice SQL against real data — querie
 2. **Select a question** from the dropdown — each comes with preloaded data tables
 3. **Write SQL** in the editor (CodeMirror with SQL syntax highlighting)
 4. **Submit** — your query runs in-browser and results are compared to the expected output
-5. **Track progress** — attempts and completions are saved to your account
 
 ## Architecture
 
@@ -74,9 +73,8 @@ Ports (VM guest → Windows host):
 
 | Service | VM | Host |
 |---|---|---|
-| Express backend + static | 3000 | **3015** |
+| Express (API + static frontend) | 3000 | **3015** |
 | PostgreSQL | 5432 | 5447 |
-| Python static server | 8888 | 8903 |
 
 Open `http://localhost:3015` in your Windows browser.
 
@@ -116,7 +114,7 @@ Run cost: ~$9/month (Cloud SQL db-f1-micro is the only paid resource; Cloud Run 
 
 ## Browser Support
 
-DuckDB WASM requires WebAssembly (2017+). Tested on Chrome 90+, Firefox 88+, Edge 90+, Safari 14.1+.
+Currently **only tested in Chromium** (via Playwright). DuckDB WASM technically requires WebAssembly (2017+) and should work in any modern browser, but Firefox, Safari, and Edge are untested. If you try them and hit issues, please open an issue.
 
 ## License
 
