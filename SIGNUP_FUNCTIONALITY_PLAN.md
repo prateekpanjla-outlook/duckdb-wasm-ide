@@ -1,6 +1,10 @@
 # Plan: New Sign-Up Functionality Enhancements
 
-**Last Updated:** 2026-02-28
+**Last Updated:** 2026-03-31
+**Status:** 📋 Roadmap — active tracking is in Vikunja
+
+> **See [Vikunja Project 2](http://localhost:3456/projects/2) for live task status.**
+> This document remains as a roadmap/design reference. Do not add new TODOs here — add them to Vikunja.
 
 ---
 
@@ -12,11 +16,13 @@ The authentication system currently includes:
 - Password hashing with bcrypt (10 rounds)
 - JWT token for session management
 - User data persistence in localStorage
+- ✅ **Rate limiting** — `express-rate-limit` in `server/server.js` (100 req/15 min per IP)
+- ✅ **Loading states** — submit button disabled during API call (in `auth-manager.js`)
 
 **Missing Features:**
-- No email verification
+- No email verification (tracked as Vikunja **#33**)
 - No password reset
-- No social login (OAuth)
+- No social login (OAuth) (tracked as Vikunja **#30**)
 - No password strength feedback
 - No confirm password field
 - No show/hide password toggle
@@ -27,34 +33,43 @@ The authentication system currently includes:
 
 ### Priority 1: Core User Experience (Quick Wins)
 
-| Feature | Description | Files to Modify | Est. Time |
-|---------|-------------|-----------------|-----------|
-| **Password Strength Meter** | Real-time visual feedback (weak/fair/strong) | `js/services/auth-manager.js`, `css/style.css`, `index.html` | 30 min |
-| **Confirm Password Field** | Verify password matching during registration | `js/services/auth-manager.js`, `index.html` | 15 min |
-| **Show/Hide Password Toggle** | Eye icon to reveal/hide password | `js/services/auth-manager.js`, `css/style.css`, `index.html` | 20 min |
-| **Better Validation Messages** | Specific errors (email invalid, password too short) | `js/services/auth-manager.js` | 20 min |
-| **Loading States** | Disable submit button during API call | `js/services/auth-manager.js`, `css/style.css` | 10 min |
+| Feature | Description | Status |
+|---------|-------------|--------|
+| **Password Strength Meter** | Real-time visual feedback (weak/fair/strong) | 🔲 Not started |
+| **Confirm Password Field** | Verify password matching during registration | 🔲 Not started |
+| **Show/Hide Password Toggle** | Eye icon to reveal/hide password | 🔲 Not started |
+| **Better Validation Messages** | Specific errors (email invalid, password too short) | 🔲 Not started |
+| **Loading States** | Disable submit button during API call | ✅ **Implemented** |
 
 ---
 
 ### Priority 2: Security & Trust
 
-| Feature | Description | Files to Modify | Est. Time |
-|---------|-------------|-----------------|-----------|
-| **Email Verification** | Send verification link after signup | `server/routes/auth.js`, `server/models/User.js`, `server/mailer.js` (new) | 2-3 hours |
-| **Terms & Privacy Checkbox** | Required consent checkbox | `js/services/auth-manager.js`, `index.html` | 15 min |
-| **Rate Limiting** | Prevent abuse on signup endpoint | `server/middleware/rateLimiter.js` (new) | 30 min |
-| **Account Lockout** | Lock after 5 failed login attempts | `server/models/User.js`, `server/routes/auth.js` | 45 min |
+| Feature | Description | Status |
+|---------|-------------|--------|
+| **Email Verification** | Send verification link after signup | 📋 Vikunja **#33** |
+| **Terms & Privacy Checkbox** | Required consent checkbox | 🔲 Not started |
+| **Rate Limiting** | Prevent abuse on signup endpoint | ✅ **Implemented** (`server.js`) |
+| **Account Lockout** | Lock after 5 failed login attempts | 🔲 Not started |
 
 ---
 
 ### Priority 3: User Management
 
-| Feature | Description | Files to Modify | Est. Time |
-|---------|-------------|-----------------|-----------|
-| **Forgot Password** | Email reset link flow | `server/routes/auth.js`, `js/services/auth-manager.js` | 2 hours |
-| **Profile Management** | Update email, change password | `server/routes/auth.js`, `js/services/profile-manager.js` (new) | 1.5 hours |
-| **Account Deletion** | User can delete their account | `server/routes/auth.js`, `server/models/User.js` | 1 hour |
+| Feature | Description | Status |
+|---------|-------------|--------|
+| **Forgot Password** | Email reset link flow | 🔲 Not started |
+| **Profile Management** | Update email, change password | 🔲 Not started |
+| **Account Deletion** | User can delete their account | 🔲 Not started (GDPR relevant) |
+
+### Priority 4: Alternative Sign-In (tracked in Vikunja)
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| **Google OAuth** | Sign in with Google | 📋 Vikunja **#30** |
+| **GitHub OAuth** | Sign in with GitHub | 📋 Vikunja **#30** |
+| **Magic Links** | Passwordless email login | 📋 Vikunja **#30** |
+| **Guest Access** | Anonymous instant start | 📋 Vikunja **#31** |
 
 ---
 

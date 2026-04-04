@@ -1,155 +1,90 @@
 # DuckDB WASM Initialization Pattern
 
-**Date Verified**: 2026-02-10
-**Status**: ✅ Working
-**Test File**: [test-duckdb-init.html](../test-duckdb-init.html)
+**Last Verified:** 2026-03-31
+**Status:** ✅ Working (EH bundle)
+**Source:** [js/duckdb-manager.js:17-41](../js/duckdb-manager.js#L17)
 
-## Working Initialization Pattern
+## Current Pattern: selectBundle() with EH Preferred
 
-This document captures the exact initialization pattern that successfully initializes DuckDB WASM in the browser.
-
-### Prerequisites
-
-1. **Import Map Required**: DuckDB WASM has transitive dependencies that must be mapped
-2. **Parameter Order Critical**: `AsyncDuckDB(logger, worker)` - logger FIRST
-3. **pthreadWorker Required**: Must use `pthreadWorker` in `instantiate()` call
-
-### Import Map Configuration
-
-```html
-<script type="importmap">
-{
-    "imports": {
-        "apache-arrow": "/node_modules/apache-arrow/Arrow.dom.mjs",
-        "apache-arrow/": "/node_modules/apache-arrow/",
-        "tslib": "/node_modules/tslib/tslib.es6.js",
-        "tslib/": "/node_modules/tslib/modules/",
-        "qs": "/node_modules/qs/lib/index.js",
-        "side-channel": "/node_modules/side-channel/index.js",
-        "flatbuffers": "/node_modules/flatbuffers/mjs/flatbuffers.js"
-    }
-}
-</script>
-```
-
-### Working Initialization Code
+The initialization uses DuckDB WASM's built-in `selectBundle()` helper to auto-detect the best bundle for the current browser. EH (WASM exceptions) is preferred, MVP is the fallback, and COI is disabled.
 
 ```javascript
-// Step 1: Load DuckDB WASM from local files
+// 1. Load DuckDB WASM module
 const duckdb = await import('/libs/duckdb-wasm/duckdb-browser.mjs');
 
-// Step 2: Create logger
+// 2. Create logger
 const logger = new duckdb.ConsoleLogger();
 
-// Step 3: Define bundle with pthreadWorker
-const bundle = {
-    mainModule: '/libs/duckdb-wasm/duckdb-mvp.wasm',
-    mainWorker: '/libs/duckdb-wasm/duckdb-browser-mvp.worker.js',
-    pthreadWorker: '/libs/duckdb-wasm/duckdb-browser-mvp.worker.js'  // REQUIRED
+// 3. Define bundles — selectBundle() picks the right one
+const base = new URL('/libs/duckdb-wasm/', window.location.origin).href;
+const BUNDLES = {
+    mvp: {
+        mainModule: `${base}duckdb-mvp.wasm`,
+        mainWorker: `${base}duckdb-browser-mvp.worker.js`,
+    },
+    eh: {
+        mainModule: `${base}duckdb-eh.wasm`,
+        mainWorker: `${base}duckdb-browser-eh.worker.js`,
+    },
+    coi: null,  // Disabled — see COI Bundle Issue below
 };
 
-// Step 4: Create worker directly (NOT using createWorker())
-const worker = new Worker(bundle.mainWorker);
+// 4. Let DuckDB pick the best bundle for this browser
+const bundle = await duckdb.selectBundle(BUNDLES);
 
-// Step 5: Instantiate database (logger FIRST, then worker)
+// 5. Create worker and instantiate
+const worker = await duckdb.createWorker(bundle.mainWorker);
 const db = new duckdb.AsyncDuckDB(logger, worker);
-await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+await db.instantiate(bundle.mainModule);
 
-// Step 6: Connect
+// 6. Connect
 const connection = await db.connect();
 ```
 
-## Critical Fixes Applied
+## The Three Bundles
 
-### Fix 1: Import Map for Dependencies
-**Error**: `Failed to resolve module specifier 'apache-arrow'`
+| Bundle | Size | Browser Support | Status |
+|--------|------|----------------|--------|
+| **eh** (preferred) | ~34 MB | WASM exceptions (2020+) | Active |
+| **mvp** (fallback) | ~38 MB | All browsers with WASM (2017+) | Active fallback |
+| **coi** (disabled) | ~37 MB | Requires SharedArrayBuffer + COOP/COEP | **Disabled** |
 
-**Solution**: Added import map with all transitive dependencies:
-- apache-arrow
-- tslib
-- qs
-- side-channel
-- flatbuffers
+`selectBundle()` returns `eh` if the browser supports WASM exceptions, otherwise `mvp`.
 
-### Fix 2: ConsoleLogger Capitalization
-**Error**: `duckdb.console_logger is not a constructor`
+### COI Bundle Issue
 
-**Solution**: Use `ConsoleLogger` (capital C), not `console_logger`
+The COI (Cross-Origin-Isolated) bundle enables multi-threaded query execution via `SharedArrayBuffer`. It is currently set to `null` because `@duckdb/duckdb-wasm@1.33.1-dev18.0` hangs indefinitely on `instantiate()` with the COI bundle, even when COOP/COEP headers are correctly set.
 
-### Fix 3: AsyncDuckDB Parameter Order
-**Error**: `this._worker.addEventListener is not a function`
+The EH bundle provides fast single-threaded execution (~1.3s init time) and is sufficient for the practice-question workload. Multi-threading is not needed for the datasets used here (small tables per question).
 
-**Solution**: Use correct parameter order:
-```javascript
-// WRONG
-const db = new duckdb.AsyncDuckDB(worker, logger);
+If a future `@duckdb/duckdb-wasm` release fixes the COI hang, the bundle can be re-enabled by adding paths to the `coi` key in `BUNDLES`.
 
-// CORRECT
-const db = new duckdb.AsyncDuckDB(logger, worker);
-```
+## Historical Fixes (Resolved)
 
-**Reference**: [Official DuckDB Documentation](https://duckdb.org/docs/stable/clients/wasm/instantiation.html)
+These were real bugs encountered during earlier development. All are fixed in the current pattern:
 
-### Fix 4: pthreadWorker Usage
-**Error**: Database initialization failures
+### ~~Fix 1: Import Map for Dependencies~~
+**Was:** `Failed to resolve module specifier 'apache-arrow'`
+**Resolution:** Import map added in [index.html](../index.html) for `apache-arrow`, `tslib`, `qs`, `side-channel`, `flatbuffers`. Still required today.
 
-**Solution**: Use `pthreadWorker` in instantiate call:
-```javascript
-await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
-```
+### ~~Fix 2: ConsoleLogger Capitalization~~
+**Was:** `duckdb.console_logger is not a constructor`
+**Resolution:** Use `ConsoleLogger` (capital C). Current code uses the correct name.
 
-### Fix 5: Direct Worker Creation
-**Error**: Proxy object issues with `createWorker()`
+### ~~Fix 3: AsyncDuckDB Parameter Order~~
+**Was:** `this._worker.addEventListener is not a function`
+**Resolution:** `new AsyncDuckDB(logger, worker)` — logger first. Current code is correct.
 
-**Solution**: Use native Worker constructor:
-```javascript
-const worker = new Worker(bundle.mainWorker);
-```
+### ~~Fix 4: Manual pthreadWorker Required~~
+**Was:** Database initialization failures when `pthreadWorker` was omitted.
+**Resolution:** No longer relevant. `selectBundle()` + EH bundle don't need `pthreadWorker` (no threading).
 
-## Test Results
-
-**Browser**: Chromium
-**Date**: 2026-02-10
-**Result**: ✅ All 9 steps passed
-
-```
-[2026-02-10T11:19:00.256Z] 🚀 Starting DuckDB WASM initialization test...
-[2026-02-10T11:19:00.256Z] Step 1: Loading DuckDB module...
-[2026-02-10T11:19:03.169Z] ✅ DuckDB module loaded successfully!
-[2026-02-10T11:19:03.169Z] Step 2: Creating console logger...
-[2026-02-10T11:19:03.169Z] ✅ Logger created successfully!
-[2026-02-10T11:19:03.169Z] Step 3: Setting up bundle paths...
-[2026-02-10T11:19:03.169Z] Step 4: Checking if WASM files exist...
-[2026-02-10T11:19:03.180Z] WASM file status: 200 OK
-[2026-02-10T11:19:03.206Z] Worker file status: 200 OK
-[2026-02-10T11:19:03.207Z] Step 5: Creating worker...
-[2026-02-10T11:19:03.209Z] ✅ Worker created successfully!
-[2026-02-10T11:19:03.209Z] Step 6: Creating AsyncDuckDB instance...
-[2026-02-10T11:19:03.210Z] ✅ AsyncDuckDB instance created!
-[2026-02-10T11:19:03.210Z] Step 7: Instantiating database with WASM file...
-[2026-02-10T11:19:05.686Z] ✅ Database instantiated successfully!
-[2026-02-10T11:19:05.686Z] Step 8: Connecting to database...
-[2026-02-10T11:19:05.986Z] ✅ Database connected successfully!
-[2026-02-10T11:19:05.986Z] Step 9: Testing simple query (SELECT 1)...
-[2026-02-10T11:19:06.031Z] ✅ Query executed successfully!
-[2026-02-10T11:19:06.031Z] 🎉 ALL TESTS PASSED! DuckDB WASM is working correctly!
-```
-
-## Files Updated
-
-1. **js/duckdb-manager.js** - Uses correct initialization pattern
-2. **index.html** - Has import map
-3. **test-duckdb-init.html** - Standalone test page with detailed logging
-
-## Next Steps
-
-1. ✅ DuckDB initialization working
-2. Test main application with CSV file upload
-3. Verify query execution works end-to-end
-4. Continue with Phase 3-5 testing (UI components, integration, E2E)
+### ~~Fix 5: Direct Worker Creation~~
+**Was:** Proxy object issues with `createWorker()`.
+**Resolution:** Current code uses `duckdb.createWorker(bundle.mainWorker)` successfully — the old issue was specific to earlier DuckDB WASM versions.
 
 ## References
 
-- Official Documentation: https://duckdb.org/docs/stable/clients/wasm/overview.html
-- Instantiation Guide: https://duckdb.org/docs/stable/clients/wasm/instantiation.html
-- GitHub Repository: https://github.com/duckdb/duckdb-wasm
+- [DuckDB WASM Instantiation Guide](https://duckdb.org/docs/stable/clients/wasm/instantiation.html)
+- [DuckDB WASM GitHub](https://github.com/duckdb/duckdb-wasm)
+- [Current implementation](../js/duckdb-manager.js)

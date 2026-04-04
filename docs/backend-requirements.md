@@ -11,10 +11,15 @@
 
 ### 2. SQL Practice Mode Workflow
 
-#### 2.1 Post-Login Prompt
-After successful login, user is presented with a choice:
-- **Yes**: Start SQL practice mode
-- **No**: Remain in normal mode, show non-modal button to start practice later
+#### 2.1 Post-Login Experience
+After successful login, the user is taken directly to the practice view:
+- Question dropdown appears in the left panel
+- User selects a question and clicks **Load Question**
+- Tables from `sql_data` are created in the in-browser DuckDB instance
+- Question text, difficulty badge, and category are displayed
+- SQL editor becomes active
+
+There is no intermediate "Yes/No, do you want to practice?" modal — the practice flow is the default experience.
 
 #### 2.2 Backend - SQL Practice Bundle
 Backend creates and sends a JSON bundle containing:
@@ -100,19 +105,23 @@ Backend creates and sends a JSON bundle containing:
 ### 3. Backend API Endpoints
 
 ```
-POST   /api/auth/register       - User registration
-POST   /api/auth/login          - User login
-GET    /api/auth/me             - Get current user info
-POST   /api/auth/logout         - Logout (invalidate token)
+POST   /api/auth/register         - User registration
+POST   /api/auth/login            - User login
+GET    /api/auth/me               - Get current user info
+POST   /api/auth/logout           - Logout (invalidate token)
 
-GET    /api/practice/start      - Get first question bundle
-GET    /api/practice/next/:id   - Get next question after current
+GET    /api/practice/questions    - List all questions (for dropdown)
+GET    /api/practice/start        - Get first question bundle
+GET    /api/practice/next         - Get next question
 GET    /api/practice/question/:id - Get specific question
-POST   /api/practice/attempt    - Submit attempt (optional: track progress)
-GET    /api/practice/progress   - Get user's progress statistics
+POST   /api/practice/verify       - Submit and verify solution (records attempt)
+GET    /api/practice/progress     - Get user's progress statistics
+GET    /api/practice/session      - Get current session state
+POST   /api/practice/session/activate    - Activate practice mode
+POST   /api/practice/session/deactivate  - Deactivate practice mode
 ```
 
-### 4. Frontend UI Components Needed
+### 4. Frontend UI Components
 
 #### 4.1 Login/Register Modal
 - Email input
@@ -120,43 +129,43 @@ GET    /api/practice/progress   - Get user's progress statistics
 - Toggle between login/register
 - Form validation
 
-#### 4.2 Practice Mode Prompt
-- Modal: "Would you like to start practicing SQL?"
-- Yes/No buttons
+#### 4.2 Question Selector (post-login)
+- Dropdown populated from `/api/practice/questions`
+- Each option shows "Q{n}: {sql_question}"
+- **Load Question** button triggers `/api/practice/question/:id` fetch
+- Question info panel: category badge, difficulty badge, description, extracted table schema
 
-#### 4.3 Practice Mode UI (when active)
-- Question display card
-- Code editor (existing)
-- Two buttons: "Run Code" and "Submit Code"
-- Results panel (existing)
-- Feedback panel (correct/incorrect)
-- "Show Solution" button
-- "Next Question" button (when correct)
+#### 4.3 Practice Mode UI (when question loaded)
+- Question display card with text and metadata
+- CodeMirror SQL editor
+- Two buttons: **Run (Ctrl+Enter)** and **Submit Code**
+- Results table (right panel)
+- Feedback panel (correct/incorrect) — shown after submit
+- **Show Solution** button — reveals solution SQL + step-by-step explanation
+- **Next Question** button — appears after correct answer
 
-#### 4.4 Non-Modal "Start Practice" Button
-- Visible when user chose "No" initially
-- Placed in header or sidebar
-- Triggers practice mode prompt again
-
-### 5. User Flow Diagram
+### 5. User Flow
 
 ```
-Login → Practice? → No → Normal Mode → [Start Practice Button]
-              ↓
-             Yes → Get Q1 Bundle → Initialize DuckDB → Show Question
-                                              ↓
+Login → Question Dropdown → Select Question → Click "Load Question"
+                                                       ↓
+                                    Tables created in DuckDB (in-memory)
+                                                       ↓
+                                    Question text + schema displayed
+                                                       ↓
                                     User writes query → Click "Run"
                                               ↓
                                           See results → Click "Submit"
                                               ↓
-                                    Compare with solution
+                                    Server records attempt
+                                    Frontend compares results
                                    ↙                    ↘
                               Correct              Incorrect
                                   ↓                      ↓
-                          Show "Next Question"    Show differences
-                          Button                  Show "Show Solution"
+                          "Next Question" button    Show differences
                                   ↓                      ↓
-                          Click → Get Q2          Try again or view solution
+                          Click → Load next        Retry or click
+                          question                 "Show Solution"
 ```
 
 ### 6. Database Schema (PostgreSQL)

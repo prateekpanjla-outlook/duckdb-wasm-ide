@@ -46,31 +46,30 @@ DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=duckdb_ide
 DB_USER=postgres
-DB_PASSWORD=your_password
+DB_PASSWORD=postgres    # local dev only — production uses Secret Manager
 
 # JWT Secret
-JWT_SECRET=generate-a-strong-random-string-here
+JWT_SECRET=generate-a-strong-random-string-here    # production uses Secret Manager
 JWT_EXPIRES_IN=7d
 ```
 
-### 3. Initialize Database
+**Production note:** Never put real secrets in `.env`. Cloud Run reads `DB_PASSWORD` and `JWT_SECRET` from GCP Secret Manager via `--set-secrets` in `cloudbuild.yaml`.
+
+### 3. Start the Server
+
+Database tables and seed questions are created **automatically** on first server start — no manual steps needed. `ensureTables()` in `server.js` runs on boot and creates:
+
+- All tables (`users`, `questions`, `user_attempts`, `user_sessions`) via `CREATE TABLE IF NOT EXISTS`
+- All indexes via `CREATE INDEX IF NOT EXISTS`
+- Seed questions (only if the `questions` table is empty)
+
+This makes fresh deploys and local development zero-friction. The manual scripts below are kept for debugging only:
 
 ```bash
-npm run init-db
+# Manual (debugging only — normally not needed)
+npm run init-db   # Force table creation
+npm run seed      # Force reseed questions
 ```
-
-This will:
-- Create the database if it doesn't exist
-- Create all required tables
-- Create indexes for performance
-
-### 4. Seed Sample Questions
-
-```bash
-npm run seed
-```
-
-This will add 7 sample SQL practice questions ranging from beginner to advanced.
 
 ## Running the Server
 

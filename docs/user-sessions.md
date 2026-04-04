@@ -1,12 +1,29 @@
 # User Session Management Options for DuckDB WASM IDE
 
+> ✅ **DECISION RECORD** — This document was originally an options analysis. The decision is made; what follows is the chosen approach with the original comparison kept as justification.
+>
+> **Chosen approach (implemented):**
+> - **Authentication token:** JWT stored in browser `localStorage` as `auth_token`
+> - **User profile:** JSON in `localStorage` as `user_data`
+> - **Practice session state (current question, active flag):** PostgreSQL table `user_sessions` (server-side)
+> - **Query history:** `localStorage` as `duckdb_query_history`
+>
+> **Implementation references:**
+> - [js/services/api-client.js](../js/services/api-client.js) — token/user storage
+> - [server/models/UserSession.js](../server/models/UserSession.js) — server-side practice session
+> - [js/query-editor.js](../js/query-editor.js) — query history in localStorage
+>
+> **Known limitation:** Concurrent sessions across multiple tabs/browsers have race conditions. See **Vikunja task #32** — "Analyze concurrent session handling: multi-tab, multi-browser, multi-IP" — for the tracked follow-up.
+
+---
+
 ## Overview
 
 This document explores different approaches for implementing user sessions in the DuckDB WASM IDE, enabling persistence of user data, preferences, and query history across browser sessions.
 
 ---
 
-## Option 1: localStorage (Recommended for Current Use Case)
+## Option 1: localStorage (CHOSEN for client-side state)
 
 ### Description
 Browser's built-in key-value storage that persists across sessions. Data is stored as strings and has no expiration time.

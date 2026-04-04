@@ -1,6 +1,6 @@
 # Playwright E2E Testing Guide
 
-This guide explains how to run and debug Playwright end-to-end tests for the DuckDB WASM IDE.
+End-to-end tests for the SQL Practice Platform using Playwright.
 
 ## Prerequisites
 
@@ -19,143 +19,138 @@ This guide explains how to run and debug Playwright end-to-end tests for the Duc
    npx playwright install
    ```
 
+## Test Files
+
+| File | Purpose | Config |
+|------|---------|--------|
+| [tests/e2e/app.spec.js](../tests/e2e/app.spec.js) | Local E2E: auth flow, question selector, DuckDB query execution | `playwright.config.js` |
+| [tests/e2e/cloud.spec.js](../tests/e2e/cloud.spec.js) | Smoke tests against Cloud Run deployment | `playwright.cloud.config.js` |
+
 ## Running Tests
 
-### Run All E2E Tests
+### Against Local Backend (Vagrant VM)
+
+The default config targets `http://localhost:3015` — the Express backend running inside the Vagrant VM (port 3000 in VM → 3015 on Windows host).
+
 ```bash
+# One-time: start the VM and Playwright (from project root on Windows)
+vagrant up
+vagrant ssh -c "cd /home/vagrant/duckdb-wasm-ide && node server/server.js &"
+
+# Run E2E tests (from Windows host)
 npm run test:e2e
 ```
 
-### Run Specific Test File
+Or run everything inside the VM:
 ```bash
-npx playwright test tests/e2e/basic-workflow.spec.js
+vagrant ssh
+cd /home/vagrant/duckdb-wasm-ide
+node server/server.js &
+npx playwright test
 ```
 
-### Run Specific Test
+### Against Cloud Run Deployment
+
 ```bash
-npx playwright test --grep "should execute SHOW TABLES"
+npx playwright test --config=playwright.cloud.config.js
 ```
 
-### Run in Headed Mode (See Browser)
+Uses `CLOUD_URL` env var to override the default deployed URL if needed.
+
+### Debug / UI Mode
+
 ```bash
+# Visual UI with timelines
+npm run test:e2e:ui
+
+# Step-through debugger
+npm run test:e2e:debug
+
+# Headed browser
 npx playwright test --headed
 ```
 
-### Debug Mode (Interactive)
+### Run Specific Test
+
 ```bash
-npm run test:e2e:debug
+npx playwright test --grep "Auth flow"
+npx playwright test tests/e2e/app.spec.js:106
 ```
 
-This opens the Playwright Inspector where you can:
-- Step through tests
-- Inspect elements
-- View selectors
-- See live execution
+## Current Test Coverage (tests/e2e/app.spec.js)
 
-### UI Mode (Visual Interface)
-```bash
-npm run test:e2e:ui
-```
+| # | Test | Verifies |
+|---|------|----------|
+| 1 | Auth flow › shows login prompt when not authenticated | Login prompt visible, editor hidden |
+| 2 | Auth flow › register via UI opens modal and submits | Registration API + UI state transition |
+| 3 | Question selector › loads questions into dropdown after login | `/api/practice/questions` fetch + dropdown populated |
+| 4 | Question selector › selecting a question shows info panel | Question metadata display |
+| 5 | DuckDB query execution › executes SELECT 1 and shows result | Full DuckDB WASM round-trip |
 
-Opens a visual interface showing all tests with timelines and traces.
+## Key Selectors
 
-## Test Files
-
-| Test File | Description |
-|-----------|-------------|
-| [tests/e2e/basic-workflow.spec.js](../tests/e2e/basic-workflow.spec.js) | Basic workflow: CSV upload, query execution, screenshots |
-| [debug-arrow.html](../debug-arrow.html) | Debug page for Arrow result structure |
-
-## Screenshots
-
-Screenshots are saved to `test-results/screenshots/` after each test step:
-
-- `01-initial-load.png` - Application initial load
-- `02-before-upload.png` - Before CSV upload
-- `03-file-selected.png` - After CSV selection
-- `04-before-show-tables.png` - Before SHOW TABLES query
-- `05-show-tables-typed.png` - After typing query
-- `06-show-tables-executed.png` - After clicking run
-- `07-show-tables-results.png` - Query results
-- `08-19-*.png` - Other query results
-- `debug-*.png` - Arrow debugging screenshots
-
-## Key Selectors Used
+Based on current [index.html](../index.html):
 
 | Element | Selector |
 |---------|----------|
-| Query Editor | `.CodeMirror` |
-| Run Button | `#runQueryBtn` |
-| File Input | `#fileInput` |
-| Drop Zone | `#dropZone` |
-| File Info | `#fileInfo` |
-| Results Container | `#resultsContainer` |
-| DB Status | `#dbStatus` |
-| Export Button | `#exportResultsBtn` |
+| SQL editor (CodeMirror) | `.CodeMirror` |
+| Run Query button | `#runQueryBtn` |
+| DB status indicator | `#dbStatus` / `.status.connected` |
+| Auth button / modal | `#authBtn`, `#authModal`, `#authEmail`, `#authPassword` |
+| Login prompt | `#loginPromptSection`, `#loginPromptBtn` |
+| Question selector | `#questionSelectorSection`, `#questionDropdown`, `#loadQuestionBtn` |
+| Results container | `#resultsContainer` |
+| Loading overlay | `#loadingOverlay` |
 
-## Test Coverage
+## Environment Details
 
-### Current Tests
-1. ✅ Application load
-2. ✅ CSV file upload
-3. ✅ SHOW TABLES query
-4. ✅ SELECT with LIMIT
-5. ✅ DESCRIBE query
-6. ✅ COUNT query
-7. ✅ Export results
-8. ✅ Arrow structure debugging
-
-### Future Tests
-- [ ] Multiple file uploads
-- [ ] Query history
-- [ ] Error handling
-- [ ] Large datasets
-- [ ] Different file types (JSON, Parquet)
-
-## Debugging Arrow Results
-
-The [debug-arrow.html](../debug-arrow.html) page shows the raw Arrow structure from DuckDB.
-
-**To use:**
-1. Open `http://localhost:8000/debug-arrow.html`
-2. Click "Test SHOW TABLES" button
-3. View the Arrow structure in the browser
-4. Check browser console for column data debug info
+| Setting | Local (Vagrant) | Cloud Run |
+|---------|----------------|-----------|
+| Backend URL | `http://localhost:3015` | `https://duckdb-ide-192834930119.us-central1.run.app` |
+| Config file | `playwright.config.js` | `playwright.cloud.config.js` |
+| Test file | `app.spec.js` | `cloud.spec.js` |
+| Timeout | 120s | 120s |
+| Workers | 1 | 1 |
 
 ## Troubleshooting
 
 ### Tests Timing Out
-- Increase timeout: `test.setTimeout(60000)`
-- DuckDB initialization takes ~5 seconds
-- Add `await page.waitForTimeout(5000)` after page load
 
-### Element Not Found
-- Check selector in [index.html](../index.html)
-- Use Playwright Inspector: `npm run test:e2e:debug`
-- Try `page.locator('selector').count()` to see if element exists
+DuckDB WASM initialization takes 1-3 seconds in the EH bundle. If tests time out waiting for `.status.connected`, check:
 
-### Screenshots Not Saving
-- Ensure directory exists: `mkdir -p test-results/screenshots`
-- Check file permissions
-- Verify path in `page.screenshot()`
+- Server is running on port 3015 (`curl http://localhost:3015/health`)
+- WASM files are being served with correct MIME type
+- Browser console for CSP or module loading errors
+
+### Missing Browsers on Vagrant VM
+
+```bash
+vagrant ssh -c "cd /home/vagrant/duckdb-wasm-ide && npx playwright install chromium"
+```
+
+### Screenshots from Failed Tests
+
+Saved to `test-results/` automatically on failure. Config: `screenshot: 'only-on-failure'`.
 
 ## CI/CD Integration
 
-For GitHub Actions, GitLab CI, etc:
+Example for GitHub Actions:
 
 ```yaml
 - name: Install dependencies
   run: npm ci
 
 - name: Install Playwright browsers
-  run: npx playwright install --with-deps
+  run: npx playwright install chromium --with-deps
 
-- name: Run E2E tests
-  run: npm run test:e2e
+- name: Run E2E tests (against Cloud Run)
+  run: npx playwright test --config=playwright.cloud.config.js
+  env:
+    CLOUD_URL: ${{ secrets.CLOUD_RUN_URL }}
 
 - name: Upload test results
   if: always()
-  uses: actions/upload-artifact@v3
+  uses: actions/upload-artifact@v4
   with:
     name: playwright-report
     path: test-results/
@@ -164,6 +159,5 @@ For GitHub Actions, GitLab CI, etc:
 ## Resources
 
 - [Playwright Documentation](https://playwright.dev)
-- [Playwright Test Docs](https://playwright.dev/docs/intro)
 - [Selectors Guide](https://playwright.dev/docs/selectors)
 - [Debugging Tests](https://playwright.dev/docs/debug)

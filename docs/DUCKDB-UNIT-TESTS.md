@@ -1,5 +1,22 @@
 # DuckDB Unit Tests Documentation
 
+> ⚠️ **HISTORICAL DOCUMENT** — This describes an earlier testing approach that is no longer in use.
+>
+> The `DuckDBManager.test.js` file and `MockAsyncDuckDB` / `MockDuckDBConnection` helpers described below do **not exist** in the current codebase. DuckDB initialization is now tested via Playwright E2E tests in [tests/e2e/app.spec.js](../tests/e2e/app.spec.js) against a real DuckDB WASM instance in a real browser.
+>
+> **Current unit tests** live in [tests/unit/](../tests/unit/) and cover UI components and services:
+> - `tests/unit/services/FileService.test.js`
+> - `tests/unit/services/HistoryService.test.js`
+> - `tests/unit/storage/StorageAdapter.test.js`
+> - `tests/unit/ui/FileUploadUI.test.js`
+> - `tests/unit/ui/QueryEditorUI.test.js`
+> - `tests/unit/ui/ResultsViewUI.test.js`
+> - `tests/unit/ui/ToastManager.test.js`
+>
+> This document is kept for historical context — it shows the mock-based dependency-injection pattern we considered. If we ever need true unit tests for DuckDBManager again, this is a useful reference.
+
+---
+
 ## Overview
 
 This document describes the comprehensive unit tests for the DuckDB WebAssembly integration in the DuckDB WASM IDE. The unit tests verify all database operations without requiring the actual DuckDB WASM module to load.
