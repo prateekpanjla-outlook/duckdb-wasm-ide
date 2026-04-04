@@ -1,7 +1,7 @@
 {
   "name": "duckdb-wasm-backend",
   "version": "1.0.0",
-  "description": "Backend server for DuckDB WASM IDE with user authentication and SQL practice mode",
+  "description": "Backend server for SQL Practice Project with user authentication and SQL practice mode",
   "main": "server.js",
   "type": "module",
   "scripts": {

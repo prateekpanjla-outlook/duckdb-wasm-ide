@@ -1,6 +1,6 @@
-# DuckDB WASM IDE - Backend Server
+# SQL Practice Project - Backend Server
 
-Backend server for the DuckDB WASM IDE with user authentication and SQL practice mode.
+Backend server for the SQL Practice Project with user authentication and SQL practice mode.
 
 ## Features
 

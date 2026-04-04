@@ -1,5 +1,5 @@
 # Google Cloud Platform Deployment Plan
-**DuckDB WASM IDE**
+**SQL Practice Project**
 **Project:** sql-practice-project-489106
 
 ---

@@ -30,7 +30,7 @@ async function loginViaAPI(page) {
     return data;
 }
 
-test.describe('DuckDB WASM IDE — E2E', () => {
+test.describe('SQL Practice Project — E2E', () => {
 
     test.describe('Auth flow', () => {
 

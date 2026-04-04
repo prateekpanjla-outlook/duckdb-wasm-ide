@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "=== DuckDB WASM IDE — VM Provisioning ==="
+echo "=== SQL Practice Project — VM Provisioning ==="
 echo "All operations use native VM filesystem only (no synced folders)"
 
 # Prevent interactive prompts

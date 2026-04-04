@@ -19,7 +19,7 @@
 
 ## Overview
 
-This document describes the comprehensive unit tests for the DuckDB WebAssembly integration in the DuckDB WASM IDE. The unit tests verify all database operations without requiring the actual DuckDB WASM module to load.
+This document describes the comprehensive unit tests for the DuckDB WebAssembly integration in the SQL Practice Project. The unit tests verify all database operations without requiring the actual DuckDB WASM module to load.
 
 ## Test Architecture
 

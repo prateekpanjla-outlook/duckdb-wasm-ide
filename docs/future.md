@@ -1,4 +1,4 @@
-# DuckDB WASM IDE - Future Features
+# SQL Practice Project - Future Features
 
 ## Planned Enhancements
 

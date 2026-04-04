@@ -1,4 +1,4 @@
-# User Session Management Options for DuckDB WASM IDE
+# User Session Management Options for SQL Practice Project
 
 > ✅ **DECISION RECORD** — This document was originally an options analysis. The decision is made; what follows is the chosen approach with the original comparison kept as justification.
 >
@@ -19,7 +19,7 @@
 
 ## Overview
 
-This document explores different approaches for implementing user sessions in the DuckDB WASM IDE, enabling persistence of user data, preferences, and query history across browser sessions.
+This document explores different approaches for implementing user sessions in the SQL Practice Project, enabling persistence of user data, preferences, and query history across browser sessions.
 
 ---
 
@@ -246,7 +246,7 @@ const session = await response.json();
 
 ---
 
-## Recommended Architecture for DuckDB WASM IDE
+## Recommended Architecture for SQL Practice Project
 
 ### Hybrid Approach
 

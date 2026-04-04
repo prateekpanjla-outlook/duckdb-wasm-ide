@@ -1,4 +1,4 @@
-# SQL Practice Platform
+# SQL Practice Project
 
 A browser-based SQL learning platform. Practice SQL against real data — queries run entirely in your browser via DuckDB WebAssembly. A PostgreSQL backend tracks progress and serves a question bank.
 

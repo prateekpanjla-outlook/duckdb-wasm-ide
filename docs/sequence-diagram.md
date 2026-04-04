@@ -1,4 +1,4 @@
-# DuckDB WASM IDE — Sequence Diagrams
+# SQL Practice Project — Sequence Diagrams
 
 ## 1. App Startup & Login Flow
 

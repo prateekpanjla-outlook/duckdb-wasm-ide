@@ -37,7 +37,7 @@ export class AuthManager {
 
                     <div class="auth-header">
                         <h2 id="authTitle">Login</h2>
-                        <p class="auth-subtitle">DuckDB WASM IDE</p>
+                        <p class="auth-subtitle">SQL Practice Project</p>
                     </div>
 
                     <form id="authForm" class="auth-form">

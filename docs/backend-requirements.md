@@ -1,4 +1,4 @@
-# DuckDB WASM IDE - Backend Requirements
+# SQL Practice Project - Backend Requirements
 
 ## Current Implementation Scope
 

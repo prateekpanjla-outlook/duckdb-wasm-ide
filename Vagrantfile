@@ -1,4 +1,4 @@
-# DuckDB WASM IDE — Development & Testing VM
+# SQL Practice Project — Development & Testing VM
 # Single VM with PostgreSQL, Node.js, Python, Playwright
 # No synced folders — uses git clone on native filesystem
 # Usage: vagrant up && vagrant ssh
