@@ -5,15 +5,9 @@ node_modules/
 coverage/
 *.lcov
 
-# Vitest cache
-.vitest/
-
-# Editor directories and files
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
+# Editor + local tooling (machine-specific, do not commit)
+.vscode/
+.claude/
 *.code-workspace
 
 # OS files
