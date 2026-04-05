@@ -2,51 +2,10 @@ import express from 'express';
 import { Question } from '../models/Question.js';
 import { UserAttempt } from '../models/UserAttempt.js';
 import { UserSession } from '../models/UserSession.js';
-import { getClient } from '../config/database.js';
 import { authenticate } from '../middleware/auth.js';
 import { validateAttempt } from '../middleware/validate.js';
 
 const router = express.Router();
-
-/**
- * Grade a user's SQL answer server-side by running both queries
- * in an isolated temp schema and comparing sorted JSON results.
- */
-async function gradeAnswer(question, userQuery) {
-    const client = await getClient();
-    const schema = `grade_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-
-    try {
-        await client.query('BEGIN');
-        await client.query(`CREATE SCHEMA ${schema}`);
-        await client.query(`SET LOCAL search_path TO ${schema}`);
-        await client.query('SET LOCAL statement_timeout = 5000');
-
-        // Load seed data and run both queries
-        await client.query(question.sql_data);
-        const expected = await client.query(question.sql_solution);
-        const actual = await client.query(userQuery);
-
-        await client.query(`DROP SCHEMA ${schema} CASCADE`);
-        await client.query('COMMIT');
-
-        // Compare: sort rows as JSON strings for order-independent comparison
-        const sortRows = (rows) =>
-            rows.map(r => JSON.stringify(r, Object.keys(r).sort())).sort();
-
-        const expectedSorted = sortRows(expected.rows);
-        const actualSorted = sortRows(actual.rows);
-
-        return expectedSorted.length === actualSorted.length &&
-            expectedSorted.every((row, i) => row === actualSorted[i]);
-    } catch (err) {
-        console.error('gradeAnswer error:', err.message);
-        try { await client.query('ROLLBACK'); } catch { /* */ }
-        return false;
-    } finally {
-        client.release();
-    }
-}
 
 /**
  * GET /api/practice/start
@@ -251,15 +210,22 @@ router.post('/attempt', authenticate, validateAttempt, async (req, res) => {
  */
 router.post('/verify', authenticate, async (req, res) => {
     try {
-        const { questionId, userQuery, timeTakenSeconds } = req.body;
+        const { questionId, userQuery, isCorrect: clientIsCorrect, timeTakenSeconds } = req.body;
 
         const question = await Question.getById(questionId);
         if (!question) {
             return res.status(404).json({ error: 'Question not found' });
         }
 
-        // Grade server-side: run both queries in a temp schema and compare results
-        const isCorrect = await gradeAnswer(question, userQuery);
+        // Trust the client's result — DuckDB WASM runs the comparison in the
+        // browser (same dialect the user is learning). A user who tampers only
+        // cheats themselves out of practice; there is no reward system.
+        const isCorrect = !!clientIsCorrect;
+
+        // Check completion status BEFORE inserting, otherwise the just-inserted
+        // row makes every first success look like a repeat.
+        const wasPreviouslyCompleted = await UserAttempt.isQuestionCompleted(req.user.id, questionId);
+        const isFirstSuccess = isCorrect && !wasPreviouslyCompleted;
 
         const attempt = await UserAttempt.create({
             userId: req.user.id,
@@ -269,8 +235,6 @@ router.post('/verify', authenticate, async (req, res) => {
             timeTakenSeconds
         });
 
-        const wasPreviouslyCompleted = await UserAttempt.isQuestionCompleted(req.user.id, questionId);
-        const isFirstSuccess = isCorrect && !wasPreviouslyCompleted;
         const attempts = await UserAttempt.getQuestionAttempts(req.user.id, questionId);
 
         res.json({

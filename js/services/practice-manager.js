@@ -325,16 +325,14 @@ export class PracticeManager {
      * Compare user results with solution results
      */
     compareResults(userResults, solutionResults) {
-        // Improved comparison for DuckDB results
+        // Order-independent comparison:
+        // 1. Same row count
+        // 2. Same column name set
+        // 3. Each row, serialized with columns in a canonical order and sorted,
+        //    matches position-by-position after sorting both sides.
 
-        if (!userResults || !solutionResults) {
+        if (!userResults?.rows || !solutionResults?.rows) {
             console.log('❌ Compare: Missing results');
-            return false;
-        }
-
-        // Check if both have rows
-        if (!userResults.rows || !solutionResults.rows) {
-            console.log('❌ Compare: Missing rows');
             return false;
         }
 
@@ -342,55 +340,37 @@ export class PracticeManager {
         const solutionRows = solutionResults.rows;
 
         console.log(`📊 Row count: User=${userRows.length}, Solution=${solutionRows.length}`);
-
-        // Compare row count
         if (userRows.length !== solutionRows.length) {
             console.log('❌ Compare: Row count mismatch');
             return false;
         }
 
-        // Compare column names
-        const userCols = userRows.length > 0 ? Object.keys(userRows[0] || {}) : [];
-        const solutionCols = solutionRows.length > 0 ? Object.keys(solutionRows[0] || {}) : [];
+        const userCols = userRows.length > 0 ? Object.keys(userRows[0] || {}).sort() : [];
+        const solutionCols = solutionRows.length > 0 ? Object.keys(solutionRows[0] || {}).sort() : [];
 
         console.log(`📊 Columns - User: [${userCols.join(', ')}]`);
         console.log(`📊 Columns - Solution: [${solutionCols.join(', ')}]`);
 
-        if (userCols.length !== solutionCols.length) {
-            console.log('❌ Compare: Column count mismatch');
-            return false;
-        }
-
-        // Check if columns match (regardless of order)
-        const userColsSorted = [...userCols].sort();
-        const solutionColsSorted = [...solutionCols].sort();
-        const colsMatch = userColsSorted.every((col, i) => col === solutionColsSorted[i]);
-
-        if (!colsMatch) {
+        if (userCols.length !== solutionCols.length ||
+            !userCols.every((c, i) => c === solutionCols[i])) {
             console.log('❌ Compare: Column names do not match');
             return false;
         }
 
-        // For each row, compare values
-        // Note: This is a simplified comparison that doesn't handle row ordering
-        for (let i = 0; i < userRows.length; i++) {
-            const userRow = userRows[i];
-            const solutionRow = solutionRows[i];
+        // Canonicalize each row: stringify values through String() so BigInt,
+        // Date, and number all collapse consistently, with keys in sorted order.
+        const canonical = (row, cols) =>
+            JSON.stringify(cols.map(c => String(row[c])));
 
-            for (const col of userCols) {
-                const userVal = userRow[col];
-                const solutionVal = solutionRow[col];
+        const userSorted = userRows.map(r => canonical(r, userCols)).sort();
+        const solutionSorted = solutionRows.map(r => canonical(r, solutionCols)).sort();
 
-                // Compare values (handle numbers as strings)
-                const userStr = String(userVal);
-                const solutionStr = String(solutionVal);
-
-                if (userStr !== solutionStr) {
-                    console.log(`❌ Compare: Row ${i}, Column '${col}' mismatch`);
-                    console.log(`   User: "${userStr}" (${typeof userVal})`);
-                    console.log(`   Solution: "${solutionStr}" (${typeof solutionVal})`);
-                    return false;
-                }
+        for (let i = 0; i < userSorted.length; i++) {
+            if (userSorted[i] !== solutionSorted[i]) {
+                console.log(`❌ Compare: Row mismatch at sorted index ${i}`);
+                console.log(`   User:     ${userSorted[i]}`);
+                console.log(`   Solution: ${solutionSorted[i]}`);
+                return false;
             }
         }
 
