@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const API = 'http://localhost:3015/api';
+const API = `${process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3015'}/api`;
 const TEST_PASSWORD = 'test1234';
 
 // Helper: wait for app to finish initializing
