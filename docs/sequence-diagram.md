@@ -11,21 +11,28 @@ sequenceDiagram
     participant API as APIClient
     participant BE as Express Backend
     participant DB as Cloud SQL
+    participant DM as DuckDBManager
 
     U->>HTML: Page load
     HTML->>App: DOMContentLoaded → new App()
-    App->>App: init() — setup event listeners
+    App->>App: init() — window.app = this, setupEventListeners
     App->>Auth: new AuthManager()
-    Auth->>Auth: Check localStorage for auth_token
+    App->>App: Read localStorage: auth_token, user_data
 
     alt Has saved token
-        Auth->>App: updateUIForLoggedInUser(user)
+        App->>Auth: updateUIForLoggedInUser(user)
         App->>App: showQuestionSelector()
-        App->>App: initializeDuckDB() (background)
+        Note over App: DuckDB init is non-blocking —<br/>question selector works without it
+        App->>DM: initializeDuckDB() (async, not awaited)
+        DM-->>App: DuckDB connected (later)
+        App->>App: new PracticeManager(dbManager)
+        App->>App: loadDefaultPracticeData()
+        App->>App: restoreSession() — best-effort
     else No token
-        Auth->>App: showLoginPrompt()
-        U->>Auth: Click "Login" button
-        Auth->>Auth: openModal()
+        App->>App: showLoginPrompt()
+        Note over App: App wires #loginPromptBtn click → authManager.openModal()
+        U->>App: Click #loginPromptBtn
+        App->>Auth: openModal()
         U->>Auth: Enter email + password, submit
         Auth->>API: login(email, password)
         API->>BE: POST /api/auth/login
@@ -33,8 +40,9 @@ sequenceDiagram
         DB-->>BE: user row
         BE-->>API: { token, user }
         API->>API: Store token + user in localStorage
-        Auth->>Auth: Close modal, show user email
-        Auth->>App: window.app.initializeDuckDB()
+        Auth->>Auth: closeModal(), updateUIForLoggedInUser
+        Auth->>App: await window.app.initializeDuckDB()
+        Auth->>Auth: new PracticeManager(window.app.dbManager)
         Auth->>App: window.app.showQuestionSelector()
     end
 ```
@@ -47,35 +55,38 @@ sequenceDiagram
     participant QDD as QuestionDropdownManager
     participant API as APIClient
     participant DM as DuckDBManager
-    participant PM as PracticeManager
     participant BE as Express Backend
     participant WASM as DuckDB WASM
 
-    par Load questions and init DuckDB
-        App->>QDD: new QuestionDropdownManager()
-        QDD->>API: getQuestions()
-        API->>BE: GET /api/practice/questions
-        BE-->>API: questions[]
-        API-->>QDD: questions[]
-        QDD->>QDD: Populate dropdown (7 questions)
-    and
-        App->>DM: initialize()
-        DM->>WASM: Select EH bundle (fallback MVP)
-        DM->>WASM: instantiate()
-        WASM-->>DM: database instance
-        DM->>WASM: connect()
-        WASM-->>DM: connection ready
-        DM-->>App: DuckDB connected
-        App->>PM: new PracticeManager(dbManager)
-        App->>PM: loadDefaultPracticeData()
-        loop Each question's sql_data
-            PM->>DM: executeQuery(CREATE TABLE...)
-            PM->>DM: executeQuery(INSERT INTO...)
-        end
+    Note over App: Step 1: Show question selector immediately<br/>(dropdown works without DuckDB)
+    App->>QDD: new QuestionDropdownManager()
+    QDD->>API: getQuestions()
+    API->>BE: GET /api/practice/questions
+    BE-->>API: questions[] from PostgreSQL
+    API-->>QDD: questions[]
+    QDD->>QDD: Populate dropdown with returned questions
+
+    Note over App: Step 2: Initialize DuckDB in background<br/>(non-blocking, via .then())
+    App->>DM: initializeDuckDB()
+    DM->>WASM: selectBundle({mvp, eh, coi:null})
+    DM->>WASM: createWorker(bundle.mainWorker)
+    DM->>WASM: new AsyncDuckDB(logger, worker)
+    DM->>WASM: db.instantiate(bundle.mainModule)
+    WASM-->>DM: database instance
+    DM->>WASM: db.connect()
+    WASM-->>DM: connection ready
+    DM-->>App: true (connected)
+
+    Note over App: Step 3: Load ALL question sql_data into main connection
+    App->>App: new PracticeManager(dbManager)
+    App->>API: getQuestions()
+    API-->>App: questions[]
+    loop Each question's sql_data
+        App->>DM: executeQuery(CREATE TABLE... / INSERT INTO...)
     end
+    Note over App: SQL Editor now has all tables pre-loaded
 
     App->>App: restoreSession() — check mid-question state
-    App->>App: Hide loading overlay
 ```
 
 ## 3. Question Selection & Practice Start
@@ -152,38 +163,46 @@ sequenceDiagram
 sequenceDiagram
     participant U as User
     participant PM as PracticeManager
-    participant DM as DuckDBManager
+    participant DM as DuckDBManager (WASM)
     participant API as APIClient
     participant BE as Backend
-    participant DB as Cloud SQL
+    participant PG as PostgreSQL
 
     U->>PM: Click "Submit Code"
-    PM->>PM: Get user SQL from editor
+    PM->>PM: Get user SQL from editor, compute timeTaken
 
-    par Execute both queries
-        PM->>DM: executeQuery(userSQL)
-        DM-->>PM: userResults {columns, rows}
-    and
-        PM->>DM: executeQuery(question.sql_solution)
-        DM-->>PM: solutionResults {columns, rows}
-    end
+    Note over PM,DM: Client-side: run both queries in-browser<br/>(sequentially, not parallel)
+    PM->>DM: executeQuery(userSQL)
+    DM-->>PM: userResults {columns, rows}
+    PM->>DM: executeQuery(question.sql_solution)
+    DM-->>PM: solutionResults {columns, rows}
 
     PM->>PM: compareResults(userResults, solutionResults)
-    Note over PM: 1. Check row count match<br/>2. Check column names match<br/>3. Check each cell value (string compare)
+    Note over PM: Row count + column names (sorted)<br/>+ per-cell string compare<br/>⚠️ Currently position-based, not order-independent (bug — task #71)
+    PM->>PM: showFeedback(clientIsCorrect, userResults, solutionResults)
 
-    alt Results match
-        PM->>PM: showFeedback(correct)
-        Note over PM: Green panel: "Correct! Well done!"<br/>Show "Next Question" button
-    else Results differ
-        PM->>PM: showFeedback(incorrect)
-        Note over PM: Red panel: "Not quite right"<br/>Prompt "Show Solution"
-    end
-
-    PM->>API: verifySolution(questionId, userSQL, isCorrect, timeTaken)
+    Note over PM,BE: Server-side: re-grades in PostgreSQL, ignoring client flag
+    PM->>API: verifySolution(questionId, userSQL, userResults, clientIsCorrect, timeTaken)
     API->>BE: POST /api/practice/verify
-    BE->>DB: INSERT INTO user_attempts
-    DB-->>BE: recorded
-    BE-->>API: { success: true }
+    BE->>PG: gradeAnswer() — CREATE SCHEMA grade_xxx
+    BE->>PG: Run question.sql_data (seed)
+    BE->>PG: Run question.sql_solution → expected rows
+    BE->>PG: Run userSQL → actual rows
+    BE->>BE: Sort both as JSON, compare (order-independent)
+    BE->>PG: DROP SCHEMA grade_xxx
+    PG-->>BE: serverIsCorrect (overrides clientIsCorrect)
+    BE->>PG: INSERT INTO user_attempts (is_correct = serverIsCorrect)
+    BE-->>API: { attempt, isFirstSuccess, solution }
+
+    Note over PM,BE: ⚠️ Dialect mismatch: user writes DuckDB SQL,<br/>server grades in PostgreSQL (task #71 removes this)
+
+    alt serverIsCorrect
+        API-->>PM: response with isCorrect=true
+        PM->>PM: showNextQuestionButton()
+    else incorrect
+        API-->>PM: response with isCorrect=false
+        Note over PM: User can retry or click Show Solution
+    end
 ```
 
 ## 6. Show Solution & Next Question
@@ -202,8 +221,9 @@ sequenceDiagram
     Note over PM: Display correct SQL<br/>+ step-by-step explanation array
 
     U->>PM: Click "Next Question →"
-    PM->>API: getNextQuestion(currentQuestionId)
-    API->>BE: GET /api/practice/next?current=5
+    PM->>API: getNextQuestion()
+    API->>BE: GET /api/practice/next
+    Note over BE: Server looks up current question from<br/>user_sessions table, returns the next one
     BE-->>API: next question object
 
     alt Has next question
