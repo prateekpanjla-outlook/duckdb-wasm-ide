@@ -171,32 +171,25 @@ sequenceDiagram
     U->>PM: Click "Submit Code"
     PM->>PM: Get user SQL from editor, compute timeTaken
 
-    Note over PM,DM: Client-side: run both queries in-browser<br/>(sequentially, not parallel)
+    Note over PM,DM: Client-side: run both queries in-browser (sequentially)
     PM->>DM: executeQuery(userSQL)
     DM-->>PM: userResults {columns, rows}
     PM->>DM: executeQuery(question.sql_solution)
     DM-->>PM: solutionResults {columns, rows}
 
     PM->>PM: compareResults(userResults, solutionResults)
-    Note over PM: Row count + column names (sorted)<br/>+ per-cell string compare<br/>⚠️ Currently position-based, not order-independent (bug — task #71)
-    PM->>PM: showFeedback(clientIsCorrect, userResults, solutionResults)
+    Note over PM: Row count + sorted column names +<br/>canonicalize rows with sorted keys, sort both sides,<br/>compare position-wise (order-independent)
+    PM->>PM: showFeedback(isCorrect, userResults, solutionResults)
 
-    Note over PM,BE: Server-side: re-grades in PostgreSQL, ignoring client flag
-    PM->>API: verifySolution(questionId, userSQL, userResults, clientIsCorrect, timeTaken)
+    Note over PM,BE: Server just records the attempt — no re-grading
+    PM->>API: verifySolution(questionId, userSQL, userResults, isCorrect, timeTaken)
     API->>BE: POST /api/practice/verify
-    BE->>PG: gradeAnswer() — CREATE SCHEMA grade_xxx
-    BE->>PG: Run question.sql_data (seed)
-    BE->>PG: Run question.sql_solution → expected rows
-    BE->>PG: Run userSQL → actual rows
-    BE->>BE: Sort both as JSON, compare (order-independent)
-    BE->>PG: DROP SCHEMA grade_xxx
-    PG-->>BE: serverIsCorrect (overrides clientIsCorrect)
-    BE->>PG: INSERT INTO user_attempts (is_correct = serverIsCorrect)
+    BE->>PG: SELECT EXISTS (is_correct=true) — wasPreviouslyCompleted
+    Note over BE: Check runs BEFORE insert so first success<br/>is not masked by the row we're about to add
+    BE->>PG: INSERT INTO user_attempts (is_correct = clientIsCorrect)
     BE-->>API: { attempt, isFirstSuccess, solution }
 
-    Note over PM,BE: ⚠️ Dialect mismatch: user writes DuckDB SQL,<br/>server grades in PostgreSQL (task #71 removes this)
-
-    alt serverIsCorrect
+    alt isCorrect
         API-->>PM: response with isCorrect=true
         PM->>PM: showNextQuestionButton()
     else incorrect
