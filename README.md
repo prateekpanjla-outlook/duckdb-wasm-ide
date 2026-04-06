@@ -4,7 +4,11 @@ A browser-based SQL learning platform. Practice SQL against real data — querie
 
 **Live:** https://duckdb-ide-frxi6yk4jq-uc.a.run.app
 
-<!-- TODO: Add a screenshot of the IDE with a loaded question and results panel -->
+## Demo
+
+[![Watch the demo](https://img.youtube.com/vi/cG_GHg43-8c/maxresdefault.jpg)](https://youtu.be/cG_GHg43-8c)
+
+[Watch on YouTube](https://youtu.be/cG_GHg43-8c)
 
 ## How It Works
 
