@@ -50,7 +50,7 @@ Detailed flow diagrams: [docs/sequence-diagram.md](docs/sequence-diagram.md)
 | Database | PostgreSQL 16 |
 | Auth | JWT in localStorage, bcrypt password hashing |
 | Deployment | Cloud Run + Cloud SQL + Secret Manager |
-| CI/CD | Cloud Build triggered from GitHub |
+| CI/CD | Cloud Build (manual trigger, automated trigger planned) |
 | Tests | Playwright (E2E) |
 
 ## Local Development — Vagrant VM
@@ -75,6 +75,7 @@ Ports (VM guest → Windows host):
 |---|---|---|
 | Express (API + static frontend) | 3000 | **3015** |
 | PostgreSQL | 5432 | 5447 |
+| Docker container test | 8080 | 8095 |
 
 Open `http://localhost:3015` in your Windows browser.
 
@@ -109,10 +110,33 @@ Run cost: ~$9/month (Cloud SQL db-f1-micro is the only paid resource; Cloud Run 
 | `Ctrl+Enter` | Run query |
 | `Ctrl+Space` | Autocomplete (in SQL editor) |
 
+## Design & Architecture Docs
+
+| Document | Description |
+|----------|-------------|
+| [docs/sequence-diagram.md](docs/sequence-diagram.md) | Mermaid sequence diagrams for all major flows (login, DuckDB init, question loading, grading, registration) |
+| [docs/backend-requirements.md](docs/backend-requirements.md) | Backend API scope: auth, practice endpoints, progress tracking |
+| [docs/duckdb-initialization-pattern.md](docs/duckdb-initialization-pattern.md) | DuckDB WASM init: EH/MVP bundle selection, connection lifecycle |
+| [docs/user-sessions.md](docs/user-sessions.md) | Session management: restore-on-refresh, multi-tab considerations |
+| [docs/playwright-testing.md](docs/playwright-testing.md) | E2E test strategy, Vagrant VM setup, known limitations |
+| [docs/future.md](docs/future.md) | Planned features: OAuth, magic links, progress dashboard |
+| [GCP_DEPLOYMENT_PLAN.md](GCP_DEPLOYMENT_PLAN.md) | Full GCP deployment architecture: Cloud Run, Cloud SQL, Secret Manager |
+
+Key design decisions:
+- **Client-side grading only** — DuckDB WASM runs both user and solution queries in the browser. No server-side SQL execution for grading. This eliminates dialect mismatch (user learns DuckDB, not PostgreSQL) and keeps server load at zero per query.
+- **No bundler** — vanilla ES modules served directly. No webpack, no Vite, no build step for frontend code.
+- **Self-hosted CodeMirror** — vendored in `libs/codemirror/` to avoid CDN dependencies.
+
+## Task Tracking
+
+Tasks are tracked in a local [Vikunja](https://vikunja.io/) instance at `http://localhost:3456`, project "SQL Practice Project" (ID 2). Tasks cover bugs, features, infrastructure, and deferred work (anti-cheat, OAuth, etc.).
+
+To list pending tasks via API:
+```bash
+curl -s -H "Authorization: Bearer <token>" \
+  "http://localhost:3456/api/v1/projects/2/tasks?filter=done=false&sort_by=priority&order_by=desc"
+```
+
 ## Browser Support
 
 Currently **only tested in Chromium** (via Playwright). DuckDB WASM technically requires WebAssembly (2017+) and should work in any modern browser, but Firefox, Safari, and Edge are untested. If you try them and hit issues, please open an issue.
-
-## License
-
-MIT
