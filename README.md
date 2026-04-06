@@ -127,6 +127,10 @@ Key design decisions:
 - **No bundler** — vanilla ES modules served directly. No webpack, no Vite, no build step for frontend code.
 - **Self-hosted CodeMirror** — vendored in `libs/codemirror/` to avoid CDN dependencies.
 
+## Pending Tasks
+
+See [docs/pending_tasks.md](docs/pending_tasks.md) for the full list of open work items.
+
 ## Task Tracking
 
 Tasks are tracked in a local [Vikunja](https://vikunja.io/) instance at `http://localhost:3456`, project "SQL Practice Project" (ID 2). Tasks cover bugs, features, infrastructure, and deferred work (anti-cheat, OAuth, etc.).
