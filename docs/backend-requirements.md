@@ -1,150 +1,133 @@
-# SQL Practice Project - Backend Requirements
+# SQL Practice Project — Backend & Frontend Architecture
 
-## Current Implementation Scope
+Current implementation as of 2026-04-06. This document describes what is built and deployed, not aspirational features.
 
-### 1. User Authentication (Email/Password)
-- User registration with email and password
-- User login with email and password
-- JWT token-based authentication
-- Password hashing with bcrypt
-- Session management
+## 1. User Authentication (Email/Password)
 
-### 2. SQL Practice Mode Workflow
+- Registration with email and password (min 6 chars, bcrypt hashed)
+- Login returns JWT token (7-day expiry)
+- Token stored in `localStorage`, sent via `Authorization: Bearer` header
+- `authenticate` middleware validates token on protected routes
 
-#### 2.1 Post-Login Experience
-After successful login, the user is taken directly to the practice view:
+## 2. SQL Practice Workflow
+
+### 2.1 Post-Login Experience
+
+After login, the user goes directly to the practice view:
 - Question dropdown appears in the left panel
 - User selects a question and clicks **Load Question**
-- Tables from `sql_data` are created in the in-browser DuckDB instance
+- Tables from `sql_data` are created in the in-browser DuckDB WASM instance
 - Question text, difficulty badge, and category are displayed
-- SQL editor becomes active
+- SQL editor (CodeMirror) becomes active
 
-There is no intermediate "Yes/No, do you want to practice?" modal — the practice flow is the default experience.
+There is no intermediate modal — practice is the default experience.
 
-#### 2.2 Backend - SQL Practice Bundle
-Backend creates and sends a JSON bundle containing:
+### 2.2 Question Bundle (from backend)
+
+Backend serves a JSON bundle per question:
 ```json
 {
-  "question_id": 1,
-  "sql_data": "-- SQL data/schema setup statements",
+  "id": 1,
+  "sql_data": "CREATE TABLE employees (...); INSERT INTO employees VALUES (...);",
   "sql_question": "Find all employees earning more than 50000",
   "sql_solution": "SELECT * FROM employees WHERE salary > 50000",
-  "sql_solution_explanation": [
-    "Step 1: Select all columns from employees table",
-    "Step 2: Filter rows where salary is greater than 50000"
-  ],
+  "sql_solution_explanation": ["Step 1: ...", "Step 2: ..."],
   "difficulty": "beginner",
   "category": "SELECT queries"
 }
 ```
 
-#### 2.3 Frontend - DuckDB Initialization
-1. Instantiate new DuckDB WASM instance
-2. Load `sql_data` into DuckDB (execute schema/data setup)
-3. Display `sql_question` to user
-4. Store `sql_solution` and `sql_solution_explanation` (NOT in DuckDB initially)
+### 2.3 DuckDB Initialization (client-side)
 
-#### 2.4 Data Storage Decision
+1. DuckDB WASM loads in browser (EH bundle preferred, MVP fallback)
+2. On question load, `sql_data` statements run against DuckDB (`CREATE OR REPLACE TABLE`)
+3. User's SQL and the solution SQL both execute in-browser against the same data
 
-**Storage Strategy:**
+### 2.4 Data Storage
 
-| Data Type | Storage Location | Reason |
-|-----------|-----------------|--------|
-| `sql_data` | DuckDB WASM (in-memory) | User queries run against this data |
-| `sql_question` | Frontend state (JavaScript) | Display to user, no query needed |
-| `sql_solution` | Frontend state + optional temp table | For validation comparison |
-| `sql_solution_explanation` | Frontend state (JavaScript) | Show after user attempts or requests |
+| Data | Location | Reason |
+|------|----------|--------|
+| `sql_data` tables | DuckDB WASM (in-memory) | User queries run against this |
+| `sql_question` | Frontend JS state | Display only |
+| `sql_solution` | Frontend JS state | Run in DuckDB for comparison |
+| `sql_solution_explanation` | Frontend JS state | Shown on "Show Solution" |
 
-**Alternative for sql_solution:**
-- Option A: Keep in JavaScript, compare result sets after execution
-- Option B: Create temporary DuckDB table with solution results, use SQL to compare
-- **Recommended**: Option A for simplicity, Option B for complex validation
+### 2.5 Run Code Button
 
-#### 2.5 Run Code Button
-- Executes user's SQL query against DuckDB
-- Displays query results in results panel
+- Executes user's SQL against DuckDB WASM
+- Displays results in the results panel
 - Does NOT validate against solution
 - Shows execution time
 
-#### 2.6 Submit Code Button
-- Executes user's SQL query
-- Compares results with `sql_solution` results
-- **Comparison Logic:**
-  ```javascript
-  // Option A: Result set comparison
-  compareResultSets(userResults, solutionResults) {
-    // Compare: row count, column names, column values
-    // Return: { isCorrect: boolean, differences: array }
-  }
+### 2.6 Submit Code Button
 
-  // Option B: Load solution in DuckDB and SQL comparison
-  // Create temp table with solution results
-  // Use EXCEPT or UNION to find differences
-  ```
+- Executes user's SQL and the solution SQL in DuckDB WASM (sequentially)
+- Compares results client-side with an **order-independent** comparator:
+  - Row count must match
+  - Column name set must match (regardless of order)
+  - Each row is canonicalized (sorted column keys, values as strings), both sides sorted, then compared position-wise
+- Sends `isCorrect` flag to backend — server trusts the client (no server-side re-grading)
+- Backend records the attempt in `user_attempts`
 
-#### 2.7 Validation Feedback
-- **Match**: Show green success message "✓ Correct!"
-- **No Match**: Show red message with details:
-  - Row count difference
-  - Column differences
-  - Sample of differing rows
+### 2.7 Validation Feedback
 
-#### 2.8 Show Solution Button
-- Always available (or after 3 failed attempts)
-- Modal/panel showing:
-  - Correct SQL solution
-  - Step-by-step explanation (from `sql_solution_explanation`)
-  - "Try Again" button to close
+- **Correct:** Green panel with "Correct! Well done!" and "Next Question" button
+- **Incorrect:** Red panel with "Not quite right. Keep trying!" and pointer to Show Solution
 
-#### 2.9 Next Question Button
-- Only appears when solution is correct
-- Clicking requests next question bundle from backend
-- Backend sends new bundle with incremented question_id
-- Frontend re-initializes DuckDB with new data
+### 2.8 Show Solution Button
 
-### 3. Backend API Endpoints
+- Always available (no attempt gating)
+- Shows the correct SQL and step-by-step explanation array
+
+### 2.9 Next Question Button
+
+- Appears after a correct submission
+- Calls `GET /api/practice/next` to fetch the next question
+- Frontend re-initializes DuckDB tables with new `sql_data`
+- Dropdown selection updates
+
+## 3. API Endpoints
 
 ```
-POST   /api/auth/register         - User registration
-POST   /api/auth/login            - User login
-GET    /api/auth/me               - Get current user info
-POST   /api/auth/logout           - Logout (invalidate token)
+POST   /api/auth/register              Register with email + password
+POST   /api/auth/login                 Login, returns JWT + user
+GET    /api/auth/me                    Get current user info
+POST   /api/auth/logout                Logout (client deletes token)
 
-GET    /api/practice/questions    - List all questions (for dropdown)
-GET    /api/practice/start        - Get first question bundle
-GET    /api/practice/next         - Get next question
-GET    /api/practice/question/:id - Get specific question
-POST   /api/practice/verify       - Submit and verify solution (records attempt)
-GET    /api/practice/progress     - Get user's progress statistics
-GET    /api/practice/session      - Get current session state
-POST   /api/practice/session/activate    - Activate practice mode
-POST   /api/practice/session/deactivate  - Deactivate practice mode
+GET    /api/practice/questions          List all questions (for dropdown)
+GET    /api/practice/start              Get first question bundle
+GET    /api/practice/next               Get next question (based on session)
+GET    /api/practice/question/:id       Get specific question by ID
+POST   /api/practice/verify             Submit answer — records attempt, returns isFirstSuccess
+POST   /api/practice/attempt            Legacy attempt submission (not used by current UI)
+GET    /api/practice/progress           User progress statistics
+GET    /api/practice/session            Current session state
+POST   /api/practice/session/activate   Activate practice mode
+POST   /api/practice/session/deactivate Deactivate practice mode
 ```
 
-### 4. Frontend UI Components
+## 4. Frontend UI Components
 
-#### 4.1 Login/Register Modal
-- Email input
-- Password input
-- Toggle between login/register
-- Form validation
+### 4.1 Login/Register Modal
+- Email + password inputs
+- Toggle between login and register modes
+- Client-side validation (email format, password min length)
 
-#### 4.2 Question Selector (post-login)
+### 4.2 Question Selector (post-login)
 - Dropdown populated from `/api/practice/questions`
-- Each option shows "Q{n}: {sql_question}"
-- **Load Question** button triggers `/api/practice/question/:id` fetch
-- Question info panel: category badge, difficulty badge, description, extracted table schema
+- Info panel shows: category badge, difficulty badge, table schema extracted from `sql_data`
+- **Load Question** button fetches full question and initializes DuckDB tables
 
-#### 4.3 Practice Mode UI (when question loaded)
+### 4.3 Practice Mode UI (when question loaded)
 - Question display card with text and metadata
-- CodeMirror SQL editor
-- Two buttons: **Run (Ctrl+Enter)** and **Submit Code**
-- Results table (right panel)
-- Feedback panel (correct/incorrect) — shown after submit
-- **Show Solution** button — reveals solution SQL + step-by-step explanation
-- **Next Question** button — appears after correct answer
+- CodeMirror SQL editor with syntax highlighting and autocomplete
+- **Run (Ctrl+Enter)** — execute query, show results
+- **Submit Code** — execute + compare + record attempt
+- Feedback panel (correct/incorrect)
+- **Show Solution** — reveals solution SQL + explanation
+- **Next Question** — appears after correct answer
 
-### 5. User Flow
+## 5. User Flow
 
 ```
 Login → Question Dropdown → Select Question → Click "Load Question"
@@ -157,8 +140,8 @@ Login → Question Dropdown → Select Question → Click "Load Question"
                                               ↓
                                           See results → Click "Submit"
                                               ↓
+                                    Client compares results (order-independent)
                                     Server records attempt
-                                    Frontend compares results
                                    ↙                    ↘
                               Correct              Incorrect
                                   ↓                      ↓
@@ -168,10 +151,9 @@ Login → Question Dropdown → Select Question → Click "Load Question"
                           question                 "Show Solution"
 ```
 
-### 6. Database Schema (PostgreSQL)
+## 6. Database Schema (PostgreSQL)
 
 ```sql
--- Users table
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
@@ -180,89 +162,39 @@ CREATE TABLE users (
     last_login TIMESTAMP
 );
 
--- Questions table
 CREATE TABLE questions (
     id SERIAL PRIMARY KEY,
     sql_data TEXT NOT NULL,
     sql_question TEXT NOT NULL,
     sql_solution TEXT NOT NULL,
     sql_solution_explanation JSONB,
-    difficulty VARCHAR(20),
-    category VARCHAR(50),
-    order_index INTEGER
+    difficulty VARCHAR(20) DEFAULT 'beginner',
+    category VARCHAR(50) DEFAULT 'SELECT queries',
+    order_index INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- User progress tracking
 CREATE TABLE user_attempts (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id),
-    question_id INTEGER REFERENCES questions(id),
-    user_query TEXT,
-    is_correct BOOLEAN,
-    attempts_count INTEGER,
-    completed_at TIMESTAMP,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    question_id INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+    user_query TEXT NOT NULL,
+    is_correct BOOLEAN DEFAULT FALSE,
+    attempts_count INTEGER DEFAULT 1,
+    completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     time_taken_seconds INTEGER
 );
 
--- User sessions (for tracking current question)
 CREATE TABLE user_sessions (
-    user_id INTEGER PRIMARY KEY REFERENCES users(id),
-    current_question_id INTEGER REFERENCES questions(id),
+    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    current_question_id INTEGER REFERENCES questions(id) ON DELETE SET NULL,
     practice_mode_active BOOLEAN DEFAULT FALSE,
     last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
-### 7. State Management
+Tables and indexes are created automatically on server startup via `ensureTables()` in `server/server.js`. Questions are seeded from `server/seed/seedData.js` if the table is empty.
 
-#### Frontend State (JavaScript)
-```javascript
-{
-  user: {
-    id: number,
-    email: string,
-    token: string
-  },
-  practiceMode: {
-    isActive: boolean,
-    currentQuestion: {
-      id: number,
-      question: string,
-      solution: string,
-      explanation: array
-    },
-    duckdbInstance: object,
-    userAttempts: number,
-    showSolution: boolean
-  }
-}
-```
+## 7. Future Enhancements
 
-### 8. Error Handling
-
-- Invalid credentials: "Invalid email or password"
-- User already exists: "Email already registered"
-- No more questions: "You've completed all available questions!"
-- DuckDB initialization failure: "Failed to load practice data"
-- Invalid SQL: Show DuckDB error message
-
-### 9. Success Metrics
-
-- User can register and login
-- Practice mode activates after login
-- Question displays correctly
-- Run code executes and shows results
-- Submit validates correctly
-- Next question loads properly
-- Progress is tracked
-
----
-
-## Future Enhancements
-
-See [future.md](./future.md) for planned features including:
-- Social login (Google, GitHub)
-- Multiple difficulty levels
-- Leaderboards
-- Custom question creation
-- Collaborative features
+See [future.md](./future.md) for planned features and [pending_tasks.md](./pending_tasks.md) for the full task list.
