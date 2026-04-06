@@ -51,7 +51,7 @@ Detailed flow diagrams: [docs/sequence-diagram.md](docs/sequence-diagram.md)
 | Auth | JWT in localStorage, bcrypt password hashing |
 | Deployment | Cloud Run + Cloud SQL + Secret Manager |
 | CI/CD | Cloud Build triggered from GitHub |
-| Tests | Playwright (E2E), Vitest (unit) |
+| Tests | Playwright (E2E) |
 
 ## Local Development — Vagrant VM
 
@@ -85,11 +85,8 @@ Tables and seed questions are created automatically on server startup — no man
 ## Running Tests
 
 ```bash
-# Unit tests (Vitest)
-npm run test:unit
-
-# E2E tests (Playwright)
-npm run test:e2e
+# E2E tests (Playwright) — run inside the Vagrant VM
+PLAYWRIGHT_BASE_URL=http://localhost:3000 npm run test:e2e
 
 # Against Cloud Run deployment
 npx playwright test --config=playwright.cloud.config.js
@@ -99,7 +96,7 @@ See [docs/playwright-testing.md](docs/playwright-testing.md).
 
 ## Deployment
 
-Pushes to `refactor` branch trigger Cloud Build → Artifact Registry → Cloud Run. See [GCP_DEPLOYMENT_PLAN.md](GCP_DEPLOYMENT_PLAN.md) for full setup.
+Cloud Build → Artifact Registry → Cloud Run. Currently triggered manually via `gcloud builds submit`; automated triggers on push are a future goal. See [GCP_DEPLOYMENT_PLAN.md](GCP_DEPLOYMENT_PLAN.md) for full setup.
 
 Project: `sql-practice-project-489106`
 
