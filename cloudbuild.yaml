@@ -1,6 +1,6 @@
-# Cloud Build configuration for automatic deployment to Cloud Run
-# Trigger: Push to main branch
+# Cloud Build configuration for deployment to Cloud Run
 # Project: sql-practice-project-489106
+# Build SA: sql-practice-deployer@$PROJECT_ID.iam.gserviceaccount.com
 
 steps:
   # Step 1: Build the Docker image
@@ -49,6 +49,11 @@ steps:
       - 'DB_HOST=/cloudsql/$PROJECT_ID:us-central1:duckdb-ide-db,DB_PORT=5432,DB_NAME=duckdb_ide,DB_USER=postgres,JWT_EXPIRES_IN=7d,NODE_ENV=production'
       - '--set-secrets'
       - 'DB_PASSWORD=db-password:latest,JWT_SECRET=jwt-secret:latest'
+      - '--service-account'
+      - 'sql-practice-runtime@$PROJECT_ID.iam.gserviceaccount.com'
+
+# Build service account (least privilege — see task #78)
+serviceAccount: 'projects/$PROJECT_ID/serviceAccounts/sql-practice-deployer@$PROJECT_ID.iam.gserviceaccount.com'
 
 # Images to be pushed to Artifact Registry
 images:
@@ -57,3 +62,4 @@ images:
 
 options:
   logging: CLOUD_LOGGING_ONLY
+  pool: {}  # use default pool
