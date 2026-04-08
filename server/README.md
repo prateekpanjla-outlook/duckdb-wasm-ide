@@ -12,7 +12,7 @@ Backend server for the SQL Practice Project with user authentication and SQL pra
 ## Prerequisites
 
 - **Node.js** 18+ and **npm**
-- **PostgreSQL** 12+ running locally or accessible remotely
+- **PostgreSQL** 16 running locally or accessible remotely
 
 ## Setup
 
@@ -37,9 +37,6 @@ Edit `.env` with your database credentials:
 # Server Configuration
 PORT=3000
 NODE_ENV=development
-
-# Frontend URL (for CORS)
-FRONTEND_URL=http://localhost:8000
 
 # Database Configuration
 DB_HOST=localhost
@@ -135,7 +132,8 @@ CREATE TABLE questions (
     sql_solution_explanation JSONB,
     difficulty VARCHAR(20) DEFAULT 'beginner',
     category VARCHAR(50) DEFAULT 'SELECT queries',
-    order_index INTEGER
+    order_index INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
@@ -143,8 +141,8 @@ CREATE TABLE questions (
 ```sql
 CREATE TABLE user_attempts (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id),
-    question_id INTEGER REFERENCES questions(id),
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    question_id INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
     user_query TEXT NOT NULL,
     is_correct BOOLEAN DEFAULT FALSE,
     attempts_count INTEGER DEFAULT 1,
@@ -156,8 +154,8 @@ CREATE TABLE user_attempts (
 ### User Sessions Table
 ```sql
 CREATE TABLE user_sessions (
-    user_id INTEGER PRIMARY KEY REFERENCES users(id),
-    current_question_id INTEGER REFERENCES questions(id),
+    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    current_question_id INTEGER REFERENCES questions(id) ON DELETE SET NULL,
     practice_mode_active BOOLEAN DEFAULT FALSE,
     last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -225,13 +223,17 @@ curl -X POST http://localhost:3000/api/practice/verify \
   }'
 ```
 
+> **Note:** `isCorrect` is determined by the client-side DuckDB WASM comparator. The server trusts this flag — there is no server-side re-grading.
+
+```
+```
+
 ## Project Structure
 
 ```
 server/
 ├── config/
 │   └── database.js         # PostgreSQL connection pool
-├── controllers/            # (Future: request handlers)
 ├── middleware/
 │   ├── auth.js            # JWT authentication middleware
 │   └── validate.js        # Input validation
@@ -244,7 +246,8 @@ server/
 │   ├── auth.js            # Authentication routes
 │   └── practice.js        # Practice mode routes
 ├── seed/
-│   └── seedQuestions.js   # Sample questions seeder
+│   ├── seedData.js        # Question data (used by ensureTables on startup)
+│   └── seedQuestions.js   # Manual seeder script (npm run seed)
 ├── utils/
 │   └── initDatabase.js    # Database initialization
 ├── .env.example           # Environment variables template
@@ -323,9 +326,9 @@ node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 
 ## Future Enhancements
 
-See [future.md](../docs/future.md) for planned features including:
-- Social login (Google, GitHub)
-- User roles and permissions
-- Question editor and admin panel
-- Real-time collaboration
-- Performance analytics
+See [future.md](../docs/future.md) and [pending_tasks.md](../docs/pending_tasks.md) for planned features including:
+- Social login — Google OAuth, GitHub OAuth, magic links (#30)
+- Email verification on signup (#33)
+- Guest user access — instant start without registration (#31)
+- Progress tracking with visual indicators (#59)
+- PostgreSQL schema-based Blue/Green deployments (#91)

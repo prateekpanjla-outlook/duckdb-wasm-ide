@@ -59,7 +59,7 @@ Key design decisions:
 | Database | PostgreSQL 16 |
 | Auth | JWT in localStorage, bcrypt password hashing |
 | Deployment | Cloud Run + Cloud SQL + Secret Manager |
-| CI/CD | Cloud Build (manual trigger, automated trigger planned) |
+| CI/CD | GitHub Actions → Cloud Build → Cloud Run (via WIF) |
 | Tests | Playwright (E2E) |
 
 ## Local Development
@@ -104,7 +104,7 @@ See [docs/playwright-testing.md](docs/playwright-testing.md) for details.
 
 ## Deployment
 
-Cloud Build → Artifact Registry → Cloud Run. Currently triggered manually via `gcloud builds submit`; automated triggers on push are a future goal. See [GCP_DEPLOYMENT.md](GCP_DEPLOYMENT.md) for full setup.
+Automated via GitHub Actions on push to main. Uses Workload Identity Federation (no SA keys). Pipeline: GitHub Actions → Cloud Build → Artifact Registry → Cloud Run. See [GCP_DEPLOYMENT.md](GCP_DEPLOYMENT.md) and [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml).
 
 Project: `sql-practice-project-489106` | Run cost: ~$9/month (Cloud SQL db-f1-micro is the only paid resource).
 
@@ -119,6 +119,8 @@ Project: `sql-practice-project-489106` | Run cost: ~$9/month (Cloud SQL db-f1-mi
 | [docs/future.md](docs/future.md) | Planned features: OAuth, magic links, progress dashboard |
 | [docs/pending_tasks.md](docs/pending_tasks.md) | Full list of open work items |
 | [GCP_DEPLOYMENT.md](GCP_DEPLOYMENT.md) | GCP deployment architecture |
+| [docs/terraform-learnings.md](docs/terraform-learnings.md) | Terraform/GCP gotchas and fixes (10 items) |
+| [infra/terraform/](infra/terraform/) | Terraform IaC — all GCP resources (35 managed) |
 
 ## Browser Support
 
