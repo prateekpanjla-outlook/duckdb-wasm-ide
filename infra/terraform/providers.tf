@@ -12,4 +12,8 @@ terraform {
 provider "google" {
   project = var.project_id
   region  = var.region
+  # Impersonation handled by ADC:
+  #   gcloud auth application-default login \
+  #     --impersonate-service-account=sql-practice-terraform@PROJECT.iam.gserviceaccount.com
+  # For GitHub Actions: WIF handles it (task #94)
 }

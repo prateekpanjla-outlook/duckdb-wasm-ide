@@ -80,18 +80,6 @@ resource "google_project_iam_member" "runtime" {
   member  = "serviceAccount:${google_service_account.runtime.email}"
 }
 
-# =============================================================================
-# Secret access — grant runtime and deployer access to specific secrets
-# =============================================================================
-
-resource "google_secret_manager_secret_iam_member" "runtime_db_password" {
-  secret_id = google_secret_manager_secret.db_password.id
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.runtime.email}"
-}
-
-resource "google_secret_manager_secret_iam_member" "runtime_jwt_secret" {
-  secret_id = google_secret_manager_secret.jwt_secret.id
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.runtime.email}"
-}
+# Note: runtime SA has secretmanager.secretAccessor at project level (above),
+# not at individual secret level. This is sufficient for 2 secrets.
+# If the project grows, consider scoping to specific secrets.
