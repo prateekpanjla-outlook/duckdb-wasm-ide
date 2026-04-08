@@ -1,0 +1,56 @@
+name: CI — E2E Tests
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  e2e-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          cd server && npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium
+
+      - name: Start PostgreSQL
+        uses: harmon758/postgresql-action@v1
+        with:
+          postgresql version: 16
+          postgresql db: duckdb_ide
+          postgresql user: postgres
+          postgresql password: testpassword
+
+      - name: Start server
+        run: |
+          JWT_SECRET=test-secret-for-ci \
+          DB_HOST=localhost \
+          DB_PORT=5432 \
+          DB_NAME=duckdb_ide \
+          DB_USER=postgres \
+          DB_PASSWORD=testpassword \
+          node server/server.js &
+          sleep 5
+          curl -s -o /dev/null -w 'HTTP %{http_code}\n' http://localhost:3000/health
+
+      - name: Run E2E tests
+        run: PLAYWRIGHT_BASE_URL=http://localhost:3000 npm run test:e2e
+
+      - name: Upload test artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: test-results/
+          retention-days: 7
