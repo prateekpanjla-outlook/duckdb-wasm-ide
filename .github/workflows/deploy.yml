@@ -12,7 +12,6 @@ env:
   PROJECT_ID: sql-practice-project-489106
   REGION: us-central1
   SERVICE: duckdb-ide
-  REPO: duckdb-ide-repo
   DEPLOYER_SA: sql-practice-deployer@sql-practice-project-489106.iam.gserviceaccount.com
   WIF_PROVIDER: projects/192834930119/locations/global/workloadIdentityPools/sql-practice-github/providers/github-actions
 
@@ -31,33 +30,15 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Build and push Docker image
+      - name: Build and deploy via Cloud Build
         run: |
-          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO }}/${{ env.SERVICE }}"
           gcloud builds submit \
-            --tag="${IMAGE}:${{ github.sha }}" \
-            --tag="${IMAGE}:latest" \
-            --region=${{ env.REGION }} \
-            --project=${{ env.PROJECT_ID }}
-
-      - name: Deploy to Cloud Run
-        run: |
-          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO }}/${{ env.SERVICE }}"
-          gcloud run deploy ${{ env.SERVICE }} \
-            --image="${IMAGE}:${{ github.sha }}" \
+            --config=cloudbuild.yaml \
             --region=${{ env.REGION }} \
             --project=${{ env.PROJECT_ID }} \
-            --platform=managed \
-            --allow-unauthenticated \
-            --port=8080 \
-            --memory=512Mi \
-            --cpu=1 \
-            --max-instances=10 \
-            --timeout=300 \
-            --add-cloudsql-instances="${{ env.PROJECT_ID }}:${{ env.REGION }}:duckdb-ide-db" \
-            --set-env-vars="DB_HOST=/cloudsql/${{ env.PROJECT_ID }}:${{ env.REGION }}:duckdb-ide-db,DB_PORT=5432,DB_NAME=duckdb_ide,DB_USER=postgres,JWT_EXPIRES_IN=7d,NODE_ENV=production" \
-            --set-secrets="DB_PASSWORD=db-password:latest,JWT_SECRET=jwt-secret:latest" \
-            --service-account="sql-practice-runtime@${{ env.PROJECT_ID }}.iam.gserviceaccount.com"
+            --substitutions=COMMIT_SHA=${{ github.sha }} \
+            --gcs-source-staging-dir=gs://sql-practice-cloudbuild-source/source \
+            --gcs-log-dir=gs://sql-practice-cloudbuild-logs/logs
 
       - name: Smoke test
         run: |
