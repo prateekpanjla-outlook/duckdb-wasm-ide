@@ -84,3 +84,46 @@ has the "serviceusage.services.use" permission.
 **Fix:** Grant `roles/serviceusage.serviceUsageConsumer` (use APIs) and `roles/cloudbuild.builds.editor` (submit builds).
 
 **Lesson:** When setting up any custom SA for CI/CD, always include `serviceUsageConsumer`. It's the "can use GCP at all" permission.
+
+## 8. Cloud Build serviceAccount field requires actAs — even on itself
+
+**Problem:** GitHub Actions deploys via WIF as the deployer SA, and `cloudbuild.yaml` specifies `serviceAccount: deployer@...`. Cloud Build rejects with:
+```
+caller does not have permission to act as service account ...107918909206202545222
+```
+The numeric ID is the deployer SA itself.
+
+**Root cause:** Cloud Build always checks `iam.serviceAccounts.actAs` on the SA specified in `serviceAccount`, regardless of whether the caller IS that SA. With a native SA key, GCP implicitly allows self-actAs. With WIF (impersonated token), the check is explicit.
+
+**Fix:** Grant the deployer SA `iam.serviceAccountUser` on itself:
+```bash
+gcloud iam service-accounts add-iam-policy-binding \
+  sql-practice-deployer@PROJECT.iam.gserviceaccount.com \
+  --member="serviceAccount:sql-practice-deployer@PROJECT.iam.gserviceaccount.com" \
+  --role="roles/iam.serviceAccountUser"
+```
+
+**Lesson:** When using WIF + Cloud Build with a custom `serviceAccount`, the caller SA needs explicit `actAs` on the build SA, even when they're the same identity. This is a difference between native SA key auth and WIF impersonated auth.
+
+## 9. gcloud builds submit --tag bypasses cloudbuild.yaml
+
+**Problem:** `gcloud builds submit --tag IMAGE` ignores `cloudbuild.yaml` entirely — it uses an inline build config. Settings like `logging`, `serviceAccount`, and `options` from `cloudbuild.yaml` don't apply.
+
+**Fix:** Use `gcloud builds submit --config=cloudbuild.yaml` with `--substitutions` for dynamic values.
+
+## 10. Custom SA cannot use the default _cloudbuild bucket
+
+**Problem:** The default `{project}_cloudbuild` bucket is auto-created by GCP. The default Cloud Build SA gets implicit access, but custom SAs are rejected even with bucket-level IAM.
+
+**Fix:** Create your own buckets for source and logs:
+```bash
+gcloud storage buckets create gs://sql-practice-cloudbuild-source
+gcloud storage buckets create gs://sql-practice-cloudbuild-logs
+```
+Then pass to gcloud:
+```bash
+gcloud builds submit --config=cloudbuild.yaml \
+  --gcs-source-staging-dir=gs://sql-practice-cloudbuild-source/source \
+  --gcs-log-dir=gs://sql-practice-cloudbuild-logs/logs
+```
+And set `logging: GCS_ONLY` in `cloudbuild.yaml` (not `CLOUD_LOGGING_ONLY`, which conflicts with `--gcs-log-dir`).
