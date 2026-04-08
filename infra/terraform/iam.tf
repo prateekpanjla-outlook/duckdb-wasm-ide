@@ -51,6 +51,8 @@ resource "google_project_iam_member" "deployer" {
     "roles/secretmanager.secretAccessor",
     "roles/logging.logWriter",
     "roles/storage.objectViewer",
+    "roles/serviceusage.serviceUsageConsumer",
+    "roles/cloudbuild.builds.editor",
   ])
 
   project = var.project_id

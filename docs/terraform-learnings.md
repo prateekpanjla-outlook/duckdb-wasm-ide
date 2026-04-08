@@ -70,3 +70,17 @@ If ADC is configured with `--impersonate-service-account` AND `providers.tf` has
 **Rule:** Use one or the other, not both:
 - ADC with `--impersonate-service-account` (simpler, no TF config change)
 - ADC without impersonation + `impersonate_service_account` in providers.tf (declarative, visible in code)
+
+## 7. Custom SAs need serviceusage.serviceUsageConsumer to call ANY GCP API
+
+**Problem:** GitHub Actions deploy with custom deployer SA failed:
+```
+The user is forbidden from accessing the bucket. Please check if the user
+has the "serviceusage.services.use" permission.
+```
+
+**Root cause:** The default Cloud Build SA gets `serviceusage.services.use` implicitly. Custom SAs don't. Without it, a SA cannot call any GCP API, even if it has service-specific roles.
+
+**Fix:** Grant `roles/serviceusage.serviceUsageConsumer` (use APIs) and `roles/cloudbuild.builds.editor` (submit builds).
+
+**Lesson:** When setting up any custom SA for CI/CD, always include `serviceUsageConsumer`. It's the "can use GCP at all" permission.
