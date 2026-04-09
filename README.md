@@ -128,4 +128,4 @@ Currently tested in **Chromium only** (via Playwright). DuckDB WASM requires Web
 
 ## Task Tracking
 
-Tasks are tracked in a local [Vikunja](https://vikunja.io/) instance (project ID 2). See [docs/pending_tasks.md](docs/pending_tasks.md) for the current list.
+Tasks are tracked on [GitHub Projects](https://github.com/users/prateekpanjla-outlook/projects/2). See [docs/pending_tasks.md](docs/pending_tasks.md) for a categorized snapshot.
