@@ -117,6 +117,75 @@ body {
     background: #c0392b;
 }
 
+.btn-info {
+    background: #3498db;
+    color: white;
+}
+
+.btn-info:hover {
+    background: #2980b9;
+}
+
+.btn-sm {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.8rem;
+}
+
+/* AI Tutor Panel */
+.ai-panel {
+    background: #f0f7ff;
+    border: 1px solid #b3d4fc;
+    border-left: 4px solid #3498db;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-top: 1rem;
+}
+
+.ai-panel.hidden {
+    display: none;
+}
+
+.ai-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.ai-panel-title {
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.ai-panel-close {
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    cursor: pointer;
+    color: #7f8c8d;
+    padding: 0;
+}
+
+.ai-panel-close:hover {
+    color: #2c3e50;
+}
+
+.ai-panel-content {
+    color: #34495e;
+    line-height: 1.6;
+    font-size: 0.95rem;
+}
+
+.ai-thinking {
+    color: #7f8c8d;
+    font-style: italic;
+}
+
+.ai-cached {
+    color: #95a5a6;
+    font-size: 0.8rem;
+}
+
 /* Main Content */
 .main-content {
     display: grid;

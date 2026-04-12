@@ -245,8 +245,19 @@ export class PracticeManager {
         solutionBtn.innerHTML = '💡 Show Solution';
         solutionBtn.addEventListener('click', () => this.showSolution());
 
+        // Add AI hint button
+        const hintBtn = document.createElement('button');
+        hintBtn.id = 'getHintBtn';
+        hintBtn.className = 'btn btn-info practice-action-btn';
+        hintBtn.innerHTML = '🤖 Get Hint';
+        hintBtn.addEventListener('click', () => this.getAIHint('hint'));
+
         queryActions.appendChild(submitBtn);
         queryActions.appendChild(solutionBtn);
+        queryActions.appendChild(hintBtn);
+
+        // Create AI response panel if it doesn't exist
+        this.ensureAIPanel();
     }
 
     /**
@@ -403,7 +414,8 @@ export class PracticeManager {
             feedbackMessage.textContent = 'Not quite right. Keep trying!';
             feedbackDetails.innerHTML = `
                 <p>Your results don't match the expected solution.</p>
-                <p>Click "Show Solution" to see the correct answer.</p>
+                <p>Click "Show Solution" to see the correct answer, or ask AI for help.</p>
+                <button id="explainErrorBtn" class="btn btn-info btn-sm" onclick="window.practiceManager.getAIHint('explain_error')">🤖 Explain What's Wrong</button>
             `;
         }
     }
@@ -422,7 +434,10 @@ export class PracticeManager {
 
         feedbackIcon.textContent = '⚠️';
         feedbackMessage.textContent = 'Error executing query';
-        feedbackDetails.textContent = errorMessage;
+        feedbackDetails.innerHTML = `
+            <p>${this.escapeHtml(errorMessage)}</p>
+            <button id="explainErrorBtn" class="btn btn-info btn-sm" onclick="window.practiceManager.getAIHint('explain_error', '${this.escapeHtml(errorMessage).replace(/'/g, "\\'")}')">🤖 Explain This Error</button>
+        `;
     }
 
     /**
@@ -608,5 +623,99 @@ export class PracticeManager {
             }
             return value;
         }, indent);
+    }
+
+    // ==================== AI Hint Methods ====================
+
+    /**
+     * Create the AI response panel if it doesn't exist
+     */
+    ensureAIPanel() {
+        if (document.getElementById('aiResponsePanel')) return;
+
+        const panel = document.createElement('div');
+        panel.id = 'aiResponsePanel';
+        panel.className = 'ai-panel hidden';
+        panel.innerHTML = `
+            <div class="ai-panel-header">
+                <span class="ai-panel-title">🤖 AI Tutor</span>
+                <button id="aiPanelClose" class="btn-link ai-panel-close">✕</button>
+            </div>
+            <div id="aiPanelContent" class="ai-panel-content"></div>
+        `;
+
+        // Insert after the feedback panel or at end of left panel
+        const feedbackPanel = document.getElementById('practiceFeedbackPanel');
+        if (feedbackPanel) {
+            feedbackPanel.parentNode.insertBefore(panel, feedbackPanel.nextSibling);
+        } else {
+            document.querySelector('.left-panel')?.appendChild(panel);
+        }
+
+        document.getElementById('aiPanelClose').addEventListener('click', () => {
+            panel.classList.add('hidden');
+        });
+    }
+
+    /**
+     * Get an AI hint, error explanation, or solution explanation
+     * @param {'hint'|'explain_error'|'explain_solution'} type
+     * @param {string|null} errorMessage
+     */
+    async getAIHint(type, errorMessage = null) {
+        const panel = document.getElementById('aiResponsePanel');
+        const content = document.getElementById('aiPanelContent');
+
+        if (!panel || !content) return;
+
+        // Get current user query from editor
+        const queryEditor = document.querySelector('.CodeMirror');
+        const userQuery = queryEditor?.CodeMirror?.getValue() || '';
+
+        // Show loading state
+        panel.classList.remove('hidden');
+        content.innerHTML = '<span class="ai-thinking">Thinking...</span>';
+
+        // Disable hint button while loading
+        const hintBtn = document.getElementById('getHintBtn');
+        if (hintBtn) hintBtn.disabled = true;
+
+        try {
+            const response = await apiClient.getHint(
+                this.currentQuestion.id,
+                userQuery,
+                errorMessage,
+                type
+            );
+
+            if (response.error) {
+                content.textContent = response.error;
+                return;
+            }
+
+            // Typing animation
+            content.textContent = '';
+            await this.typeText(content, response.hint);
+
+            if (response.cached) {
+                content.innerHTML += '<span class="ai-cached"> (cached)</span>';
+            }
+
+        } catch (error) {
+            console.error('AI hint error:', error);
+            content.textContent = error.message || 'Failed to get hint. Please try again.';
+        } finally {
+            if (hintBtn) hintBtn.disabled = false;
+        }
+    }
+
+    /**
+     * Animate text appearing character by character
+     */
+    async typeText(element, text, speed = 20) {
+        for (const char of text) {
+            element.textContent += char;
+            await new Promise(r => setTimeout(r, speed));
+        }
     }
 }

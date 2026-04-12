@@ -10,6 +10,7 @@ import { fileURLToPath } from 'url';
 // Import routes
 import authRoutes from './routes/auth.js';
 import practiceRoutes from './routes/practice.js';
+import aiRoutes from './routes/ai.js';
 import pool from './config/database.js';
 
 // Load environment variables
@@ -80,6 +81,7 @@ app.get('/health/db', async (req, res) => {
 // API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/practice', practiceRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Serve pre-compressed WASM files (built by Docker: gzip -k -9)
 // Browser sends Accept-Encoding: gzip → we serve .wasm.gz with Content-Encoding: gzip
@@ -182,6 +184,17 @@ async function ensureTables() {
         await client.query(`CREATE INDEX IF NOT EXISTS idx_user_attempts_question_id ON user_attempts(question_id)`);
         await client.query(`CREATE INDEX IF NOT EXISTS idx_user_attempts_user_question ON user_attempts(user_id, question_id)`);
         await client.query(`CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions(user_id)`);
+        await client.query(`CREATE TABLE IF NOT EXISTS ai_usage (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            question_id INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+            type VARCHAR(20) NOT NULL,
+            input_tokens INTEGER DEFAULT 0,
+            output_tokens INTEGER DEFAULT 0,
+            cached BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`);
+        await client.query(`CREATE INDEX IF NOT EXISTS idx_ai_usage_user_id ON ai_usage(user_id)`);
         await client.query(`CREATE INDEX IF NOT EXISTS idx_questions_order_index ON questions(order_index)`);
         console.log('✅ Database tables and indexes ensured');
 

@@ -283,6 +283,22 @@ class APIClient {
         return await this.request(`/practice/questions?${params}`);
     }
 
+    // ==================== AI Methods ====================
+
+    /**
+     * Get AI hint, error explanation, or solution explanation
+     * @param {number} questionId
+     * @param {string} userQuery - Student's SQL attempt
+     * @param {string|null} errorMessage - DuckDB error if any
+     * @param {'hint'|'explain_error'|'explain_solution'} type
+     */
+    async getHint(questionId, userQuery, errorMessage, type = 'hint') {
+        return await this.request('/ai/hint', {
+            method: 'POST',
+            body: JSON.stringify({ questionId, userQuery, errorMessage, type })
+        });
+    }
+
     // ==================== Utility Methods ====================
 
     /**
