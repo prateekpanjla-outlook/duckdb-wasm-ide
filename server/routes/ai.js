@@ -8,12 +8,15 @@ import rateLimit from 'express-rate-limit';
 
 const router = express.Router();
 
-// Rate limit: 10 AI requests per hour per user
+// Rate limit: AI_RATE_LIMIT requests per AI_RATE_WINDOW_MINUTES per user
+const AI_RATE_LIMIT = parseInt(process.env.AI_RATE_LIMIT || '10', 10);
+const AI_RATE_WINDOW = parseInt(process.env.AI_RATE_WINDOW_MINUTES || '60', 10);
+
 const aiRateLimit = rateLimit({
-    windowMs: 60 * 60 * 1000, // 1 hour
-    max: 10,
+    windowMs: AI_RATE_WINDOW * 60 * 1000,
+    max: AI_RATE_LIMIT,
     keyGenerator: (req) => req.user?.id || req.ip,
-    message: { error: 'Rate limit exceeded. You can request up to 10 AI hints per hour.' },
+    message: { error: `Rate limit exceeded. You can request up to ${AI_RATE_LIMIT} AI hints per ${AI_RATE_WINDOW} minutes.` },
     standardHeaders: true,
     legacyHeaders: false
 });

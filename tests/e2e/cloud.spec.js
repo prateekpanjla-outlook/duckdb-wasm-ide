@@ -309,3 +309,111 @@ test.describe('Cloud Run Deployment — Security', () => {
         expect(resp.ok()).toBeFalsy();
     });
 });
+
+test.describe('Cloud Run Deployment — AI Hints', () => {
+    let authToken;
+
+    test.beforeAll(async ({ request }) => {
+        // Register a user for AI tests
+        const email = `ai_${Date.now()}_${Math.random().toString(36).slice(2, 6)}@test.com`;
+        const resp = await request.post(`${API}/auth/register`, {
+            data: { email, password: TEST_PASSWORD }
+        });
+        const data = await resp.json();
+        authToken = data.token;
+    });
+
+    test('AI hint endpoint responds with valid structure', async ({ request }) => {
+        const resp = await request.post(`${API}/ai/hint`, {
+            headers: { Authorization: `Bearer ${authToken}` },
+            data: {
+                questionId: 1,
+                userQuery: 'SELECT * FROM employees',
+                errorMessage: null,
+                type: 'hint'
+            }
+        });
+
+        expect(resp.status()).toBe(200);
+        const body = await resp.json();
+        expect(body).toHaveProperty('hint');
+        expect(body).toHaveProperty('cached');
+        expect(body).toHaveProperty('tokens');
+        expect(typeof body.hint).toBe('string');
+        expect(body.hint.length).toBeGreaterThan(10);
+        expect(typeof body.tokens.input).toBe('number');
+        expect(typeof body.tokens.output).toBe('number');
+    });
+
+    test('AI explain_error returns valid response', async ({ request }) => {
+        const resp = await request.post(`${API}/ai/hint`, {
+            headers: { Authorization: `Bearer ${authToken}` },
+            data: {
+                questionId: 1,
+                userQuery: 'SELECT * FROM nonexistent',
+                errorMessage: 'Table nonexistent does not exist',
+                type: 'explain_error'
+            }
+        });
+
+        expect(resp.status()).toBe(200);
+        const body = await resp.json();
+        expect(body.hint.length).toBeGreaterThan(10);
+    });
+
+    test('AI explain_solution returns valid response', async ({ request }) => {
+        const resp = await request.post(`${API}/ai/hint`, {
+            headers: { Authorization: `Bearer ${authToken}` },
+            data: {
+                questionId: 1,
+                userQuery: '',
+                type: 'explain_solution'
+            }
+        });
+
+        expect(resp.status()).toBe(200);
+        const body = await resp.json();
+        expect(body.hint.length).toBeGreaterThan(10);
+    });
+
+    test('AI hint requires authentication', async ({ request }) => {
+        const resp = await request.post(`${API}/ai/hint`, {
+            data: { questionId: 1, userQuery: 'SELECT 1', type: 'hint' }
+        });
+        expect(resp.status()).toBe(401);
+    });
+
+    test('AI hint rejects invalid type', async ({ request }) => {
+        const resp = await request.post(`${API}/ai/hint`, {
+            headers: { Authorization: `Bearer ${authToken}` },
+            data: { questionId: 1, userQuery: 'SELECT 1', type: 'invalid' }
+        });
+        expect(resp.status()).toBe(400);
+    });
+
+    test('AI hint rejects missing questionId', async ({ request }) => {
+        const resp = await request.post(`${API}/ai/hint`, {
+            headers: { Authorization: `Bearer ${authToken}` },
+            data: { userQuery: 'SELECT 1', type: 'hint' }
+        });
+        expect(resp.status()).toBe(400);
+    });
+
+    test('AI hint caches repeated requests', async ({ request }) => {
+        // First request
+        await request.post(`${API}/ai/hint`, {
+            headers: { Authorization: `Bearer ${authToken}` },
+            data: { questionId: 1, userQuery: 'SELECT * FROM employees', type: 'hint' }
+        });
+
+        // Second identical request should be cached
+        const resp = await request.post(`${API}/ai/hint`, {
+            headers: { Authorization: `Bearer ${authToken}` },
+            data: { questionId: 1, userQuery: 'SELECT * FROM employees', type: 'hint' }
+        });
+
+        expect(resp.status()).toBe(200);
+        const body = await resp.json();
+        expect(body.cached).toBe(true);
+    });
+});
