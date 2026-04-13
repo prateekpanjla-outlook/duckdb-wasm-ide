@@ -672,9 +672,10 @@ export class PracticeManager {
         const queryEditor = document.querySelector('.CodeMirror');
         const userQuery = queryEditor?.CodeMirror?.getValue() || '';
 
-        // Show loading state
+        // Show loading state and scroll into view
         panel.classList.remove('hidden');
         content.innerHTML = '<span class="ai-thinking">Thinking...</span>';
+        panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
         // Disable hint button while loading
         const hintBtn = document.getElementById('getHintBtn');
