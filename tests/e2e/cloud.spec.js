@@ -310,6 +310,86 @@ test.describe('Cloud Run Deployment — Security', () => {
     });
 });
 
+test.describe('Cloud Run Deployment — AI Screenshots', () => {
+    test('capture AI hint flow screenshots', async ({ page, request }) => {
+        test.setTimeout(300000); // 5 min — DuckDB WASM init is slow on Cloud Run
+
+        await page.goto(BASE_URL);
+        await waitForAppReady(page);
+        await page.screenshot({ path: 'test-results/ai-00-login-prompt.png', fullPage: true });
+
+        await loginViaAPI(page, request);
+
+        // Wait for question selector (DuckDB init can take 60-90s)
+        await page.waitForFunction(() => {
+            const el = document.getElementById('questionSelectorSection');
+            return el && !el.classList.contains('hidden');
+        }, { timeout: 180000 });
+
+        await page.screenshot({ path: 'test-results/ai-01-question-selector.png', fullPage: true });
+
+        // Select and load question
+        const dropdown = page.locator('#questionDropdown, select').first();
+        await dropdown.selectOption({ index: 1 });
+        const loadBtn = page.locator('button:has-text("Load"), #loadQuestionBtn').first();
+        if (await loadBtn.isVisible()) await loadBtn.click();
+        await page.waitForSelector('.CodeMirror', { timeout: 120000 });
+        await page.waitForTimeout(2000);
+
+        await page.screenshot({ path: 'test-results/ai-02-question-loaded.png', fullPage: true });
+
+        // Type a wrong query
+        const cm = page.locator('.CodeMirror');
+        await cm.click();
+        await page.keyboard.type('SELECT * FROM employees;');
+        await page.waitForTimeout(500);
+
+        await page.screenshot({ path: 'test-results/ai-03-query-typed.png', fullPage: true });
+
+        // Scroll down to see practice buttons
+        await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+        await page.waitForTimeout(1000);
+        await page.screenshot({ path: 'test-results/ai-03b-scrolled-down.png', fullPage: true });
+
+        // Click Get Hint
+        const hintBtn = page.locator('#getHintBtn');
+        await hintBtn.scrollIntoViewIfNeeded();
+        if (await hintBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+            await hintBtn.click();
+            // Wait for AI response (typing animation)
+            await page.waitForFunction(() => {
+                const panel = document.getElementById('aiPanelContent');
+                return panel && panel.textContent.length > 20;
+            }, { timeout: 30000 });
+            await page.waitForTimeout(1000);
+
+            await page.screenshot({ path: 'test-results/ai-04-hint-response.png', fullPage: true });
+        }
+
+        // Submit wrong answer to trigger feedback
+        const submitBtn = page.locator('button:has-text("Submit"), #submitPracticeBtn').first();
+        if (await submitBtn.isVisible()) {
+            await submitBtn.click();
+            await page.waitForTimeout(2000);
+
+            await page.screenshot({ path: 'test-results/ai-05-incorrect-feedback.png', fullPage: true });
+
+            // Click Explain What's Wrong if visible
+            const explainBtn = page.locator('#explainErrorBtn');
+            if (await explainBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+                await explainBtn.click();
+                await page.waitForFunction(() => {
+                    const panel = document.getElementById('aiPanelContent');
+                    return panel && panel.textContent.length > 20;
+                }, { timeout: 30000 });
+                await page.waitForTimeout(1000);
+
+                await page.screenshot({ path: 'test-results/ai-06-explain-error.png', fullPage: true });
+            }
+        }
+    });
+});
+
 test.describe('Cloud Run Deployment — AI Hints', () => {
     let authToken;
 
