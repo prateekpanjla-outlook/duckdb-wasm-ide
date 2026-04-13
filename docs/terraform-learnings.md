@@ -85,6 +85,20 @@ has the "serviceusage.services.use" permission.
 
 **Lesson:** When setting up any custom SA for CI/CD, always include `serviceUsageConsumer`. It's the "can use GCP at all" permission.
 
+## 7b. Gemini model deprecation — gemini-2.0-flash unavailable for new users
+
+**Problem:** Gemini API returns 404:
+```
+This model models/gemini-2.0-flash is no longer available to new users.
+Please update your code to use a newer model.
+```
+
+**Root cause:** Google deprecated `gemini-2.0-flash` for new API keys. The model exists in the model list but rejects `generateContent` calls from new projects.
+
+**Fix:** Use `gemini-2.5-flash` instead. Parameterize via `GEMINI_MODEL` env var so model changes don't require code changes.
+
+**Lesson:** Always parameterize AI model names. Models get deprecated frequently. Hard-coding a model name = future breakage.
+
 ## 8. Cloud Build serviceAccount field requires actAs — even on itself
 
 **Problem:** GitHub Actions deploys via WIF as the deployer SA, and `cloudbuild.yaml` specifies `serviceAccount: deployer@...`. Cloud Build rejects with:

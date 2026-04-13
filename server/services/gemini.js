@@ -14,7 +14,7 @@
 const BASE_URL = process.env.GEMINI_API_URL
     || 'https://generativelanguage.googleapis.com/v1beta/models';
 
-const MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const MAX_TOKENS = parseInt(process.env.GEMINI_MAX_TOKENS || '200', 10);
 const TEMPERATURE = parseFloat(process.env.GEMINI_TEMPERATURE || '0.7');
 const TIMEOUT_MS = parseInt(process.env.GEMINI_TIMEOUT_MS || '10000', 10);
