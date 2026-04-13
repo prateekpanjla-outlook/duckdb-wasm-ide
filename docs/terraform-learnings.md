@@ -141,3 +141,33 @@ gcloud builds submit --config=cloudbuild.yaml \
   --gcs-log-dir=gs://sql-practice-cloudbuild-logs/logs
 ```
 And set `logging: GCS_ONLY` in `cloudbuild.yaml` (not `CLOUD_LOGGING_ONLY`, which conflicts with `--gcs-log-dir`).
+
+## 11. Concurrent Cloud Build submissions can exhaust Get requests quota
+
+**Problem:** Three pushes to main within ~10 minutes each triggered `gcloud builds submit` via GitHub Actions. The third run hung indefinitely and eventually showed:
+```
+Quota exceeded for quota metric 'Build and Operation Get requests'
+and limit 'Build and Operation Get requests per minute' of service
+'cloudbuild.googleapis.com'
+```
+
+**Root cause:** `gcloud builds submit` polls the Cloud Build API repeatedly to check if the build finished. Three concurrent polling loops exceeded the **"Build and Operation Get requests per minute"** quota. The Docker build itself succeeded (image was pushed — logs showed "Layer already exists"), but `gcloud` couldn't confirm success because the status-check API was rate-limited. The GitHub Action then hung waiting for a response that never came.
+
+**Fix (preventive):** Add `paths` filter to `deploy.yml` so only app code changes trigger deploys. This reduces concurrent build frequency. Before the fix, docs-only commits were triggering unnecessary deploys.
+
+```yaml
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'server/**'
+      - 'js/**'
+      - 'css/**'
+      - 'index.html'
+      - 'Dockerfile'
+      - 'cloudbuild.yaml'
+      - 'package.json'
+      - 'package-lock.json'
+```
+
+**Lesson:** Rapid successive pushes to main can cause Cloud Build API quota exhaustion. Space out deploys, or use path filters to avoid unnecessary builds. If a run gets stuck this way, later successful runs deploy the same (or newer) code, so the stuck run can be safely cancelled.
