@@ -3,6 +3,15 @@ name: Deploy to Cloud Run
 on:
   push:
     branches: [main]
+    paths:
+      - 'server/**'
+      - 'js/**'
+      - 'css/**'
+      - 'index.html'
+      - 'Dockerfile'
+      - 'cloudbuild.yaml'
+      - 'package.json'
+      - 'package-lock.json'
 
 permissions:
   contents: read
