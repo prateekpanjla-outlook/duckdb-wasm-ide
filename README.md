@@ -131,7 +131,8 @@ Project: `sql-practice-project-489106` | Run cost: ~$9/month (Cloud SQL db-f1-mi
 | [docs/future.md](docs/future.md) | Planned features: OAuth, magic links, progress dashboard |
 | [docs/pending_tasks.md](docs/pending_tasks.md) | Full list of open work items |
 | [GCP_DEPLOYMENT.md](GCP_DEPLOYMENT.md) | GCP deployment architecture |
-| [docs/terraform-learnings.md](docs/terraform-learnings.md) | Terraform/GCP gotchas and fixes (10 items) |
+| [docs/gemini-integration.md](docs/gemini-integration.md) | Gemini AI integration: architecture, prompts, issues, fine-tuning analysis |
+| [docs/terraform-learnings.md](docs/terraform-learnings.md) | Terraform/GCP gotchas and fixes (11 items) |
 | [infra/terraform/](infra/terraform/) | Terraform IaC — all GCP resources (35 managed) |
 
 ## Browser Support
