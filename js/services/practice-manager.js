@@ -678,6 +678,10 @@ export class PracticeManager {
         const queryEditor = document.querySelector('.CodeMirror');
         const userQuery = queryEditor?.CodeMirror?.getValue() || '';
 
+        // Hide the feedback panel so it doesn't overlap the AI response
+        const feedbackPanel = document.getElementById('practiceFeedbackPanel');
+        if (feedbackPanel) feedbackPanel.classList.add('hidden');
+
         // Update header to show what type of response this is
         const titleLabels = { hint: '🤖 AI Hint', explain_error: '🤖 Error Explanation', explain_solution: '🤖 Solution Explanation' };
         const titleEl = document.querySelector('.ai-panel-title');
