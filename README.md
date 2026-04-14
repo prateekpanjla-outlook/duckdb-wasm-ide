@@ -6,9 +6,20 @@ A browser-based SQL learning platform. Practice SQL against real data — querie
 
 ## Demo
 
+### App Walkthrough
 [![Watch the demo](https://img.youtube.com/vi/cG_GHg43-8c/maxresdefault.jpg)](https://youtu.be/cG_GHg43-8c)
 
 [Watch on YouTube](https://youtu.be/cG_GHg43-8c)
+
+### AI-Powered SQL Hints (Gemini 2.5 Flash)
+[![AI Hints demo](https://img.youtube.com/vi/DbzvDvRmXlY/maxresdefault.jpg)](https://youtu.be/DbzvDvRmXlY)
+
+[Watch on YouTube](https://youtu.be/DbzvDvRmXlY)
+
+Get AI-powered help while practicing SQL — powered by Gemini 2.5 Flash (server-side, no API key exposed to the browser):
+- **Get Hint** — nudges you in the right direction without revealing the answer
+- **Explain This Error** — explains DuckDB syntax errors in plain language
+- **Explain What's Wrong** — analyzes why your query returns incorrect results
 
 ## How It Works
 
@@ -16,6 +27,7 @@ A browser-based SQL learning platform. Practice SQL against real data — querie
 2. **Select a question** from the dropdown — each comes with preloaded data tables
 3. **Write SQL** in the editor (CodeMirror with syntax highlighting, `Ctrl+Enter` to run, `Ctrl+Space` for autocomplete)
 4. **Submit** — your query runs in-browser and results are compared to the expected output (order-independent)
+5. **Ask for AI help** — click Get Hint, Explain Error, or Explain What's Wrong for Gemini-powered guidance
 
 ## Architecture
 
