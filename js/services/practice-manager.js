@@ -415,8 +415,11 @@ export class PracticeManager {
             feedbackDetails.innerHTML = `
                 <p>Your results don't match the expected solution.</p>
                 <p>Click "Show Solution" to see the correct answer, or ask AI for help.</p>
-                <button id="explainErrorBtn" class="btn btn-info btn-sm" onclick="window.practiceManager.getAIHint('explain_error')">🤖 Explain What's Wrong</button>
+                <button id="explainErrorBtn" class="btn btn-info btn-sm">🤖 Explain What's Wrong</button>
             `;
+            document.getElementById('explainErrorBtn').addEventListener('click', () => {
+                this.getAIHint('explain_error');
+            });
         }
     }
 
@@ -436,8 +439,11 @@ export class PracticeManager {
         feedbackMessage.textContent = 'Error executing query';
         feedbackDetails.innerHTML = `
             <p>${this.escapeHtml(errorMessage)}</p>
-            <button id="explainErrorBtn" class="btn btn-info btn-sm" onclick="window.practiceManager.getAIHint('explain_error', '${this.escapeHtml(errorMessage).replace(/'/g, "\\'")}')">🤖 Explain This Error</button>
+            <button id="explainErrorBtn" class="btn btn-info btn-sm">🤖 Explain This Error</button>
         `;
+        document.getElementById('explainErrorBtn').addEventListener('click', () => {
+            this.getAIHint('explain_error', errorMessage);
+        });
     }
 
     /**
