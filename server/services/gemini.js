@@ -51,6 +51,7 @@ export async function generateHint(systemPrompt, userPrompt) {
         }
     };
 
+    const startTime = Date.now();
     const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -58,16 +59,22 @@ export async function generateHint(systemPrompt, userPrompt) {
         signal: AbortSignal.timeout(TIMEOUT_MS)
     });
 
+    const latencyMs = Date.now() - startTime;
+
     if (!response.ok) {
         const error = await response.text();
+        console.error(`Gemini API failed: status=${response.status} latency=${latencyMs}ms body=${error.substring(0, 500)}`);
         throw new Error(`Gemini API error (${response.status}): ${error}`);
     }
 
     const data = await response.json();
 
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const finishReason = data.candidates?.[0]?.finishReason || 'unknown';
     const inputTokens = data.usageMetadata?.promptTokenCount || 0;
     const outputTokens = data.usageMetadata?.candidatesTokenCount || 0;
+
+    console.log(`Gemini OK: model=${MODEL} latency=${latencyMs}ms tokens=${inputTokens}/${outputTokens} finish=${finishReason} response="${text.substring(0, 100)}..."`);
 
     return { text, inputTokens, outputTokens };
 }

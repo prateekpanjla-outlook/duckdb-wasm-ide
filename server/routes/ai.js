@@ -118,7 +118,7 @@ router.post('/hint', authenticate, aiRateLimit, async (req, res) => {
         res.json(response);
 
     } catch (error) {
-        console.error('AI hint error:', error.message);
+        console.error('AI hint error:', error.message, '| user:', req.user?.id, '| type:', req.body?.type, '| questionId:', req.body?.questionId);
 
         if (error.message.includes('Gemini API error')) {
             return res.status(503).json({ error: 'AI service temporarily unavailable. Please try again.' });
