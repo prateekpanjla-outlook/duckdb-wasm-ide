@@ -672,6 +672,11 @@ export class PracticeManager {
         const queryEditor = document.querySelector('.CodeMirror');
         const userQuery = queryEditor?.CodeMirror?.getValue() || '';
 
+        // Update header to show what type of response this is
+        const titleLabels = { hint: '🤖 AI Hint', explain_error: '🤖 Error Explanation', explain_solution: '🤖 Solution Explanation' };
+        const titleEl = document.querySelector('.ai-panel-title');
+        if (titleEl) titleEl.textContent = titleLabels[type] || '🤖 AI Tutor';
+
         // Show loading state and scroll into view
         panel.classList.remove('hidden');
         content.innerHTML = '<span class="ai-thinking">Thinking...</span>';
