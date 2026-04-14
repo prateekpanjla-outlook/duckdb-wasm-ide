@@ -431,6 +431,7 @@ test.describe('Cloud Run Deployment — AI Hints', () => {
     });
 
     test('AI explain_error returns valid response', async ({ request }) => {
+        await new Promise(r => setTimeout(r, 30000)); // Rate limit buffer
         const resp = await request.post(`${API}/ai/hint`, {
             headers: { Authorization: `Bearer ${authToken}` },
             data: {
@@ -447,6 +448,7 @@ test.describe('Cloud Run Deployment — AI Hints', () => {
     });
 
     test('AI explain_solution returns valid response', async ({ request }) => {
+        await new Promise(r => setTimeout(r, 30000)); // Rate limit buffer
         const resp = await request.post(`${API}/ai/hint`, {
             headers: { Authorization: `Bearer ${authToken}` },
             data: {
