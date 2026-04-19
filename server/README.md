@@ -92,6 +92,8 @@ npm start
 |--------|----------|-------------|
 | POST | `/api/auth/register` | Register new user |
 | POST | `/api/auth/login` | Login existing user |
+| POST | `/api/auth/guest` | Create anonymous guest user (24h JWT) |
+| POST | `/api/auth/guest/upgrade` | Convert guest to registered account |
 | GET | `/api/auth/me` | Get current user info |
 | POST | `/api/auth/logout` | Logout |
 
@@ -108,6 +110,20 @@ npm start
 | POST | `/api/practice/session/activate` | Activate practice mode |
 | POST | `/api/practice/session/deactivate` | Deactivate practice mode |
 | GET | `/api/practice/questions` | List all questions |
+
+### AI
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/ai/hint` | Get AI hint/explanation (Gemini, rate-limited) |
+
+### Admin (requires X-Admin-Key header)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/admin/agent` | Run Question Authoring Agent |
+| POST | `/api/admin/agent/approve` | Insert approved question + concept tags |
+| POST | `/api/admin/agent/generate-test` | Generate Playwright test for a question |
 
 ## Database Schema
 
@@ -243,11 +259,19 @@ server/
 │   ├── UserAttempt.js     # User attempts model
 │   └── UserSession.js     # User session model
 ├── routes/
-│   ├── auth.js            # Authentication routes
+│   ├── admin.js           # Admin agent routes (X-Admin-Key auth)
+│   ├── ai.js              # AI hint routes (Gemini)
+│   ├── auth.js            # Authentication routes (login, register, guest)
 │   └── practice.js        # Practice mode routes
 ├── seed/
+│   ├── seedConcepts.js    # SQL concept taxonomy + question tagging
 │   ├── seedData.js        # Question data (used by ensureTables on startup)
 │   └── seedQuestions.js   # Manual seeder script (npm run seed)
+├── services/
+│   ├── agent.js           # Question Authoring Agent loop (Gemini function calling)
+│   ├── agentTools.js      # Agent tool implementations (7 tools)
+│   ├── gemini.js          # Gemini API client
+│   └── promptBuilder.js   # AI hint prompt builder
 ├── utils/
 │   └── initDatabase.js    # Database initialization
 ├── .env.example           # Environment variables template
@@ -329,6 +353,8 @@ node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 See [future.md](../docs/future.md) and [pending_tasks.md](../docs/pending_tasks.md) for planned features including:
 - Social login — Google OAuth, GitHub OAuth, magic links (#30)
 - Email verification on signup (#33)
-- Guest user access — instant start without registration (#31)
+- ~~Guest user access — instant start without registration (#31)~~ **(DONE 2026-04-19)**
+- ~~Question Authoring Agent with Gemini function calling (#35)~~ **(DONE 2026-04-19)**
+- ~~SQL concept taxonomy (#37)~~ **(DONE 2026-04-19)**
 - Progress tracking with visual indicators (#59)
 - PostgreSQL schema-based Blue/Green deployments (#91)

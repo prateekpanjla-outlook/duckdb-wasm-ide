@@ -8,7 +8,7 @@ Generated 2026-04-13. Maps Vikunja task IDs to GitHub Issue numbers after the mi
 |-----------|--------------|----------|--------|
 | 14 | Add ESLint/Prettier config | 2 | Open |
 | 30 | Add advanced sign-in: Google OAuth, GitHub OAuth, magic links | 3 | Open |
-| 31 | Guest user access — instant start without registration | 4 | Open |
+| 31 | Guest user access — instant start without registration | 4 | **Closed** (2026-04-19) |
 | 32 | Analyze concurrent session handling: multi-tab, multi-browser, multi-IP | 5 | Open |
 | 33 | Add email verification on new account signup | 6 | Open |
 | 42 | Replace DuckDB WASM with SQL.js for broader browser support | 7 | Open |
@@ -101,6 +101,20 @@ These tasks were created directly in GitHub Issues and have no Vikunja equivalen
 | 30 | WIF for Terraform and CI/CD | Created for #94 equivalent work |
 | 31-32 | Branch protection, Blue/Green | Created during CI/CD planning |
 | 33 | Gemini AI integration | Created 2026-04-12 |
+| 34 | Learn GitHub Actions internals | Created 2026-04-14 |
+| 35 | Question Authoring Agent with Gemini function calling | Created 2026-04-19 |
+| 36 | Enable local/VM testing with Gemini API key | Created 2026-04-19 |
+| 37 | SQL concept taxonomy and per-question tagging | Created 2026-04-19 |
+| 38 | Close concept loop: save tags on insertion | Created 2026-04-19 |
+
+## Vikunja tasks created 2026-04-19
+
+| Vikunja # | Title | GitHub # | Status |
+|-----------|-------|----------|--------|
+| 99 | Question Authoring Agent with Gemini function calling | 35 | Deployed |
+| 100 | Enable local/VM testing with Gemini API key | 36 | Open |
+| 101 | SQL concept taxonomy and per-question tagging | 37 | Deployed |
+| 102 | Close concept loop: save tags on insertion | 38 | Deployed |
 
 ## Notes
 

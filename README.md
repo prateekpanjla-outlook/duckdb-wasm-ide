@@ -23,7 +23,7 @@ Get AI-powered help while practicing SQL — powered by Gemini 2.5 Flash (server
 
 ## How It Works
 
-1. **Register or log in** with email and password
+1. **Start as guest** (instant, no signup) or **register** with email and password
 2. **Select a question** from the dropdown — each comes with preloaded data tables
 3. **Write SQL** in the editor (CodeMirror with syntax highlighting, `Ctrl+Enter` to run, `Ctrl+Space` for autocomplete)
 4. **Submit** — your query runs in-browser and results are compared to the expected output (order-independent)
