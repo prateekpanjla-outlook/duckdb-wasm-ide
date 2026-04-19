@@ -145,6 +145,29 @@ async function initDatabase() {
             ON users(is_guest) WHERE is_guest = TRUE
         `);
 
+        // SQL concept taxonomy
+        console.log('Creating sql_concepts table...');
+        await dbClient.query(`
+            CREATE TABLE IF NOT EXISTS sql_concepts (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(50) UNIQUE NOT NULL,
+                category VARCHAR(50) NOT NULL,
+                difficulty VARCHAR(20) DEFAULT 'beginner'
+            )
+        `);
+        console.log('✅ SQL concepts table created');
+
+        console.log('Creating question_concepts table...');
+        await dbClient.query(`
+            CREATE TABLE IF NOT EXISTS question_concepts (
+                question_id INTEGER REFERENCES questions(id) ON DELETE CASCADE,
+                concept_id INTEGER REFERENCES sql_concepts(id) ON DELETE CASCADE,
+                is_intended BOOLEAN DEFAULT TRUE,
+                PRIMARY KEY (question_id, concept_id)
+            )
+        `);
+        console.log('✅ Question concepts table created');
+
         console.log('✅ Indexes created');
 
         await dbClient.end();

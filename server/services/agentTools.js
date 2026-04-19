@@ -197,11 +197,66 @@ test('Question ${question_id} - ${shortTitle}', async ({ page }) => {
     };
 }
 
+/**
+ * Tool: list_concepts
+ * Returns all SQL concepts with coverage count (how many questions use each).
+ */
+export async function list_concepts() {
+    const result = await query(`
+        SELECT c.id, c.name, c.category, c.difficulty,
+            COUNT(qc.question_id) FILTER (WHERE qc.is_intended = TRUE) as intended_count,
+            COUNT(qc.question_id) FILTER (WHERE qc.is_intended = FALSE) as alternative_count
+        FROM sql_concepts c
+        LEFT JOIN question_concepts qc ON c.id = qc.concept_id
+        GROUP BY c.id, c.name, c.category, c.difficulty
+        ORDER BY c.category, c.name
+    `);
+
+    return {
+        total_concepts: result.rows.length,
+        concepts: result.rows.map(r => ({
+            id: r.id,
+            name: r.name,
+            category: r.category,
+            difficulty: r.difficulty,
+            intended_questions: parseInt(r.intended_count),
+            alternative_questions: parseInt(r.alternative_count)
+        }))
+    };
+}
+
+/**
+ * Tool: get_coverage_gaps
+ * Returns concepts with zero intended questions — these are gaps in the curriculum.
+ */
+export async function get_coverage_gaps() {
+    const result = await query(`
+        SELECT c.name, c.category, c.difficulty
+        FROM sql_concepts c
+        LEFT JOIN question_concepts qc ON c.id = qc.concept_id AND qc.is_intended = TRUE
+        WHERE qc.concept_id IS NULL
+        ORDER BY c.category, c.difficulty, c.name
+    `);
+
+    const gapsByCategory = {};
+    for (const row of result.rows) {
+        if (!gapsByCategory[row.category]) gapsByCategory[row.category] = [];
+        gapsByCategory[row.category].push({ name: row.name, difficulty: row.difficulty });
+    }
+
+    return {
+        total_gaps: result.rows.length,
+        gaps_by_category: gapsByCategory
+    };
+}
+
 // Tool registry — maps tool names to functions
 export const TOOL_FUNCTIONS = {
     list_existing_questions,
     execute_sql,
     validate_question,
     insert_question,
-    generate_test
+    generate_test,
+    list_concepts,
+    get_coverage_gaps
 };

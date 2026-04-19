@@ -1,5 +1,44 @@
 # Question Authoring Agent — Comprehensive Plan
 
+## Part 0: Agent vs Admin — Responsibility Split
+
+### What the Admin does (human judgment)
+- **Decides what topic to add** — "We need a HAVING question"
+- **Reviews if the question is well-worded** — Is it clear? Ambiguous?
+- **Judges if the difficulty is appropriate** — Is this really "intermediate"?
+- **Decides if the data is realistic** — Do these numbers make sense?
+- **Approves or rejects** — Final gatekeeper
+
+### What the Agent does (automation)
+- **Generates SQL** — CREATE TABLE, INSERT, solution query, explanation
+- **Validates SQL is syntactically correct** — Does it run without errors?
+- **Validates solution is distinguishable** — Does it return different results than SELECT *?
+- **Identifies concept gaps** — Queries the taxonomy for uncovered concepts
+- **Determines next order_index** — Where to slot the question
+- **Tags new questions with concepts** — Intended and alternative solution approaches
+- **Generates test code** — Playwright test for the new question
+
+### What the Agent CANNOT do
+- Judge whether a concept is already "covered" by existing questions (a question may be solvable via an approach different from the stored solution)
+- Assess pedagogical quality — is this a good learning question?
+- Determine if the data tells a believable story
+- Know what the admin's curriculum plan is
+
+### Summary
+
+| | Admin | Agent |
+|---|---|---|
+| **What** to create | Decides | Follows |
+| **How** to create (SQL) | Reviews | Generates |
+| **Is it valid SQL?** | Trusts agent | Verifies |
+| **Is it a good question?** | Judges | Can't judge |
+| **What concepts are missing?** | Informed by agent | Queries taxonomy |
+| **Insert into DB?** | Approves | Executes |
+
+The agent is a **code generator with validation** — not a curriculum designer. The admin brings intent and judgment, the agent brings speed and correctness checking.
+
+---
+
 ## Part 1: Analysis
 
 ### Current State

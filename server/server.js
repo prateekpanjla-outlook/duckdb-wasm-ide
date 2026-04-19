@@ -202,6 +202,21 @@ async function ensureTables() {
         await client.query(`CREATE INDEX IF NOT EXISTS idx_ai_usage_user_id ON ai_usage(user_id)`);
         await client.query(`CREATE INDEX IF NOT EXISTS idx_questions_order_index ON questions(order_index)`);
         await client.query(`CREATE INDEX IF NOT EXISTS idx_users_is_guest ON users(is_guest) WHERE is_guest = TRUE`);
+
+        // SQL concept taxonomy
+        await client.query(`CREATE TABLE IF NOT EXISTS sql_concepts (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(50) UNIQUE NOT NULL,
+            category VARCHAR(50) NOT NULL,
+            difficulty VARCHAR(20) DEFAULT 'beginner'
+        )`);
+        await client.query(`CREATE TABLE IF NOT EXISTS question_concepts (
+            question_id INTEGER REFERENCES questions(id) ON DELETE CASCADE,
+            concept_id INTEGER REFERENCES sql_concepts(id) ON DELETE CASCADE,
+            is_intended BOOLEAN DEFAULT TRUE,
+            PRIMARY KEY (question_id, concept_id)
+        )`);
+
         console.log('✅ Database tables and indexes ensured');
 
         // Seed questions if table is empty
@@ -217,6 +232,32 @@ async function ensureTables() {
                 );
             }
             console.log(`✅ Seeded ${seedQuestions.length} questions`);
+        }
+
+        // Seed SQL concepts if table is empty
+        const conceptCount = await client.query('SELECT COUNT(*) as count FROM sql_concepts');
+        if (parseInt(conceptCount.rows[0].count) === 0) {
+            console.log('🌱 Seeding SQL concepts...');
+            const { seedConcepts, seedQuestionConcepts } = await import('./seed/seedConcepts.js');
+            for (const c of seedConcepts) {
+                await client.query(
+                    'INSERT INTO sql_concepts (name, category, difficulty) VALUES ($1, $2, $3) ON CONFLICT (name) DO NOTHING',
+                    [c.name, c.category, c.difficulty]
+                );
+            }
+            console.log(`✅ Seeded ${seedConcepts.length} SQL concepts`);
+
+            // Tag existing questions with concepts
+            for (const qc of seedQuestionConcepts) {
+                const conceptResult = await client.query('SELECT id FROM sql_concepts WHERE name = $1', [qc.concept]);
+                if (conceptResult.rows[0]) {
+                    await client.query(
+                        'INSERT INTO question_concepts (question_id, concept_id, is_intended) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+                        [qc.question_id, conceptResult.rows[0].id, qc.is_intended]
+                    );
+                }
+            }
+            console.log(`✅ Tagged existing questions with concepts`);
         }
     } finally {
         client.release();

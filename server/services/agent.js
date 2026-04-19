@@ -103,6 +103,16 @@ const TOOL_DECLARATIONS = [
             },
             required: ["question_id", "sql_solution", "question_text"]
         }
+    },
+    {
+        name: "list_concepts",
+        description: "List all SQL concepts in the taxonomy with their coverage count (how many questions use each concept as intended or alternative solution). Use this to understand what concepts are well-covered.",
+        parameters: { type: "object", properties: {} }
+    },
+    {
+        name: "get_coverage_gaps",
+        description: "Get SQL concepts that have ZERO intended questions — these are gaps in the curriculum that need new questions. Use this to suggest what topics to cover next.",
+        parameters: { type: "object", properties: {} }
     }
 ];
 
@@ -111,12 +121,19 @@ const SYSTEM_PROMPT = `You are a Question Authoring Agent for a SQL practice pla
 Your job is to generate new SQL practice questions based on admin requests.
 
 WORKFLOW:
-1. First, call list_existing_questions to see what exists and find the next order_index
-2. Generate a complete question with: sql_data (CREATE TABLE + INSERT), sql_question, sql_solution, sql_solution_explanation, difficulty, category
-3. Call validate_question to verify the SQL is correct and the solution is distinguishable
-4. If validation fails, fix the issue and re-validate
-5. Present the complete question as a JSON preview for admin approval
-6. Do NOT call insert_question unless the admin explicitly says to insert
+1. First, call get_coverage_gaps to see which SQL concepts have no questions yet
+2. Call list_existing_questions to find the next order_index and see existing topics
+3. Generate a complete question targeting the requested concept
+4. Call validate_question to verify the SQL is correct and the solution is distinguishable
+5. If validation fails, fix the issue and re-validate
+6. Present the complete question as a JSON preview for admin approval
+7. Do NOT call insert_question unless the admin explicitly says to insert
+
+CONCEPT TAXONOMY:
+The platform maintains a taxonomy of ~35 SQL concepts (e.g. WHERE, GROUP BY, HAVING, INNER JOIN, RANK, CTE).
+Each question is tagged with which concepts it covers (intended vs alternative solutions).
+Use get_coverage_gaps to find untaught concepts. Use list_concepts for full coverage details.
+When generating a question, include a "concepts" field listing which concepts it covers.
 
 RULES:
 - sql_data must use PostgreSQL-compatible SQL
@@ -136,7 +153,12 @@ IMPORTANT: When presenting the final preview, output it as a JSON code block lik
   "sql_solution_explanation": ["...", "..."],
   "difficulty": "...",
   "category": "...",
-  "order_index": N
+  "order_index": N,
+  "concepts": [
+    {"name": "HAVING", "is_intended": true},
+    {"name": "GROUP BY", "is_intended": true},
+    {"name": "Subquery in WHERE", "is_intended": false}
+  ]
 }
 \`\`\``;
 
