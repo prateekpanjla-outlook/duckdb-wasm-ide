@@ -39,6 +39,7 @@
             </div>
             <div class="header-right">
                 <button id="viewQuestionsBtn" class="btn btn-secondary hidden">📋 Questions</button>
+                <button id="adminAgentBtn" class="btn btn-secondary hidden">🤖 Agent</button>
                 <button id="authBtn" class="btn btn-primary">Login</button>
                 <button id="clearHistoryBtn" class="btn btn-secondary">Clear History</button>
             </div>
@@ -185,5 +186,15 @@
 
     <!-- App Scripts -->
     <script type="module" src="js/app.js"></script>
+    <script type="module">
+        import { AgentPanel } from './js/services/agent-panel.js';
+        window.agentPanel = new AgentPanel();
+        const agentBtn = document.getElementById('adminAgentBtn');
+        if (agentBtn) {
+            agentBtn.addEventListener('click', () => window.agentPanel.show());
+            // Show agent button always (admin key checked server-side)
+            agentBtn.classList.remove('hidden');
+        }
+    </script>
 </body>
 </html>

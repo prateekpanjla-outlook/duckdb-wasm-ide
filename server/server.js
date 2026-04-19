@@ -11,6 +11,7 @@ import { fileURLToPath } from 'url';
 import authRoutes from './routes/auth.js';
 import practiceRoutes from './routes/practice.js';
 import aiRoutes from './routes/ai.js';
+import adminRoutes from './routes/admin.js';
 import pool from './config/database.js';
 
 // Load environment variables
@@ -82,6 +83,7 @@ app.get('/health/db', async (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/practice', practiceRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Serve pre-compressed WASM files (built by Docker: gzip -k -9)
 // Browser sends Accept-Encoding: gzip → we serve .wasm.gz with Content-Encoding: gzip

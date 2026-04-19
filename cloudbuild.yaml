@@ -48,7 +48,7 @@ steps:
       - '--set-env-vars'
       - 'DB_HOST=/cloudsql/$PROJECT_ID:us-central1:duckdb-ide-db,DB_PORT=5432,DB_NAME=duckdb_ide,DB_USER=postgres,JWT_EXPIRES_IN=7d,NODE_ENV=production'
       - '--set-secrets'
-      - 'DB_PASSWORD=db-password:latest,JWT_SECRET=jwt-secret:latest,GEMINI_API_KEY=gemini-api-key:latest'
+      - 'DB_PASSWORD=db-password:latest,JWT_SECRET=jwt-secret:latest,GEMINI_API_KEY=gemini-api-key:latest,ADMIN_SECRET=admin-secret:latest'
       - '--service-account'
       - 'sql-practice-runtime@$PROJECT_ID.iam.gserviceaccount.com'
 
