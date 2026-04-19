@@ -71,6 +71,18 @@ export async function execute_sql({ sql }) {
  * Everything runs in ROLLBACK — nothing persists.
  */
 export async function validate_question({ sql_data, sql_solution }) {
+    // Check for table name collisions with existing questions
+    const tableNames = [...sql_data.matchAll(/CREATE\s+TABLE\s+(\w+)/gi)].map(m => m[1].toLowerCase());
+    const existingQuestions = await Question.getAll();
+    const collisions = [];
+    for (const q of existingQuestions) {
+        const existingTables = [...(q.sql_data || '').matchAll(/CREATE\s+TABLE\s+(\w+)/gi)].map(m => m[1].toLowerCase());
+        const overlap = tableNames.filter(t => existingTables.includes(t));
+        if (overlap.length) {
+            collisions.push({ question_id: q.id, tables: overlap });
+        }
+    }
+
     const client = await getClient();
     try {
         await client.query('BEGIN');
@@ -111,7 +123,8 @@ export async function validate_question({ sql_data, sql_solution }) {
             solution_rows: solutionResult.rowCount,
             solution_columns: solutionResult.fields?.map(f => f.name),
             solution_preview: solutionResult.rows?.slice(0, 5),
-            distinguishable
+            distinguishable,
+            table_collisions: collisions.length > 0 ? collisions : null
         };
     } catch (error) {
         await client.query('ROLLBACK').catch(() => {});

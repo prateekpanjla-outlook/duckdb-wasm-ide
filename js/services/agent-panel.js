@@ -228,14 +228,86 @@ export class AgentPanel {
     }
 
     showApprovalButtons() {
+        const q = this.pendingQuestion;
         const previewDiv = document.getElementById('agentPreview');
         previewDiv.classList.remove('hidden');
+
+        // Extract schema (CREATE TABLE lines) and data (INSERT lines) from sql_data
+        const lines = (q.sql_data || '').split('\n');
+        const schemaLines = lines.filter(l => /CREATE TABLE|^\s+\w+\s+(INTEGER|VARCHAR|TEXT|DATE|DECIMAL|BOOLEAN|SERIAL)/i.test(l));
+        const insertMatch = q.sql_data.match(/INSERT INTO[\s\S]*/i);
+        const insertData = insertMatch ? insertMatch[0] : '';
+        const rowCount = (insertData.match(/\(/g) || []).length - 1; // subtract the column list parens
+
+        // Format concepts
+        const conceptsHtml = (q.concepts || []).map(c => {
+            const badge = c.is_intended ? 'intended' : 'alternative';
+            return `<span class="concept-badge concept-${badge}">${this.escapeHtml(c.name)}</span>`;
+        }).join(' ');
+
+        // Format explanation
+        const explanationHtml = (q.sql_solution_explanation || []).map((e, i) =>
+            `<li>${this.escapeHtml(e)}</li>`
+        ).join('');
+
         previewDiv.innerHTML = `
-            <div class="approval-buttons">
-                <button id="approveQuestionBtn" class="btn btn-primary">Approve & Insert</button>
-                <button id="rejectQuestionBtn" class="btn btn-secondary">Reject & Try Again</button>
+            <div class="question-preview-card">
+                <h3>Question Preview</h3>
+
+                <div class="preview-meta">
+                    <span class="badge badge-${q.difficulty}">${this.escapeHtml(q.difficulty || '')}</span>
+                    <span class="badge">${this.escapeHtml(q.category || '')}</span>
+                    <span class="badge">Order #${q.order_index || '?'}</span>
+                </div>
+
+                <div class="preview-section">
+                    <h4>Question</h4>
+                    <p>${this.escapeHtml(q.sql_question || '')}</p>
+                </div>
+
+                <div class="preview-section">
+                    <h4>Schema</h4>
+                    <pre class="preview-code">${this.escapeHtml(schemaLines.join('\n'))}</pre>
+                </div>
+
+                <div class="preview-section preview-collapsible">
+                    <h4 class="preview-toggle">Sample Data <span class="preview-row-count">(${rowCount > 0 ? rowCount : '?'} rows — click to expand)</span></h4>
+                    <pre class="preview-code preview-folded">${this.escapeHtml(insertData)}</pre>
+                </div>
+
+                <div class="preview-section">
+                    <h4>Solution</h4>
+                    <pre class="preview-code">${this.escapeHtml(q.sql_solution || '')}</pre>
+                </div>
+
+                <div class="preview-section">
+                    <h4>Explanation</h4>
+                    <ol class="preview-explanation">${explanationHtml}</ol>
+                </div>
+
+                <div class="preview-section">
+                    <h4>Concepts</h4>
+                    <div class="preview-concepts">${conceptsHtml || 'None specified'}</div>
+                </div>
+
+                <div class="approval-buttons">
+                    <button id="approveQuestionBtn" class="btn btn-primary">Approve & Insert</button>
+                    <button id="rejectQuestionBtn" class="btn btn-secondary">Reject & Try Again</button>
+                </div>
             </div>
         `;
+
+        // Collapsible data section
+        previewDiv.querySelector('.preview-toggle')?.addEventListener('click', () => {
+            const folded = previewDiv.querySelector('.preview-folded');
+            if (folded) {
+                folded.classList.remove('preview-folded');
+                previewDiv.querySelector('.preview-row-count').textContent = '(click to collapse)';
+            } else {
+                previewDiv.querySelector('.preview-collapsible pre').classList.add('preview-folded');
+                previewDiv.querySelector('.preview-row-count').textContent = `(${rowCount > 0 ? rowCount : '?'} rows — click to expand)`;
+            }
+        });
 
         document.getElementById('approveQuestionBtn').addEventListener('click', () => this.approveQuestion());
         document.getElementById('rejectQuestionBtn').addEventListener('click', () => {
@@ -316,13 +388,18 @@ export class AgentPanel {
                 return result.success
                     ? `${result.command} — ${result.rowCount} row(s)`
                     : `Failed: ${this.escapeHtml(result.error || 'unknown error')}`;
-            case 'validate_question':
-                return [
+            case 'validate_question': {
+                const parts = [
                     result.schema_valid ? 'Schema valid' : 'Schema invalid',
                     result.rows_inserted ? `${result.rows_inserted} rows inserted` : null,
                     result.solution_valid ? `Solution returns ${result.solution_rows} rows` : 'Solution invalid',
                     result.distinguishable ? 'Distinguishable' : 'NOT distinguishable'
                 ].filter(Boolean).join(' · ');
+                const collisionWarning = result.table_collisions
+                    ? `<br><strong style="color:#c62828">Table name collision:</strong> ${result.table_collisions.map(c => `"${c.tables.join(', ')}" also used in Q${c.question_id}`).join('; ')}`
+                    : '';
+                return parts + collisionWarning;
+            }
             case 'insert_question':
                 return `Question <strong>#${result.id}</strong> inserted. Concepts tagged: ${result.concepts_tagged?.map(c => this.escapeHtml(c)).join(', ') || 'none'}`;
             case 'generate_test':

@@ -770,6 +770,123 @@ table tbody tr.no-data td {
 .approval-buttons {
     display: flex;
     gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+/* Question preview card */
+.question-preview-card {
+    padding: 0.5rem 0;
+}
+
+.question-preview-card h3 {
+    margin: 0 0 0.75rem;
+    font-size: 1.1rem;
+}
+
+.preview-meta {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.preview-meta .badge {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    background: #e3f2fd;
+    color: #1565c0;
+}
+
+.preview-meta .badge-beginner { background: #e8f5e9; color: #2e7d32; }
+.preview-meta .badge-intermediate { background: #fff3e0; color: #e65100; }
+.preview-meta .badge-advanced { background: #fce4ec; color: #c62828; }
+
+.preview-section {
+    margin-bottom: 0.75rem;
+}
+
+.preview-section h4 {
+    font-size: 0.85rem;
+    color: #555;
+    margin: 0 0 0.3rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.preview-code {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    padding: 0.5rem;
+    font-size: 0.8rem;
+    white-space: pre-wrap;
+    overflow-x: auto;
+    max-height: 200px;
+    overflow-y: auto;
+    margin: 0;
+}
+
+.preview-folded {
+    max-height: 2.5rem;
+    overflow: hidden;
+    position: relative;
+}
+
+.preview-folded::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1.5rem;
+    background: linear-gradient(transparent, #f8f9fa);
+}
+
+.preview-toggle {
+    cursor: pointer;
+}
+
+.preview-toggle:hover {
+    color: #1565c0;
+}
+
+.preview-row-count {
+    font-weight: normal;
+    font-size: 0.75rem;
+    color: #888;
+}
+
+.preview-explanation {
+    margin: 0;
+    padding-left: 1.2rem;
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+
+.preview-concepts {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.concept-badge {
+    font-size: 0.75rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 10px;
+    border: 1px solid;
+}
+
+.concept-intended {
+    background: #e8f5e9;
+    border-color: #4caf50;
+    color: #2e7d32;
+}
+
+.concept-alternative {
+    background: #fff3e0;
+    border-color: #ff9800;
+    color: #e65100;
 }
 
 /* ==================== Auth Modal ==================== */
