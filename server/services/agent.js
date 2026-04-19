@@ -168,12 +168,11 @@ IMPORTANT: When presenting the final preview, output it as a JSON code block lik
  * @param {object[]} existingHistory - Previous conversation turns (for follow-ups)
  * @returns {{ steps: object[], messages: object[] }}
  */
-export async function runAgent(userPrompt, existingHistory = []) {
+export async function runAgent(userPrompt, existingHistory = [], onStep = null) {
     if (!API_KEY) {
-        return {
-            steps: [{ type: 'error', content: 'GEMINI_API_KEY not configured' }],
-            messages: []
-        };
+        const errorStep = { type: 'error', content: 'GEMINI_API_KEY not configured' };
+        if (onStep) onStep(errorStep);
+        return { steps: [errorStep], messages: [] };
     }
 
     const messages = existingHistory.length > 0
@@ -242,12 +241,14 @@ export async function runAgent(userPrompt, existingHistory = []) {
         if (toolCall) {
             const { name, args } = toolCall.functionCall;
 
-            steps.push({
+            const toolCallStep = {
                 type: 'tool_call',
                 tool: name,
                 input: args,
                 latencyMs
-            });
+            };
+            steps.push(toolCallStep);
+            if (onStep) onStep(toolCallStep);
 
             console.log(`Agent tool call: ${name}(${JSON.stringify(args).substring(0, 100)})`);
 
@@ -261,11 +262,13 @@ export async function runAgent(userPrompt, existingHistory = []) {
                 toolResult = { error: error.message };
             }
 
-            steps.push({
+            const toolResultStep = {
                 type: 'tool_result',
                 tool: name,
                 result: toolResult
-            });
+            };
+            steps.push(toolResultStep);
+            if (onStep) onStep(toolResultStep);
 
             // Add tool result to conversation for next Gemini call
             messages.push({
@@ -282,17 +285,21 @@ export async function runAgent(userPrompt, existingHistory = []) {
         }
 
         if (textPart) {
-            steps.push({
+            const answerStep = {
                 type: 'answer',
                 content: textPart.text,
                 latencyMs
-            });
+            };
+            steps.push(answerStep);
+            if (onStep) onStep(answerStep);
             break;
         }
     }
 
     if (stepCount >= MAX_STEPS) {
-        steps.push({ type: 'error', content: 'Agent reached maximum step limit' });
+        const limitStep = { type: 'error', content: 'Agent reached maximum step limit' };
+        steps.push(limitStep);
+        if (onStep) onStep(limitStep);
     }
 
     console.log(`Agent completed: ${steps.length} steps, ${stepCount} Gemini calls, daily usage: ${dailyCallCount}/250`);

@@ -77,7 +77,7 @@ export class AgentPanel {
         stepsContainer.scrollTop = stepsContainer.scrollHeight;
 
         try {
-            const response = await fetch('/api/admin/agent', {
+            const response = await fetch('/api/admin/agent/stream', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -86,16 +86,38 @@ export class AgentPanel {
                 body: JSON.stringify({ prompt, history: this.history })
             });
 
-            const data = await response.json();
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || 'Agent request failed');
+            }
 
             thinkingEl.remove();
 
-            if (!response.ok) {
-                throw new Error(data.error || 'Agent request failed');
-            }
+            // Read SSE stream — render each step as it arrives
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
 
-            this.history = data.history;
-            this.renderSteps(data.steps);
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+
+                const events = buffer.split('\n\n');
+                buffer = events.pop(); // keep incomplete chunk
+
+                for (const event of events) {
+                    if (!event.startsWith('data: ')) continue;
+                    const step = JSON.parse(event.slice(6));
+
+                    if (step.type === 'done') {
+                        this.history = step.history;
+                    } else {
+                        this.renderSteps([step]);
+                    }
+                }
+            }
 
         } catch (error) {
             thinkingEl.remove();

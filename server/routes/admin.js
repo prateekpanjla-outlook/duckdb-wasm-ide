@@ -61,6 +61,42 @@ router.post('/agent', async (req, res) => {
 });
 
 /**
+ * POST /api/admin/agent/stream
+ * Same as /agent but streams steps via SSE as they happen.
+ */
+router.post('/agent/stream', async (req, res) => {
+    try {
+        const { prompt, history } = req.body;
+
+        if (!prompt) {
+            return res.status(400).json({ error: 'Prompt is required' });
+        }
+
+        // SSE headers
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.flushHeaders();
+
+        console.log(`Agent stream request: "${prompt.substring(0, 100)}"`);
+
+        const onStep = (step) => {
+            res.write(`data: ${JSON.stringify(step)}\n\n`);
+        };
+
+        const result = await runAgent(prompt, history || [], onStep);
+
+        // Send final event with history for follow-up requests
+        res.write(`data: ${JSON.stringify({ type: 'done', history: result.messages })}\n\n`);
+        res.end();
+    } catch (error) {
+        console.error('Agent stream error:', error);
+        res.write(`data: ${JSON.stringify({ type: 'error', content: error.message })}\n\n`);
+        res.end();
+    }
+});
+
+/**
  * POST /api/admin/agent/approve
  * Insert a previously previewed question.
  * Body: { question: { sql_data, sql_question, ... } }
