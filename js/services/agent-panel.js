@@ -20,8 +20,9 @@ export class AgentPanel {
                 <div class="agent-key-input">
                     <input type="password" id="adminKeyInput" placeholder="Admin Key" class="form-input">
                 </div>
-                <div id="agentSteps" class="agent-steps"></div>
-                <div id="agentPreview" class="agent-preview hidden"></div>
+                <div id="agentSteps" class="agent-steps">
+                    <div id="agentPreview" class="agent-preview hidden"></div>
+                </div>
                 <div class="agent-input">
                     <input type="text" id="agentPrompt" placeholder='e.g. "Add a question about RANK() window function"' class="form-input">
                     <button id="agentSendBtn" class="btn btn-primary">Send</button>
@@ -374,13 +375,16 @@ export class AgentPanel {
         }
 
         switch (tool) {
-            case 'list_existing_questions':
-                return `Found <strong>${result.count}</strong> questions. Next order_index: <strong>${result.next_order_index}</strong>. Categories: ${result.questions?.map(q => this.escapeHtml(q.category)).filter((v, i, a) => a.indexOf(v) === i).join(', ') || 'none'}`;
+            case 'list_existing_questions': {
+                const cats = result.questions?.map(q => this.escapeHtml(q.category)).filter((v, i, a) => a.indexOf(v) === i).join(', ') || 'none';
+                const tables = result.used_table_names?.map(t => this.escapeHtml(t)).join(', ') || 'none';
+                return `Found <strong>${result.count}</strong> questions. Next order_index: <strong>${result.next_order_index}</strong>.<br>Categories: ${cats}<br>Used table names: <code>${tables}</code>`;
+            }
             case 'get_coverage_gaps': {
                 const gaps = result.gaps_by_category || {};
                 const categories = Object.keys(gaps);
-                const names = categories.flatMap(c => gaps[c].map(g => this.escapeHtml(g.name))).slice(0, 8);
-                return `<strong>${result.total_gaps}</strong> uncovered concepts: ${names.join(', ')}${result.total_gaps > 8 ? '...' : ''}`;
+                const names = categories.flatMap(c => gaps[c].map(g => this.escapeHtml(g.name)));
+                return `<strong>${result.total_gaps}</strong> uncovered concepts: ${names.join(', ')}`;
             }
             case 'list_concepts':
                 return `<strong>${result.total_concepts}</strong> concepts in taxonomy`;

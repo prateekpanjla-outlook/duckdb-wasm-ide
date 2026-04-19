@@ -17,9 +17,17 @@ export async function list_existing_questions() {
         ? Math.max(...questions.map(q => q.order_index))
         : 0;
 
+    // Extract table names from each question's sql_data
+    const usedTableNames = new Set();
+    for (const q of questions) {
+        const matches = (q.sql_data || '').matchAll(/CREATE\s+TABLE\s+(\w+)/gi);
+        for (const m of matches) usedTableNames.add(m[1].toLowerCase());
+    }
+
     return {
         count: questions.length,
         next_order_index: maxOrder + 1,
+        used_table_names: [...usedTableNames],
         questions: questions.map(q => ({
             id: q.id,
             order_index: q.order_index,

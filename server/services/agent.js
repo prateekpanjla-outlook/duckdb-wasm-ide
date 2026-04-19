@@ -153,6 +153,7 @@ When generating a question, include a "concepts" field listing which concepts it
 
 RULES:
 - sql_data must use PostgreSQL-compatible SQL
+- IMPORTANT: Do NOT reuse table names from existing questions. list_existing_questions returns used_table_names — pick different names.
 - Use realistic data (real-sounding names, reasonable numbers)
 - sql_solution_explanation must be an array of strings, each explaining one part of the query
 - Difficulty levels: beginner (SELECT/WHERE), intermediate (JOIN/GROUP BY/HAVING), advanced (window functions/subqueries/CTEs)
