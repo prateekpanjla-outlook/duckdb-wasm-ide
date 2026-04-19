@@ -349,8 +349,16 @@ sequenceDiagram
     BE->>G: generateContent (+ history)
     G-->>BE: functionCall: validate_question(sql_data, sql_solution)
     BE->>DB: BEGIN; CREATE TABLE; INSERT; SELECT; ROLLBACK
-    DB-->>BE: valid, 12 rows
+    DB-->>BE: valid, 12 rows, no table collisions
     BE->>G: functionResponse (validation)
+
+    Note over BE: wait 7s (rate limit)
+
+    BE->>G: generateContent (+ history)
+    G-->>BE: functionCall: check_concept_overlap(["HAVING"])
+    BE->>DB: SELECT overlapping questions for concepts
+    DB-->>BE: overlap details
+    BE->>G: functionResponse (overlap)
 
     Note over BE: wait 7s (rate limit)
 

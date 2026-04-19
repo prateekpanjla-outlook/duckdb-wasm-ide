@@ -66,7 +66,7 @@ An agentic endpoint that takes a natural language prompt ("Add a question about 
 |---|---|
 | Call LLM multiple times | 3-5 Gemini calls per question generation |
 | Each query stores ALL past interaction | Full conversation history array passed each call |
-| 3+ custom tool functions | 5 tools: list_questions, execute_sql, validate_question, insert_question, generate_test |
+| 3+ custom tool functions | 8 tools: list_questions, execute_sql, validate_question, insert_question, generate_test, list_concepts, get_coverage_gaps, check_concept_overlap |
 | Display reasoning chain | Frontend shows each step with tool name, input, result |
 | Can't do without tools | LLM doesn't know existing questions, can't run SQL, can't insert into DB |
 
@@ -100,9 +100,14 @@ function adminAuth(req, res, next) {
 
 ### Agent Loop Architecture
 
+The agent supports two modes:
+- **`POST /api/admin/agent`** — Returns all steps at once when the agent loop completes.
+- **`POST /api/admin/agent/stream`** — SSE (Server-Sent Events) streaming endpoint for real-time step display. Each tool call and result is sent as an SSE event as it happens.
+
 ```
 ┌──────────────────────────────────────────────────────┐
 │  POST /api/admin/agent                                │
+│  POST /api/admin/agent/stream  (SSE)                  │
 │  Header: X-Admin-Key: secret                          │
 │  Body: { prompt: "Add a question about RANK()" }      │
 └──────────────┬───────────────────────────────────────┘
@@ -184,7 +189,7 @@ function trackDailyUsage() {
 }
 ```
 
-### The 5 Tools
+### The 8 Tools
 
 ```javascript
 const TOOLS = [
@@ -202,7 +207,7 @@ const TOOLS = [
     },
     {
         name: "validate_question",
-        description: "Run the complete validation pipeline: execute sql_data to create tables, execute sql_solution to verify it returns results, execute a deliberately wrong query to verify the solution is distinguishable. Returns validation report.",
+        description: "Run the complete validation pipeline: execute sql_data to create tables, execute sql_solution to verify it returns results, execute a deliberately wrong query to verify the solution is distinguishable, and detect table name collisions with existing questions. Returns validation report.",
         parameters: {
             sql_data: { type: "string", description: "CREATE TABLE and INSERT statements" },
             sql_solution: { type: "string", description: "The correct SQL query" }
@@ -229,6 +234,23 @@ const TOOLS = [
             sql_solution: { type: "string" },
             question_text: { type: "string" }
         }
+    },
+    {
+        name: "list_concepts",
+        description: "List all SQL concepts in the taxonomy with their categories and difficulty levels.",
+        parameters: {}  // no params
+    },
+    {
+        name: "get_coverage_gaps",
+        description: "Return SQL concepts that have no questions covering them. Helps identify what to author next.",
+        parameters: {}  // no params
+    },
+    {
+        name: "check_concept_overlap",
+        description: "Check whether a proposed question's concepts overlap with existing questions. Returns overlap details so the agent can adjust before finalizing.",
+        parameters: {
+            concept_names: { type: "array", items: { type: "string" }, description: "Concept names to check for overlap" }
+        }
     }
 ];
 ```
@@ -250,20 +272,25 @@ Step 2: LLM generates question content internally, then validates
   → Result: {
       schema_valid: true, rows_inserted: 12,
       solution_valid: true, solution_rows: 12,
-      distinguishable: true
+      distinguishable: true,
+      table_name_collisions: []
     }
 
-Step 3: LLM presents the question preview as final answer
+Step 3: LLM checks concept overlap before finalizing
+  → Tool: check_concept_overlap({ concept_names: ["RANK", "Window Functions"] })
+  → Result: { overlapping_questions: [], unique_concepts: ["RANK"] }
+
+Step 4: LLM presents the question preview as final answer
   → Returns structured preview with all fields for admin review
 
 --- HUMAN APPROVAL GATE ---
 
-Step 4 (separate request): Admin clicks "Approve"
+Step 5 (separate request): Admin clicks "Approve"
   → POST /api/admin/agent/approve
   → Tool: insert_question({...all fields...})
   → Result: { id: 21, message: "Question inserted" }
 
-Step 5 (optional): Generate and run test
+Step 6 (optional): Generate and run test
   → Tool: generate_test({ question_id: 21, sql_solution: "...", question_text: "..." })
   → Result: { test_file: "tests/e2e/question-21.spec.js", test_code: "..." }
 ```
@@ -315,7 +342,7 @@ We then execute the tool, add the result as a `functionResponse`, and call Gemin
 | File | Purpose |
 |---|---|
 | `server/services/agent.js` | Agent loop: Gemini ↔ tools, conversation history, step tracking |
-| `server/services/agentTools.js` | Tool implementations (list_questions, execute_sql, validate, insert, generate_test) |
+| `server/services/agentTools.js` | Tool implementations (list_questions, execute_sql, validate, insert, generate_test, list_concepts, get_coverage_gaps, check_concept_overlap) |
 | `server/routes/admin.js` | `POST /api/admin/agent`, `POST /api/admin/agent/approve`, admin auth middleware |
 | `js/services/agent-panel.js` | Frontend: admin panel UI, reasoning chain display, approve/reject buttons |
 
@@ -565,7 +592,7 @@ const TOOL_DECLARATIONS = [
     },
     {
         name: "validate_question",
-        description: "Run the full validation pipeline for a generated question: create tables from sql_data, run the sql_solution, and verify the solution produces distinguishable results. Use this after generating question content.",
+        description: "Run the full validation pipeline for a generated question: create tables from sql_data, run the sql_solution, verify the solution produces distinguishable results, and detect table name collisions with existing questions. Use this after generating question content.",
         parameters: {
             type: "object",
             properties: {
@@ -608,6 +635,31 @@ const TOOL_DECLARATIONS = [
             },
             required: ["question_id", "sql_solution", "question_text"]
         }
+    },
+    {
+        name: "list_concepts",
+        description: "List all SQL concepts in the taxonomy with their categories and difficulty levels.",
+        parameters: { type: "object", properties: {} }
+    },
+    {
+        name: "get_coverage_gaps",
+        description: "Return SQL concepts that have no questions covering them.",
+        parameters: { type: "object", properties: {} }
+    },
+    {
+        name: "check_concept_overlap",
+        description: "Check whether proposed concepts overlap with existing questions. Returns overlap details.",
+        parameters: {
+            type: "object",
+            properties: {
+                concept_names: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "Concept names to check for overlap"
+                }
+            },
+            required: ["concept_names"]
+        }
     }
 ];
 
@@ -618,10 +670,11 @@ Your job is to generate new SQL practice questions based on admin requests.
 WORKFLOW:
 1. First, call list_existing_questions to see what exists and find the next order_index
 2. Generate a complete question with: sql_data (CREATE TABLE + INSERT), sql_question, sql_solution, sql_solution_explanation, difficulty, category
-3. Call validate_question to verify the SQL is correct and the solution is distinguishable
+3. Call validate_question to verify the SQL is correct, the solution is distinguishable, and there are no table name collisions
 4. If validation fails, fix the issue and re-validate
-5. Present the complete question as a preview for admin approval
-6. Do NOT call insert_question unless the admin explicitly approves
+5. Call check_concept_overlap to verify the question covers concepts not already well-covered
+6. Present the complete question as a preview for admin approval
+7. Do NOT call insert_question unless the admin explicitly approves
 
 RULES:
 - sql_data must use DuckDB-compatible SQL (similar to PostgreSQL)
@@ -1408,7 +1461,7 @@ Admin (Browser)          Express Server           Gemini API            PostgreS
 ## Part 5: Implementation Checklist
 
 ### Phase 1: Backend (3-4 hours)
-- [ ] Create `server/services/agentTools.js` — 5 tool functions
+- [ ] Create `server/services/agentTools.js` — 8 tool functions
 - [ ] Create `server/services/agent.js` — agent loop with Gemini function calling
 - [ ] Create `server/routes/admin.js` — admin auth + 3 endpoints
 - [ ] Mount admin routes in `server/server.js`

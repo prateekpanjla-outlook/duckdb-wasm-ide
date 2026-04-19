@@ -1,0 +1,16 @@
+2026-04-19 11:34:17 GET 200 https://duckdb-ide-frxi6yk4jq-uc.a.run.app/js/services/agent-panel.js
+2026-04-19 11:34:49 POST 200 https://duckdb-ide-frxi6yk4jq-uc.a.run.app/api/admin/agent
+2026-04-19 11:34:49 Agent request: "hello"
+2026-04-19 11:34:50 Agent completed: 1 steps, 1 Gemini calls, daily usage: 3/250
+2026-04-19 11:36:04 POST 200 https://duckdb-ide-frxi6yk4jq-uc.a.run.app/api/admin/agent
+2026-04-19 11:36:04 Agent request: "add a question about having in sql"
+2026-04-19 11:36:05 Agent tool call: list_existing_questions({})
+2026-04-19 11:36:05 Agent: rate limit wait 5848ms
+2026-04-19 11:36:17 Agent tool call: validate_question({"sql_data":"\nCREATE TABLE Orders (\n    order_id INTEGER PRIMARY KEY,\n    customer_id INTEGER,\n )
+2026-04-19 11:36:17 Agent: rate limit wait 861ms
+2026-04-19 11:36:21 Agent completed: 5 steps, 3 Gemini calls, daily usage: 6/250
+2026-04-19 12:56:36 POST 200 https://duckdb-ide-frxi6yk4jq-uc.a.run.app/api/admin/agent
+2026-04-19 12:56:36 Agent request: "Show me coverage gaps"
+2026-04-19 12:56:37 Agent tool call: get_coverage_gaps({})
+2026-04-19 12:56:37 Agent: rate limit wait 5995ms
+2026-04-19 12:56:45 Agent completed: 3 steps, 2 Gemini calls, daily usage: 2/250

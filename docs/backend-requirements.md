@@ -112,6 +112,7 @@ POST   /api/practice/session/deactivate Deactivate practice mode
 POST   /api/ai/hint                    Get AI hint/explanation (Gemini, rate-limited)
 
 POST   /api/admin/agent                Run Question Authoring Agent (X-Admin-Key required)
+POST   /api/admin/agent/stream         SSE streaming endpoint for real-time agent step display
 POST   /api/admin/agent/approve        Insert approved question + concept tags
 POST   /api/admin/agent/generate-test  Generate Playwright test for a question
 ```
