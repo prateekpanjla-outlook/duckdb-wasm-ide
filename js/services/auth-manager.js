@@ -22,7 +22,11 @@ export class AuthManager {
     async checkExistingAuth() {
         if (apiClient.isAuthenticated()) {
             const user = apiClient.getUser();
-            this.updateUIForLoggedInUser(user);
+            if (apiClient.isGuest()) {
+                this.updateUIForGuestUser(user);
+            } else {
+                this.updateUIForLoggedInUser(user);
+            }
         }
     }
 
@@ -150,6 +154,12 @@ export class AuthManager {
         const modal = document.getElementById('authModal');
         modal.classList.remove('visible');
         this.clearForm();
+        // Reset upgrade mode and restore toggle button
+        if (this._upgradeMode) {
+            this._upgradeMode = false;
+            const toggleBtn = document.getElementById('authToggleBtn');
+            if (toggleBtn) toggleBtn.style.display = '';
+        }
     }
 
     /**
@@ -180,6 +190,11 @@ export class AuthManager {
      * Handle form submission
      */
     async handleSubmit() {
+        // Route to upgrade handler if in upgrade mode
+        if (this._upgradeMode) {
+            return this.handleUpgrade();
+        }
+
         const email = document.getElementById('authEmail').value.trim();
         const password = document.getElementById('authPassword').value;
         const errorDiv = document.getElementById('authError');
@@ -267,6 +282,165 @@ export class AuthManager {
             // Hide query editor and results panel
             if (querySection) querySection.classList.add('hidden');
             if (resultsPanel) resultsPanel.classList.add('hidden');
+        }
+    }
+
+    /**
+     * Start as guest — creates anonymous account, full access
+     */
+    async startAsGuest() {
+        try {
+            await apiClient.guestLogin();
+
+            this.closeModal();
+            const user = apiClient.getUser();
+            this.updateUIForGuestUser(user);
+            this.showNotification('Welcome! You can start practicing immediately.', 'success');
+
+            // Same initialization as regular login
+            await window.app.initializeDuckDB();
+            window.app.practiceManager = new PracticeManager(window.app.dbManager);
+            window.practiceManager = window.app.practiceManager;
+            window.app.showQuestionSelector();
+
+        } catch (error) {
+            this.showNotification('Failed to start guest session. Please try again.', 'error');
+            console.error('Guest login failed:', error);
+        }
+    }
+
+    /**
+     * Update UI for guest user — shows "Guest" in header with upgrade option
+     */
+    updateUIForGuestUser(user) {
+        const authBtn = document.getElementById('authBtn');
+        const practiceBtn = document.getElementById('startPracticeBtn');
+        const viewQuestionsBtn = document.getElementById('viewQuestionsBtn');
+        const querySection = document.getElementById('querySection');
+        const resultsPanel = document.getElementById('resultsPanel');
+
+        authBtn.textContent = 'Guest';
+        authBtn.classList.remove('btn-primary');
+        authBtn.classList.add('btn-secondary');
+        authBtn.onclick = () => this.showGuestOptions();
+
+        if (practiceBtn) practiceBtn.style.display = 'inline-block';
+        if (viewQuestionsBtn) viewQuestionsBtn.classList.remove('hidden');
+        if (querySection) querySection.classList.remove('hidden');
+        if (resultsPanel) resultsPanel.classList.remove('hidden');
+    }
+
+    /**
+     * Show options for guest: upgrade to full account or logout
+     */
+    showGuestOptions() {
+        const existing = document.getElementById('guestOptionsModal');
+        if (existing) existing.remove();
+
+        const modalHTML = `
+            <div id="guestOptionsModal" class="auth-modal visible">
+                <div class="auth-modal-content">
+                    <button class="auth-modal-close" id="closeGuestOptions">&times;</button>
+                    <div class="auth-header">
+                        <h2>Guest Account</h2>
+                        <p class="auth-subtitle">Your progress will be lost when the session expires</p>
+                    </div>
+                    <div class="guest-options">
+                        <button id="upgradeAccountBtn" class="btn btn-primary" style="width:100%; margin-bottom:0.75rem;">
+                            Create Account (Save Progress)
+                        </button>
+                        <button id="guestLogoutBtn" class="btn btn-secondary" style="width:100%;">
+                            Logout
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+        document.getElementById('closeGuestOptions').addEventListener('click', () => {
+            document.getElementById('guestOptionsModal').remove();
+        });
+        document.getElementById('guestOptionsModal').addEventListener('click', (e) => {
+            if (e.target.id === 'guestOptionsModal') {
+                document.getElementById('guestOptionsModal').remove();
+            }
+        });
+        document.getElementById('upgradeAccountBtn').addEventListener('click', () => {
+            document.getElementById('guestOptionsModal').remove();
+            this.showUpgradeForm();
+        });
+        document.getElementById('guestLogoutBtn').addEventListener('click', async () => {
+            document.getElementById('guestOptionsModal').remove();
+            await apiClient.logout();
+            this.updateUIForLoggedInUser(null);
+            // Show login prompt again
+            const loginPrompt = document.getElementById('loginPromptSection');
+            const questionSelector = document.getElementById('questionSelectorSection');
+            if (loginPrompt) loginPrompt.classList.remove('hidden');
+            if (questionSelector) questionSelector.classList.add('hidden');
+            this.showNotification('Logged out', 'info');
+        });
+    }
+
+    /**
+     * Show form to upgrade guest to registered account
+     */
+    showUpgradeForm() {
+        this.isLoginMode = false;
+
+        const title = document.getElementById('authTitle');
+        const submitText = document.getElementById('authSubmitText');
+        const toggleBtn = document.getElementById('authToggleBtn');
+        const toggleText = document.getElementById('authToggleText');
+
+        title.textContent = 'Create Account';
+        submitText.textContent = 'Save My Progress';
+        toggleText.textContent = '';
+        toggleBtn.style.display = 'none';
+
+        // Replace form submit handler for upgrade
+        const form = document.getElementById('authForm');
+        this._upgradeMode = true;
+
+        this.openModal();
+    }
+
+    /**
+     * Handle guest upgrade form submission
+     */
+    async handleUpgrade() {
+        const email = document.getElementById('authEmail').value.trim();
+        const password = document.getElementById('authPassword').value;
+        const errorDiv = document.getElementById('authError');
+        const submitBtn = document.querySelector('.auth-submit-btn');
+        const submitText = document.getElementById('authSubmitText');
+        const spinner = document.querySelector('.auth-spinner');
+
+        errorDiv.classList.add('hidden');
+        submitBtn.disabled = true;
+        submitText.classList.add('hidden');
+        spinner.classList.remove('hidden');
+
+        try {
+            await apiClient.upgradeGuest(email, password);
+
+            this.closeModal();
+            this._upgradeMode = false;
+            const user = apiClient.getUser();
+            this.updateUIForLoggedInUser(user);
+            this.showNotification('Account created! Your progress has been saved.', 'success');
+
+            // Restore toggle button
+            document.getElementById('authToggleBtn').style.display = '';
+        } catch (error) {
+            errorDiv.textContent = error.message || 'Upgrade failed';
+            errorDiv.classList.remove('hidden');
+        } finally {
+            submitBtn.disabled = false;
+            submitText.classList.remove('hidden');
+            spinner.classList.add('hidden');
         }
     }
 

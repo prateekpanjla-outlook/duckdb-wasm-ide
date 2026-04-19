@@ -60,6 +60,7 @@ async function initDatabase() {
                 id SERIAL PRIMARY KEY,
                 email VARCHAR(255) UNIQUE NOT NULL,
                 password_hash VARCHAR(255) NOT NULL,
+                is_guest BOOLEAN DEFAULT FALSE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 last_login TIMESTAMP
             )
@@ -137,6 +138,11 @@ async function initDatabase() {
         await dbClient.query(`
             CREATE INDEX IF NOT EXISTS idx_questions_order_index
             ON questions(order_index)
+        `);
+
+        await dbClient.query(`
+            CREATE INDEX IF NOT EXISTS idx_users_is_guest
+            ON users(is_guest) WHERE is_guest = TRUE
         `);
 
         console.log('✅ Indexes created');

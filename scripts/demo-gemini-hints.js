@@ -155,9 +155,10 @@ async function main() {
         await aiPanel.evaluate(el => el.scrollIntoView({ behavior: 'smooth', block: 'center' }));
         await PAUSE(4000); // Let viewer read the hint
 
-        // Collapse AI panel before next demo
+        // Collapse AI panel and wait for Gemini rate limit to reset
         await page.locator('#aiPanelClose').click();
-        await PAUSE(1000);
+        console.log('   Waiting 60s for Gemini rate limit to reset...');
+        await PAUSE(60000);
 
         // =============================================
         // DEMO 2: Syntax Error (1 Gemini API call used)
@@ -191,9 +192,10 @@ async function main() {
         await aiPanel.evaluate(el => el.scrollIntoView({ behavior: 'smooth', block: 'center' }));
         await PAUSE(4000); // Let viewer read the explanation
 
-        // Collapse AI panel before next demo
+        // Collapse AI panel and wait for Gemini rate limit to reset
         await page.locator('#aiPanelClose').click();
-        await PAUSE(1000);
+        console.log('   Waiting 60s for Gemini rate limit to reset...');
+        await PAUSE(60000);
 
         // =============================================
         // DEMO 3: Logical Error (2 Gemini API calls used)

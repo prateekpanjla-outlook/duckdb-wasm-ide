@@ -40,7 +40,7 @@ export class User {
      * Find user by ID
      */
     static async findById(id) {
-        const text = 'SELECT id, email, created_at, last_login FROM users WHERE id = $1';
+        const text = 'SELECT id, email, is_guest, created_at, last_login FROM users WHERE id = $1';
         const result = await query(text, [id]);
         return result.rows[0];
     }
@@ -72,7 +72,7 @@ export class User {
     static async getProfile(id) {
         const text = `
             SELECT
-                id, email, created_at, last_login,
+                id, email, is_guest, created_at, last_login,
                 (SELECT COUNT(*) FROM user_attempts WHERE user_id = users.id) as total_attempts,
                 (SELECT COUNT(*) FROM user_attempts WHERE user_id = users.id AND is_correct = true) as correct_attempts
             FROM users

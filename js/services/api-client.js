@@ -299,6 +299,52 @@ class APIClient {
         });
     }
 
+    // ==================== Guest Methods ====================
+
+    /**
+     * Create guest session — no credentials needed
+     */
+    async guestLogin() {
+        const data = await this.request('/auth/guest', {
+            method: 'POST'
+        });
+
+        if (!data.token || !data.user) {
+            throw new Error('Invalid response from server: missing token or user data');
+        }
+
+        this.setToken(data.token);
+        this.setUser(data.user);
+
+        return data;
+    }
+
+    /**
+     * Upgrade guest account to registered account
+     */
+    async upgradeGuest(email, password) {
+        const data = await this.request('/auth/guest/upgrade', {
+            method: 'POST',
+            body: JSON.stringify({ email, password })
+        });
+
+        if (!data.token || !data.user) {
+            throw new Error('Invalid response from server: missing token or user data');
+        }
+
+        this.setToken(data.token);
+        this.setUser(data.user);
+
+        return data;
+    }
+
+    /**
+     * Check if current user is a guest
+     */
+    isGuest() {
+        return this.user?.isGuest === true || this.user?.is_guest === true;
+    }
+
     // ==================== Utility Methods ====================
 
     /**

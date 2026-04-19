@@ -40,7 +40,11 @@ class App {
             const user = JSON.parse(localStorage.getItem('user_data') || 'null');
 
             if (token && user) {
-                this.authManager.updateUIForLoggedInUser(user);
+                if (user.isGuest || user.is_guest) {
+                    this.authManager.updateUIForGuestUser(user);
+                } else {
+                    this.authManager.updateUIForLoggedInUser(user);
+                }
                 this.showQuestionSelector();
 
                 // DuckDB init is non-blocking — question selector works without it
@@ -141,6 +145,16 @@ class App {
             loginPromptBtn.addEventListener('click', () => {
                 if (this.authManager) {
                     this.authManager.openModal();
+                }
+            });
+        }
+
+        // Set up guest mode button
+        const guestModeBtn = document.getElementById('guestModeBtn');
+        if (guestModeBtn) {
+            guestModeBtn.addEventListener('click', () => {
+                if (this.authManager) {
+                    this.authManager.startAsGuest();
                 }
             });
         }

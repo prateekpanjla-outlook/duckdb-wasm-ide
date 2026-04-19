@@ -570,6 +570,37 @@ table tbody tr.no-data td {
     font-size: 1rem;
 }
 
+/* ==================== Guest Mode ==================== */
+.btn-guest {
+    font-size: 1.1rem;
+    padding: 0.85rem 2rem;
+}
+
+.login-prompt-divider {
+    display: flex;
+    align-items: center;
+    margin: 0.75rem 0;
+    gap: 1rem;
+}
+
+.login-prompt-divider::before,
+.login-prompt-divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid var(--border-color, #ddd);
+}
+
+.login-prompt-divider span {
+    color: #888;
+    font-size: 0.85rem;
+}
+
+.hint-small {
+    font-size: 0.8rem;
+    margin-top: 0.25rem;
+    opacity: 0.7;
+}
+
 /* ==================== Auth Modal ==================== */
 .auth-modal {
     position: fixed;

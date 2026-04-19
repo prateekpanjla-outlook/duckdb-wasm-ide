@@ -49,7 +49,7 @@ jobs:
             --gcs-source-staging-dir=gs://sql-practice-cloudbuild-source/source \
             --gcs-log-dir=gs://sql-practice-cloudbuild-logs/logs
 
-      - name: Smoke test
+      - name: Health check
         run: |
           URL=$(gcloud run services describe ${{ env.SERVICE }} \
             --region=${{ env.REGION }} \

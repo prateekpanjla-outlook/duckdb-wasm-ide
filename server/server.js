@@ -150,9 +150,12 @@ async function ensureTables() {
             id SERIAL PRIMARY KEY,
             email VARCHAR(255) UNIQUE NOT NULL,
             password_hash VARCHAR(255) NOT NULL,
+            is_guest BOOLEAN DEFAULT FALSE,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             last_login TIMESTAMP
         )`);
+        // Migration: add is_guest column to existing deployments
+        await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_guest BOOLEAN DEFAULT FALSE`);
         await client.query(`CREATE TABLE IF NOT EXISTS questions (
             id SERIAL PRIMARY KEY,
             sql_data TEXT NOT NULL,
@@ -196,6 +199,7 @@ async function ensureTables() {
         )`);
         await client.query(`CREATE INDEX IF NOT EXISTS idx_ai_usage_user_id ON ai_usage(user_id)`);
         await client.query(`CREATE INDEX IF NOT EXISTS idx_questions_order_index ON questions(order_index)`);
+        await client.query(`CREATE INDEX IF NOT EXISTS idx_users_is_guest ON users(is_guest) WHERE is_guest = TRUE`);
         console.log('✅ Database tables and indexes ensured');
 
         // Seed questions if table is empty
