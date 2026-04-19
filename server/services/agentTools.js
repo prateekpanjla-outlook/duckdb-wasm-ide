@@ -140,7 +140,29 @@ export async function insert_question(params) {
         category: params.category,
         order_index: params.order_index
     });
-    return { id: question.id, message: `Question ${question.id} inserted successfully` };
+
+    // Tag question with concepts
+    const taggedConcepts = [];
+    if (params.concepts?.length) {
+        for (const c of params.concepts) {
+            const conceptResult = await query(
+                'SELECT id FROM sql_concepts WHERE name = $1', [c.name]
+            );
+            if (conceptResult.rows[0]) {
+                await query(
+                    'INSERT INTO question_concepts (question_id, concept_id, is_intended) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+                    [question.id, conceptResult.rows[0].id, c.is_intended]
+                );
+                taggedConcepts.push(c.name);
+            }
+        }
+    }
+
+    return {
+        id: question.id,
+        message: `Question ${question.id} inserted successfully`,
+        concepts_tagged: taggedConcepts
+    };
 }
 
 /**
