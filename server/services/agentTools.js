@@ -272,6 +272,42 @@ export async function get_coverage_gaps() {
     };
 }
 
+/**
+ * Tool: check_concept_overlap
+ * Given a list of concept names, checks if any already have questions covering them.
+ * Call this after generating a question to warn the admin about overlaps.
+ */
+export async function check_concept_overlap({ concepts }) {
+    const results = [];
+    for (const conceptName of concepts) {
+        const conceptRow = await query('SELECT id FROM sql_concepts WHERE name = $1', [conceptName]);
+        if (!conceptRow.rows[0]) {
+            results.push({ concept: conceptName, status: 'not_in_taxonomy' });
+            continue;
+        }
+        const conceptId = conceptRow.rows[0].id;
+
+        const intended = await query(
+            `SELECT q.id, q.sql_question FROM questions q
+             JOIN question_concepts qc ON q.id = qc.question_id
+             WHERE qc.concept_id = $1 AND qc.is_intended = TRUE`, [conceptId]
+        );
+        const alternative = await query(
+            `SELECT q.id, q.sql_question FROM questions q
+             JOIN question_concepts qc ON q.id = qc.question_id
+             WHERE qc.concept_id = $1 AND qc.is_intended = FALSE`, [conceptId]
+        );
+
+        results.push({
+            concept: conceptName,
+            intended_in: intended.rows.map(r => ({ id: r.id, preview: r.sql_question.substring(0, 60) })),
+            alternative_in: alternative.rows.map(r => ({ id: r.id, preview: r.sql_question.substring(0, 60) })),
+            status: intended.rows.length > 0 ? 'already_covered' : alternative.rows.length > 0 ? 'alternative_only' : 'not_covered'
+        });
+    }
+    return { concepts: results };
+}
+
 // Tool registry — maps tool names to functions
 export const TOOL_FUNCTIONS = {
     list_existing_questions,
@@ -280,5 +316,6 @@ export const TOOL_FUNCTIONS = {
     insert_question,
     generate_test,
     list_concepts,
-    get_coverage_gaps
+    get_coverage_gaps,
+    check_concept_overlap
 };

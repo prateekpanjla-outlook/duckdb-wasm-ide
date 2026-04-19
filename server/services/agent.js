@@ -113,6 +113,21 @@ const TOOL_DECLARATIONS = [
         name: "get_coverage_gaps",
         description: "Get SQL concepts that have ZERO intended questions — these are gaps in the curriculum that need new questions. Use this to suggest what topics to cover next.",
         parameters: { type: "object", properties: {} }
+    },
+    {
+        name: "check_concept_overlap",
+        description: "Check if the concepts used in a generated question already have existing questions covering them. Call this AFTER generating a question and BEFORE presenting the preview, so the admin can see overlaps.",
+        parameters: {
+            type: "object",
+            properties: {
+                concepts: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "List of concept names to check (e.g. ['HAVING', 'GROUP BY'])"
+                }
+            },
+            required: ["concepts"]
+        }
     }
 ];
 
@@ -126,8 +141,9 @@ WORKFLOW:
 3. Generate a complete question targeting the requested concept
 4. Call validate_question to verify the SQL is correct and the solution is distinguishable
 5. If validation fails, fix the issue and re-validate
-6. Present the complete question as a JSON preview for admin approval
-7. Do NOT call insert_question unless the admin explicitly says to insert
+6. Call check_concept_overlap with the concepts your question covers, so the admin can see if any overlap with existing questions
+7. Present the complete question as a JSON preview for admin approval
+8. Do NOT call insert_question unless the admin explicitly says to insert
 
 CONCEPT TAXONOMY:
 The platform maintains a taxonomy of ~35 SQL concepts (e.g. WHERE, GROUP BY, HAVING, INNER JOIN, RANK, CTE).

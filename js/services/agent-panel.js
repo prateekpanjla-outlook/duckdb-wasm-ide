@@ -289,6 +289,8 @@ export class AgentPanel {
                 return `Inserting question: "${this.escapeHtml((input?.sql_question || '').substring(0, 60))}"`;
             case 'generate_test':
                 return `Generating Playwright test for question ${input?.question_id}`;
+            case 'check_concept_overlap':
+                return `Checking overlap for: ${input?.concepts?.map(c => this.escapeHtml(c)).join(', ') || '?'}`;
             default:
                 return `Calling ${tool}...`;
         }
@@ -325,6 +327,15 @@ export class AgentPanel {
                 return `Question <strong>#${result.id}</strong> inserted. Concepts tagged: ${result.concepts_tagged?.map(c => this.escapeHtml(c)).join(', ') || 'none'}`;
             case 'generate_test':
                 return `Test file: <code>${result.filename}</code>`;
+            case 'check_concept_overlap':
+                return (result.concepts || []).map(c => {
+                    const name = this.escapeHtml(c.concept);
+                    if (c.status === 'not_covered') return `<strong>${name}</strong> — not covered yet`;
+                    if (c.status === 'alternative_only') return `<strong>${name}</strong> — alternative in Q${c.alternative_in.map(q => q.id).join(', Q')}`;
+                    if (c.status === 'already_covered') return `<strong>${name}</strong> — already covered in Q${c.intended_in.map(q => q.id).join(', Q')}`;
+                    if (c.status === 'not_in_taxonomy') return `<strong>${name}</strong> — not in taxonomy`;
+                    return `<strong>${name}</strong> — ${c.status}`;
+                }).join('<br>');
             default:
                 return JSON.stringify(result).substring(0, 100);
         }
