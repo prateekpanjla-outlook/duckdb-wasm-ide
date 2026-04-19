@@ -674,6 +674,20 @@ table tbody tr.no-data td {
     border-left: 3px solid #4caf50;
 }
 
+.step-summary {
+    margin-top: 0.4rem;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    color: #333;
+}
+
+.step-summary code {
+    background: rgba(0,0,0,0.06);
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.8rem;
+}
+
 .step-detail {
     display: none;
     margin-top: 0.5rem;

@@ -161,6 +161,7 @@ export class AgentPanel {
             switch (step.type) {
                 case 'tool_call': {
                     stepEl.className = 'agent-step step-tool-call';
+                    const callSummary = this.formatToolCall(step.tool, step.input);
                     stepEl.innerHTML = `
                         <div class="step-tool-header">
                             <span class="step-icon">&#9881;</span>
@@ -168,6 +169,7 @@ export class AgentPanel {
                             <span class="step-latency">${step.latencyMs}ms</span>
                             <span class="step-toggle">&#9660;</span>
                         </div>
+                        <div class="step-summary">${callSummary}</div>
                         <pre class="step-detail">${this.escapeHtml(JSON.stringify(step.input, null, 2))}</pre>
                     `;
                     stepEl.querySelector('.step-tool-header').addEventListener('click', () => {
@@ -177,6 +179,7 @@ export class AgentPanel {
                 }
                 case 'tool_result': {
                     const hasError = step.result?.error;
+                    const resultSummary = this.formatToolResult(step.tool, step.result);
                     stepEl.className = 'agent-step step-tool-result';
                     stepEl.innerHTML = `
                         <div class="step-tool-header">
@@ -184,6 +187,7 @@ export class AgentPanel {
                             <strong>${this.escapeHtml(step.tool)} result</strong>
                             <span class="step-toggle">&#9660;</span>
                         </div>
+                        <div class="step-summary">${resultSummary}</div>
                         <pre class="step-detail">${this.escapeHtml(JSON.stringify(step.result, null, 2))}</pre>
                     `;
                     stepEl.querySelector('.step-tool-header').addEventListener('click', () => {
@@ -266,6 +270,63 @@ export class AgentPanel {
 
         } catch (error) {
             this.addStep('error', `Insert failed: ${error.message}`);
+        }
+    }
+
+    formatToolCall(tool, input) {
+        switch (tool) {
+            case 'list_existing_questions':
+                return 'Checking what questions already exist...';
+            case 'get_coverage_gaps':
+                return 'Looking for SQL concepts with no questions yet...';
+            case 'list_concepts':
+                return 'Loading full concept coverage details...';
+            case 'execute_sql':
+                return `Running SQL: <code>${this.escapeHtml((input?.sql || '').substring(0, 80))}...</code>`;
+            case 'validate_question':
+                return 'Validating generated question (schema + solution + distinguishability)...';
+            case 'insert_question':
+                return `Inserting question: "${this.escapeHtml((input?.sql_question || '').substring(0, 60))}"`;
+            case 'generate_test':
+                return `Generating Playwright test for question ${input?.question_id}`;
+            default:
+                return `Calling ${tool}...`;
+        }
+    }
+
+    formatToolResult(tool, result) {
+        if (result?.error) {
+            return `Error: ${this.escapeHtml(result.error)}`;
+        }
+
+        switch (tool) {
+            case 'list_existing_questions':
+                return `Found <strong>${result.count}</strong> questions. Next order_index: <strong>${result.next_order_index}</strong>. Categories: ${result.questions?.map(q => this.escapeHtml(q.category)).filter((v, i, a) => a.indexOf(v) === i).join(', ') || 'none'}`;
+            case 'get_coverage_gaps': {
+                const gaps = result.gaps_by_category || {};
+                const categories = Object.keys(gaps);
+                const names = categories.flatMap(c => gaps[c].map(g => this.escapeHtml(g.name))).slice(0, 8);
+                return `<strong>${result.total_gaps}</strong> uncovered concepts: ${names.join(', ')}${result.total_gaps > 8 ? '...' : ''}`;
+            }
+            case 'list_concepts':
+                return `<strong>${result.total_concepts}</strong> concepts in taxonomy`;
+            case 'execute_sql':
+                return result.success
+                    ? `${result.command} — ${result.rowCount} row(s)`
+                    : `Failed: ${this.escapeHtml(result.error || 'unknown error')}`;
+            case 'validate_question':
+                return [
+                    result.schema_valid ? 'Schema valid' : 'Schema invalid',
+                    result.rows_inserted ? `${result.rows_inserted} rows inserted` : null,
+                    result.solution_valid ? `Solution returns ${result.solution_rows} rows` : 'Solution invalid',
+                    result.distinguishable ? 'Distinguishable' : 'NOT distinguishable'
+                ].filter(Boolean).join(' · ');
+            case 'insert_question':
+                return `Question <strong>#${result.id}</strong> inserted. Concepts tagged: ${result.concepts_tagged?.map(c => this.escapeHtml(c)).join(', ') || 'none'}`;
+            case 'generate_test':
+                return `Test file: <code>${result.filename}</code>`;
+            default:
+                return JSON.stringify(result).substring(0, 100);
         }
     }
 
