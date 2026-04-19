@@ -220,15 +220,21 @@ ALTER TABLE users ADD COLUMN name VARCHAR(255);
 - Suggest optimizations
 - Identify anti-patterns
 
-#### Smart Hints
-- AI-generated hints
-- Contextual assistance
-- Error explanation
+#### Smart Hints — IMPLEMENTED (2026-04-14)
+- AI-generated hints via Gemini 2.5 Flash
+- Contextual assistance (hint, error explanation, solution explanation)
+- See [gemini-integration.md](./gemini-integration.md)
 
-#### Question Generator
-- AI generates questions from schema
-- Difficulty calibration
-- Unique questions per user
+#### Question Generator — IMPLEMENTED (2026-04-19)
+- Question Authoring Agent via Gemini function calling (7 tools)
+- SQL concept taxonomy with coverage gap detection
+- Human-in-the-loop approval before insertion
+- See [question-authoring-agent.md](./question-authoring-agent.md)
+
+#### Guest Access — IMPLEMENTED (2026-04-19)
+- One-click anonymous access, 24h JWT
+- One-click upgrade to registered account preserving progress
+- See [guest_access.md](./guest_access.md)
 
 ---
 

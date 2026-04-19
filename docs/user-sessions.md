@@ -14,6 +14,14 @@
 > - [js/query-editor.js](../js/query-editor.js) — query history in localStorage
 >
 > **Known limitation:** Concurrent sessions across multiple tabs/browsers have race conditions. See **Vikunja task #32** — "Analyze concurrent session handling: multi-tab, multi-browser, multi-IP" — for the tracked follow-up.
+>
+> **Guest sessions (added 2026-04-19):**
+> - Guest users are real rows in the `users` table with `is_guest=true`
+> - JWT expires in 24h (vs 7d for registered users)
+> - Guest email format: `guest-{uuid}@guest.local`
+> - Progress tracked identically to registered users (same `user_attempts`, `user_sessions` tables)
+> - One-click upgrade to registered account preserves all progress (same user_id, just updates email + password + is_guest=false)
+> - See [guest_access.md](./guest_access.md) for full implementation plan
 
 ---
 

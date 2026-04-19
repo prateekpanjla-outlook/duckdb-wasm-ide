@@ -268,3 +268,99 @@ sequenceDiagram
         Auth->>Auth: Show email in auth button
     end
 ```
+
+## 8. Guest Access Flow
+
+```mermaid
+sequenceDiagram
+    participant U as User/Browser
+    participant Auth as AuthManager
+    participant API as APIClient
+    participant BE as Express Server
+    participant DB as PostgreSQL
+
+    U->>Auth: Click "Start Practicing"
+    Auth->>API: guestLogin()
+    API->>BE: POST /api/auth/guest
+    BE->>DB: INSERT users (is_guest=true, email=guest-{uuid})
+    DB-->>BE: user row
+    BE->>BE: jwt.sign(userId, 24h)
+    BE-->>API: { token, user: { isGuest: true } }
+    API->>API: Store token + user in localStorage
+    Auth->>Auth: Show "Guest" in header
+    Auth->>Auth: Initialize DuckDB + show questions
+```
+
+## 9. Guest Upgrade Flow
+
+```mermaid
+sequenceDiagram
+    participant U as User/Browser
+    participant Auth as AuthManager
+    participant API as APIClient
+    participant BE as Express Server
+    participant DB as PostgreSQL
+
+    U->>Auth: Click "Guest" → "Create Account"
+    Auth->>Auth: Show upgrade form (reuse auth modal)
+    U->>Auth: Enter email + password
+    Auth->>API: upgradeGuest(email, password)
+    API->>BE: POST /api/auth/guest/upgrade
+    BE->>DB: SELECT is_guest WHERE id=userId
+    DB-->>BE: true
+    BE->>DB: SELECT WHERE email=newEmail (check not taken)
+    DB-->>BE: not found
+    BE->>DB: UPDATE users SET email, password_hash, is_guest=false
+    BE->>BE: jwt.sign(userId, 7d)
+    BE-->>API: { token, user: { email } }
+    API->>API: Replace token in localStorage
+    Auth->>Auth: Show email in header (not "Guest")
+    Note over U,DB: All progress preserved (same user_id)
+```
+
+## 10. Question Authoring Agent Flow
+
+```mermaid
+sequenceDiagram
+    participant A as Admin (Browser)
+    participant BE as Express Server
+    participant G as Gemini API
+    participant DB as PostgreSQL
+
+    A->>BE: POST /api/admin/agent (X-Admin-Key)
+    Note over BE: Verify admin key
+
+    BE->>G: generateContent (+ tool declarations)
+    G-->>BE: functionCall: get_coverage_gaps()
+    BE->>DB: SELECT uncovered concepts
+    DB-->>BE: 29 gaps
+    BE->>G: functionResponse (gaps)
+
+    Note over BE: wait 7s (rate limit)
+
+    BE->>G: generateContent (+ history)
+    G-->>BE: functionCall: list_existing_questions()
+    BE->>DB: SELECT all questions
+    DB-->>BE: 7 questions
+    BE->>G: functionResponse (questions)
+
+    Note over BE: wait 7s (rate limit)
+
+    BE->>G: generateContent (+ history)
+    G-->>BE: functionCall: validate_question(sql_data, sql_solution)
+    BE->>DB: BEGIN; CREATE TABLE; INSERT; SELECT; ROLLBACK
+    DB-->>BE: valid, 12 rows
+    BE->>G: functionResponse (validation)
+
+    Note over BE: wait 7s (rate limit)
+
+    BE->>G: generateContent (+ history)
+    G-->>BE: text: JSON preview with concepts
+    BE-->>A: { steps[], history }
+
+    Note over A: Admin reviews preview
+    A->>BE: POST /api/admin/agent/approve
+    BE->>DB: INSERT INTO questions
+    BE->>DB: INSERT INTO question_concepts (tags)
+    BE-->>A: { id: 8, concepts_tagged: ["HAVING"] }
+```

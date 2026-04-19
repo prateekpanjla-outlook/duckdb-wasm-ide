@@ -1,11 +1,13 @@
 # SQL Practice Project — Backend & Frontend Architecture
 
-Current implementation as of 2026-04-06. This document describes what is built and deployed, not aspirational features.
+Current implementation as of 2026-04-19. This document describes what is built and deployed, not aspirational features.
 
-## 1. User Authentication (Email/Password)
+## 1. User Authentication (Email/Password + Guest Access)
 
 - Registration with email and password (min 6 chars, bcrypt hashed)
 - Login returns JWT token (7-day expiry)
+- **Guest access**: one-click start, creates anonymous user with `is_guest=true`, JWT expires in 24h
+- **Guest upgrade**: convert guest to registered account, preserving all progress (same user_id)
 - Token stored in `localStorage`, sent via `Authorization: Bearer` header
 - `authenticate` middleware validates token on protected routes
 
@@ -91,6 +93,8 @@ Backend serves a JSON bundle per question:
 ```
 POST   /api/auth/register              Register with email + password
 POST   /api/auth/login                 Login, returns JWT + user
+POST   /api/auth/guest                 Create anonymous guest user (24h JWT)
+POST   /api/auth/guest/upgrade         Convert guest to registered account
 GET    /api/auth/me                    Get current user info
 POST   /api/auth/logout                Logout (client deletes token)
 
@@ -104,6 +108,12 @@ GET    /api/practice/progress           User progress statistics
 GET    /api/practice/session            Current session state
 POST   /api/practice/session/activate   Activate practice mode
 POST   /api/practice/session/deactivate Deactivate practice mode
+
+POST   /api/ai/hint                    Get AI hint/explanation (Gemini, rate-limited)
+
+POST   /api/admin/agent                Run Question Authoring Agent (X-Admin-Key required)
+POST   /api/admin/agent/approve        Insert approved question + concept tags
+POST   /api/admin/agent/generate-test  Generate Playwright test for a question
 ```
 
 ## 4. Frontend UI Components
@@ -158,6 +168,7 @@ CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
+    is_guest BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_login TIMESTAMP
 );
@@ -193,7 +204,33 @@ CREATE TABLE user_sessions (
 );
 ```
 
-Tables and indexes are created automatically on server startup via `ensureTables()` in `server/server.js`. Questions are seeded from `server/seed/seedData.js` if the table is empty.
+CREATE TABLE ai_usage (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    question_id INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+    type VARCHAR(20) NOT NULL,
+    input_tokens INTEGER DEFAULT 0,
+    output_tokens INTEGER DEFAULT 0,
+    cached BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE sql_concepts (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(50) UNIQUE NOT NULL,
+    category VARCHAR(50) NOT NULL,
+    difficulty VARCHAR(20) DEFAULT 'beginner'
+);
+
+CREATE TABLE question_concepts (
+    question_id INTEGER REFERENCES questions(id) ON DELETE CASCADE,
+    concept_id INTEGER REFERENCES sql_concepts(id) ON DELETE CASCADE,
+    is_intended BOOLEAN DEFAULT TRUE,
+    PRIMARY KEY (question_id, concept_id)
+);
+```
+
+Tables and indexes are created automatically on server startup via `ensureTables()` in `server/server.js`. Questions are seeded from `server/seed/seedData.js` and SQL concepts from `server/seed/seedConcepts.js` if tables are empty.
 
 ## 7. Future Enhancements
 

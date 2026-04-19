@@ -1,6 +1,6 @@
 # Pending Tasks
 
-Tracked in local [Vikunja](https://vikunja.io/) instance (project ID 2). Last updated: 2026-04-09.
+Tracked in local [Vikunja](https://vikunja.io/) instance (project ID 2). Last updated: 2026-04-19.
 
 ## Bug
 
@@ -34,8 +34,17 @@ Tracked in local [Vikunja](https://vikunja.io/) instance (project ID 2). Last up
 | # | Task |
 |---|------|
 | 59 | Add proper progress tracking with visual indicators |
-| 31 | Guest user access — instant start without registration |
+| ~~31~~ | ~~Guest user access — instant start without registration~~ **(DONE 2026-04-19)** |
 | 30 | Add advanced sign-in: Google OAuth, GitHub OAuth, magic links |
+
+## Agentic AI (new 2026-04-19)
+
+| # | Task | Status |
+|---|------|--------|
+| 99 | Question Authoring Agent with Gemini function calling | Deployed, needs full flow testing |
+| 100 | Enable local/VM testing with Gemini API key | Open |
+| 101 | SQL concept taxonomy and per-question tagging | Deployed |
+| 102 | Close concept loop: save tags on question insertion | Deployed |
 
 ## Email Verification (#33 — deferred)
 

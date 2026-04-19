@@ -1,5 +1,7 @@
 # Agentic AI Course — Assignment Analysis
 
+> **Update 2026-04-19:** A Question Authoring Agent has been implemented in this project using Gemini 2.5 Flash function calling. See [question-authoring-agent.md](./question-authoring-agent.md) for the implementation plan. The agent has 7 tools, admin auth, rate limiting, concept taxonomy integration, and human-in-the-loop approval. It is deployed and working on production.
+
 ## Assignment
 > Full-stack agent with a working web UI — backend in Python, frontend in Node.js/React. Agent takes a goal and executes it with at least one tool.
 

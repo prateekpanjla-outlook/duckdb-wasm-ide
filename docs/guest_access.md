@@ -716,6 +716,65 @@ User returns after 24h (token expired)
   └─ User can start new guest session or register
 ```
 
+### Sequence Diagram: Guest Start
+
+```
+Browser                    Express Server              PostgreSQL
+  │                              │                         │
+  │  Click "Start Practicing"    │                         │
+  │──POST /api/auth/guest───────>│                         │
+  │                              │  INSERT INTO users      │
+  │                              │  (is_guest=true)        │
+  │                              │────────────────────────>│
+  │                              │  <── user row ──────────│
+  │                              │                         │
+  │                              │  jwt.sign(userId, 24h)  │
+  │  <── { token, user } ───────│                         │
+  │                              │                         │
+  │  localStorage.set(token)     │                         │
+  │  initializeDuckDB()          │                         │
+  │  showQuestionSelector()      │                         │
+  │                              │                         │
+  │  GET /api/practice/questions─>│                         │
+  │                              │  SELECT * FROM questions│
+  │                              │────────────────────────>│
+  │  <── { questions[] } ────────│  <── rows ──────────────│
+  │                              │                         │
+  │  Render dropdown             │                         │
+```
+
+### Sequence Diagram: Guest Upgrade
+
+```
+Browser                    Express Server              PostgreSQL
+  │                              │                         │
+  │  Click "Create Account"      │                         │
+  │  Enter email + password      │                         │
+  │                              │                         │
+  │──POST /api/auth/guest/upgrade>│                        │
+  │  { email, password }         │                         │
+  │                              │  SELECT is_guest        │
+  │                              │────────────────────────>│
+  │                              │  <── true ──────────────│
+  │                              │                         │
+  │                              │  SELECT by email        │
+  │                              │────────────────────────>│
+  │                              │  <── not found ─────────│
+  │                              │                         │
+  │                              │  UPDATE users SET       │
+  │                              │  email, password_hash,  │
+  │                              │  is_guest=false         │
+  │                              │────────────────────────>│
+  │                              │  <── updated ───────────│
+  │                              │                         │
+  │                              │  jwt.sign(userId, 7d)   │
+  │  <── { token, user } ───────│                         │
+  │                              │                         │
+  │  Header: email (not "Guest") │                         │
+  │  All progress preserved      │                         │
+  │  (same user_id)              │                         │
+```
+
 ---
 
 ## Part 6: Edge Cases & Error Handling

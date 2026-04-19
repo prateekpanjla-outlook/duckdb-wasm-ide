@@ -4,6 +4,10 @@
 **Model:** Gemini 2.5 Flash (server-side, regular POST + client typing animation)
 **Status:** Deployed to Cloud Run
 
+**Two usage modes:**
+1. **AI Hints** (`POST /api/ai/hint`) — Single Gemini call, text generation, typing animation. For students.
+2. **Question Authoring Agent** (`POST /api/admin/agent`) — Multi-step Gemini function calling loop with 7 tools. For admins. See [question-authoring-agent.md](./question-authoring-agent.md).
+
 ## Issues Encountered
 
 | # | Issue | Root Cause | Fix |
