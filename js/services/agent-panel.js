@@ -20,9 +20,7 @@ export class AgentPanel {
                 <div class="agent-key-input">
                     <input type="password" id="adminKeyInput" placeholder="Admin Key" class="form-input">
                 </div>
-                <div id="agentSteps" class="agent-steps">
-                    <div id="agentPreview" class="agent-preview hidden"></div>
-                </div>
+                <div id="agentSteps" class="agent-steps"></div>
                 <div class="agent-input">
                     <input type="text" id="agentPrompt" placeholder='e.g. "Add a question about RANK() window function"' class="form-input">
                     <button id="agentSendBtn" class="btn btn-primary">Send</button>
@@ -230,8 +228,17 @@ export class AgentPanel {
 
     showApprovalButtons() {
         const q = this.pendingQuestion;
-        const previewDiv = document.getElementById('agentPreview');
-        previewDiv.classList.remove('hidden');
+        const stepsContainer = document.getElementById('agentSteps');
+
+        // Remove any existing preview
+        const existing = document.getElementById('agentPreview');
+        if (existing) existing.remove();
+
+        // Create preview as a new element appended to steps
+        const previewDiv = document.createElement('div');
+        previewDiv.id = 'agentPreview';
+        previewDiv.className = 'agent-preview';
+        stepsContainer.appendChild(previewDiv);
 
         // Extract schema (CREATE TABLE lines) and data (INSERT lines) from sql_data
         const lines = (q.sql_data || '').split('\n');
@@ -310,10 +317,13 @@ export class AgentPanel {
             }
         });
 
+        // Scroll preview into view
+        previewDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
         document.getElementById('approveQuestionBtn').addEventListener('click', () => this.approveQuestion());
         document.getElementById('rejectQuestionBtn').addEventListener('click', () => {
             this.pendingQuestion = null;
-            previewDiv.classList.add('hidden');
+            previewDiv.remove();
             document.getElementById('agentPrompt').value = 'Try again with a different approach';
             document.getElementById('agentPrompt').focus();
         });
@@ -338,7 +348,7 @@ export class AgentPanel {
             if (!response.ok) throw new Error(data.error);
 
             this.addStep('success', `Question ${data.id} inserted successfully!`);
-            document.getElementById('agentPreview').classList.add('hidden');
+            document.getElementById('agentPreview')?.remove();
             this.pendingQuestion = null;
 
         } catch (error) {
