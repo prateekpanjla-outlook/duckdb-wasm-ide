@@ -33,18 +33,28 @@ async function main() {
     });
 
     const context = await browser.newContext({
-        viewport: { width: 1920, height: 1080 }
+        viewport: null
     });
 
     const page = await context.newPage();
 
-    // --- Step 1: Load the app ---
-    console.log('Step 1: Loading app...');
+    // --- Step 1: Load the app and login as guest ---
+    console.log('Step 1: Loading app and starting as guest...');
     await page.goto(BASE_URL);
     await page.waitForFunction(() => {
         const overlay = document.getElementById('loadingOverlay');
         return !overlay || !overlay.classList.contains('visible');
     }, { timeout: 60000 });
+    await sleep(1500);
+
+    // Start as guest so the page has full layout
+    await page.click('#guestModeBtn');
+    await page.waitForSelector('.status.connected', { timeout: 150000 });
+    await page.waitForFunction(() => {
+        const dd = document.getElementById('questionDropdown');
+        return dd && dd.options.length > 1;
+    }, { timeout: 30000 });
+    console.log('  → Guest session started, questions loaded');
     await sleep(2000);
 
     // --- Step 2: Open Agent panel ---
@@ -126,9 +136,7 @@ async function main() {
     }, { timeout: 60000 });
     await sleep(2000);
 
-    // Start as guest to see questions
-    await page.click('#guestModeBtn');
-    await page.waitForSelector('.status.connected', { timeout: 150000 });
+    // Wait for questions to reload
     await page.waitForFunction(() => {
         const dd = document.getElementById('questionDropdown');
         return dd && dd.options.length > 1;

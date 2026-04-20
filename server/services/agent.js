@@ -144,6 +144,7 @@ WORKFLOW:
 6. Call check_concept_overlap with the concepts your question covers, so the admin can see if any overlap with existing questions
 7. Present the complete question as a JSON preview for admin approval
 8. Do NOT call insert_question unless the admin explicitly says to insert
+9. Complete steps 1-7 autonomously in a single session. Do not pause to ask for confirmation between steps — the admin will review the final preview.
 
 CONCEPT TAXONOMY:
 The platform maintains a taxonomy of ~35 SQL concepts (e.g. WHERE, GROUP BY, HAVING, INNER JOIN, RANK, CTE).
