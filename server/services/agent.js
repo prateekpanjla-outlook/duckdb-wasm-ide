@@ -244,8 +244,11 @@ export async function runAgent(userPrompt, existingHistory = [], onStep = null) 
 
         const latencyMs = Date.now() - startTime;
 
-        if (!data.candidates?.[0]?.content?.parts) {
-            steps.push({ type: 'error', content: 'No response from Gemini', latencyMs });
+        const finishReason = data.candidates?.[0]?.finishReason;
+        if (!data.candidates?.[0]?.content?.parts?.length) {
+            console.log(`Agent: empty/missing response from Gemini. finishReason=${finishReason}, raw=${JSON.stringify(data).substring(0, 300)}`);
+            steps.push({ type: 'error', content: `Empty response from Gemini (finishReason: ${finishReason || 'unknown'})`, latencyMs });
+            if (onStep) onStep(steps[steps.length - 1]);
             break;
         }
 
@@ -254,7 +257,7 @@ export async function runAgent(userPrompt, existingHistory = [], onStep = null) 
 
         // Check for tool call
         const toolCall = parts.find(p => p.functionCall);
-        const textPart = parts.find(p => p.text);
+        const textPart = parts.find(p => p.text && p.text.trim());
 
         if (toolCall) {
             const { name, args } = toolCall.functionCall;
