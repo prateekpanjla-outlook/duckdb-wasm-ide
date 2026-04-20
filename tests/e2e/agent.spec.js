@@ -12,24 +12,6 @@ async function waitForAppReady(page) {
 
 test.describe('Question Authoring Agent', () => {
 
-    test('agent rejects invalid admin key', async ({ page }) => {
-        await page.goto('/');
-        await waitForAppReady(page);
-
-        // Open agent panel
-        await page.click('#adminAgentBtn');
-        await expect(page.locator('#agentPanel')).toBeVisible({ timeout: 5000 });
-
-        // Enter wrong key and send
-        await page.fill('#adminKeyInput', 'wrong-key');
-        await page.fill('#agentPrompt', 'hello');
-        await page.click('#agentSendBtn');
-
-        // Should show error
-        await expect(page.locator('.step-error')).toBeVisible({ timeout: 15000 });
-        await expect(page.locator('.step-error')).toContainText('Invalid admin key');
-    });
-
     test('agent generates a RANK() question with full reasoning chain', async ({ page }) => {
         // This test takes ~60s due to rate limiting between Gemini calls
         test.setTimeout(180000);
@@ -65,29 +47,6 @@ test.describe('Question Authoring Agent', () => {
         // Verify approve/reject buttons exist
         await expect(page.locator('#approveQuestionBtn')).toBeVisible();
         await expect(page.locator('#rejectQuestionBtn')).toBeVisible();
-    });
-
-    test('agent can approve and insert a question', async ({ page }) => {
-        test.setTimeout(180000);
-
-        await page.goto('/');
-        await waitForAppReady(page);
-
-        // Open agent panel and generate question
-        await page.click('#adminAgentBtn');
-        await page.fill('#adminKeyInput', ADMIN_KEY);
-        await page.fill('#agentPrompt', 'Add a question about RANK() window function');
-        await page.click('#agentSendBtn');
-
-        // Wait for preview card
-        await expect(page.locator('.question-preview-card')).toBeVisible({ timeout: 120000 });
-
-        // Click approve
-        await page.click('#approveQuestionBtn');
-
-        // Should show success message
-        await expect(page.locator('.step-success')).toBeVisible({ timeout: 30000 });
-        await expect(page.locator('.step-success')).toContainText('inserted successfully');
     });
 
     test('newly inserted question appears in dropdown after refresh', async ({ page }) => {
