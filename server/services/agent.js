@@ -200,6 +200,8 @@ export async function runAgent(userPrompt, existingHistory = [], onStep = null) 
     const steps = [];
     let stepCount = 0;
     let lastCallTime = 0;
+    let toolCallsMade = 0;
+    let emptyRetries = 0;
 
     while (stepCount < MAX_STEPS) {
         stepCount++;
@@ -240,7 +242,9 @@ export async function runAgent(userPrompt, existingHistory = [], onStep = null) 
 
             data = await response.json();
         } catch (error) {
-            steps.push({ type: 'error', content: `Gemini call failed: ${error.message}`, latencyMs: Date.now() - startTime });
+            const errStep = { type: 'error', content: `Gemini call failed: ${error.message}`, latencyMs: Date.now() - startTime };
+            steps.push(errStep);
+            if (onStep) onStep(errStep);
             break;
         }
 
@@ -249,8 +253,20 @@ export async function runAgent(userPrompt, existingHistory = [], onStep = null) 
         const finishReason = data.candidates?.[0]?.finishReason;
         if (!data.candidates?.[0]?.content?.parts?.length) {
             console.log(`Agent: empty/missing response from Gemini. finishReason=${finishReason}, raw=${JSON.stringify(data).substring(0, 300)}`);
-            steps.push({ type: 'error', content: `Empty response from Gemini (finishReason: ${finishReason || 'unknown'})`, latencyMs });
-            if (onStep) onStep(steps[steps.length - 1]);
+
+            // Retry empty responses up to 2 times (transient Gemini issues)
+            if (emptyRetries < 2 && stepCount < MAX_STEPS) {
+                emptyRetries++;
+                const retryStep = { type: 'tool_call', tool: 'system', input: { action: `Retrying empty Gemini response (attempt ${emptyRetries}/2, finishReason: ${finishReason || 'unknown'})` }, latencyMs };
+                steps.push(retryStep);
+                if (onStep) onStep(retryStep);
+                console.log(`Agent: retrying empty response (attempt ${emptyRetries}/2)`);
+                continue;
+            }
+
+            const errStep = { type: 'error', content: `Empty response from Gemini after ${emptyRetries} retries (finishReason: ${finishReason || 'unknown'})`, latencyMs };
+            steps.push(errStep);
+            if (onStep) onStep(errStep);
             break;
         }
 
@@ -263,6 +279,7 @@ export async function runAgent(userPrompt, existingHistory = [], onStep = null) 
 
         if (toolCall) {
             const { name, args } = toolCall.functionCall;
+            toolCallsMade++;
 
             const toolCallStep = {
                 type: 'tool_call',
@@ -311,6 +328,21 @@ export async function runAgent(userPrompt, existingHistory = [], onStep = null) 
 
         if (textPart) {
             console.log(`Agent step ${stepCount} TEXT: "${textPart.text.substring(0, 500)}"`);
+
+            // If Gemini returned text without making ANY tool calls, nudge it to use tools
+            if (toolCallsMade === 0 && stepCount < MAX_STEPS) {
+                console.log(`Agent: nudging Gemini to use tools (responded with text on first call)`);
+                const nudgeStep = { type: 'tool_call', tool: 'system', input: { action: 'Retrying — agent skipped tools' }, latencyMs };
+                steps.push(nudgeStep);
+                if (onStep) onStep(nudgeStep);
+
+                messages.push({
+                    role: 'user',
+                    parts: [{ text: 'You MUST use the available tools before responding. Start by calling get_coverage_gaps, then list_existing_questions. Complete the full workflow using tools before giving a text answer.' }]
+                });
+                continue;
+            }
+
             const answerStep = {
                 type: 'answer',
                 content: textPart.text,

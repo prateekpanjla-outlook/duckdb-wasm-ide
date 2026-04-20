@@ -90,7 +90,7 @@ async function main() {
 
     // --- Step 4: Type the prompt slowly ---
     console.log('Step 4: Typing prompt...');
-    const prompt = 'Add a question about RANK() window function';
+    const prompt = 'Add a question about DENSE_RANK() window function';
     await page.click('#agentPrompt');
     for (const char of prompt) {
         await page.keyboard.type(char, { delay: 50 });
