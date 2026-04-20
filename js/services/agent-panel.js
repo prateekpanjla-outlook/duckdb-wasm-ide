@@ -171,6 +171,13 @@ export class AgentPanel {
 
             switch (step.type) {
                 case 'tool_call': {
+                    // System pseudo-steps (retries, nudges) render as plain visible messages
+                    if (step.tool === 'system') {
+                        stepEl.className = 'agent-step step-system';
+                        stepEl.innerHTML = `<span class="step-icon">&#9888;</span> <strong>${this.escapeHtml(step.input?.action || 'System')}</strong>`;
+                        break;
+                    }
+
                     stepEl.className = 'agent-step step-tool-call';
                     const callSummary = this.formatToolCall(step.tool, step.input);
                     stepEl.innerHTML = `

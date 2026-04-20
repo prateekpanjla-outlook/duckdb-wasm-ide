@@ -738,6 +738,13 @@ table tbody tr.no-data td {
     overflow-x: auto;
 }
 
+.step-system {
+    background: #fff3e0;
+    border-left: 3px solid #ff9800;
+    color: #e65100;
+    font-weight: 500;
+}
+
 .step-error {
     background: #ffebee;
     border-left: 3px solid #f44336;

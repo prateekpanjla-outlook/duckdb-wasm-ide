@@ -101,13 +101,13 @@ async function main() {
     console.log('Step 5: Sending prompt — watch the reasoning chain build...');
     await page.click('#agentSendBtn');
 
-    // Wait for first tool call (SSE streaming — may take time due to rate limiting)
-    await page.waitForSelector('.step-tool-call', { timeout: 90000 });
-    console.log('  → First tool call appeared');
+    // Wait for first tool call (SSE streaming — may take time due to rate limiting + retries)
+    await page.waitForSelector('.step-tool-call, .step-system', { timeout: 600000 });
+    console.log('  → First step appeared');
 
-    // Wait for question preview card
+    // Wait for question preview card (up to 10 min — Gemini may retry on 503)
     try {
-        await page.waitForSelector('.question-preview-card', { timeout: 120000 });
+        await page.waitForSelector('.question-preview-card', { timeout: 600000 });
         console.log('  → Question preview appeared');
     } catch {
         console.log('  → Timed out waiting for preview. Check the panel for errors.');
