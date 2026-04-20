@@ -76,59 +76,59 @@ export class AgentPanel {
         stepsContainer.scrollTop = stepsContainer.scrollHeight;
 
         try {
-            await new Promise((resolve, reject) => {
-                const xhr = new XMLHttpRequest();
-                xhr.open('POST', '/api/admin/agent/stream');
-                xhr.setRequestHeader('Content-Type', 'application/json');
-                xhr.setRequestHeader('X-Admin-Key', adminKey);
-
-                let lastIndex = 0;
-                let thinkingRemoved = false;
-
-                xhr.onprogress = () => {
-                    if (!thinkingRemoved) {
-                        thinkingEl.remove();
-                        thinkingRemoved = true;
-                    }
-
-                    const newData = xhr.responseText.substring(lastIndex);
-                    lastIndex = xhr.responseText.length;
-
-                    const events = newData.split('\n\n');
-                    for (const event of events) {
-                        if (!event.startsWith('data: ')) continue;
-                        try {
-                            const step = JSON.parse(event.slice(6));
-                            if (step.type === 'done') {
-                                this.history = step.history;
-                            } else {
-                                this.renderSteps([step]);
-                            }
-                        } catch { /* incomplete JSON, will get it next time */ }
-                    }
-                };
-
-                xhr.onload = () => {
-                    if (!thinkingRemoved) thinkingEl.remove();
-                    if (xhr.status !== 200) {
-                        try {
-                            const err = JSON.parse(xhr.responseText);
-                            this.addStep('error', err.error || 'Agent request failed');
-                        } catch {
-                            this.addStep('error', `Agent request failed (${xhr.status})`);
-                        }
-                    }
-                    resolve();
-                };
-
-                xhr.onerror = () => {
-                    if (!thinkingRemoved) thinkingEl.remove();
-                    this.addStep('error', 'Network error');
-                    reject(new Error('Network error'));
-                };
-
-                xhr.send(JSON.stringify({ prompt, history: this.history }));
+            const response = await fetch('/api/admin/agent/stream', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Admin-Key': adminKey
+                },
+                body: JSON.stringify({ prompt, history: this.history })
             });
+
+            console.log('[SSE] Response status:', response.status, 'ok:', response.ok);
+
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || 'Agent request failed');
+            }
+
+            thinkingEl.remove();
+
+            // Read SSE stream — render each step as it arrives
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let chunkCount = 0;
+
+            console.log('[SSE] Starting to read stream...');
+
+            while (true) {
+                const { done, value } = await reader.read();
+                chunkCount++;
+                console.log(`[SSE] Chunk #${chunkCount}: done=${done}, bytes=${value?.length || 0}`);
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                console.log(`[SSE] Buffer length: ${buffer.length}, content preview: "${buffer.substring(0, 100)}..."`);
+
+                const events = buffer.split('\n\n');
+                buffer = events.pop(); // keep incomplete chunk
+
+                console.log(`[SSE] Parsed ${events.length} events from chunk`);
+
+                for (const event of events) {
+                    if (!event.startsWith('data: ')) continue;
+                    const step = JSON.parse(event.slice(6));
+                    console.log(`[SSE] Step: type=${step.type}, tool=${step.tool || 'n/a'}`);
+
+                    if (step.type === 'done') {
+                        this.history = step.history;
+                    } else {
+                        this.renderSteps([step]);
+                    }
+                }
+            }
+            console.log(`[SSE] Stream complete. Total chunks: ${chunkCount}`);
 
         } catch (error) {
             thinkingEl.remove();

@@ -116,7 +116,9 @@ class App {
                 const statements = q.sql_data.split(';').filter(s => s.trim());
                 for (const stmt of statements) {
                     if (!stmt.trim()) continue;
-                    await this.dbManager.executeQuery(stmt);
+                    // Convert CREATE TABLE to CREATE OR REPLACE TABLE to handle duplicate table names
+                    const safeStmt = stmt.replace(/CREATE\s+TABLE\s+/gi, 'CREATE OR REPLACE TABLE ');
+                    await this.dbManager.executeQuery(safeStmt);
                 }
             }
             console.log(`Loaded practice tables from ${questions.length} questions`);
