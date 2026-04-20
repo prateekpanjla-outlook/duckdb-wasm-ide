@@ -209,6 +209,8 @@ export async function runAgent(userPrompt, existingHistory = [], onStep = null) 
         lastCallTime = Date.now();
         trackDailyUsage();
 
+        console.log(`Agent Gemini call #${stepCount}: sending ${messages.length} messages`);
+
         // Call Gemini
         const startTime = Date.now();
         let data;
@@ -271,7 +273,7 @@ export async function runAgent(userPrompt, existingHistory = [], onStep = null) 
             steps.push(toolCallStep);
             if (onStep) onStep(toolCallStep);
 
-            console.log(`Agent tool call: ${name}(${JSON.stringify(args).substring(0, 100)})`);
+            console.log(`Agent step ${stepCount} CALL: ${name}(${JSON.stringify(args).substring(0, 500)})`);
 
             // Execute the tool
             let toolResult;
@@ -282,6 +284,8 @@ export async function runAgent(userPrompt, existingHistory = [], onStep = null) 
             } catch (error) {
                 toolResult = { error: error.message };
             }
+
+            console.log(`Agent step ${stepCount} RESULT: ${name} → ${JSON.stringify(toolResult).substring(0, 500)}`);
 
             const toolResultStep = {
                 type: 'tool_result',
@@ -306,7 +310,7 @@ export async function runAgent(userPrompt, existingHistory = [], onStep = null) 
         }
 
         if (textPart) {
-            console.log(`Agent text response (step ${stepCount}): "${textPart.text.substring(0, 200)}"`);
+            console.log(`Agent step ${stepCount} TEXT: "${textPart.text.substring(0, 500)}"`);
             const answerStep = {
                 type: 'answer',
                 content: textPart.text,
