@@ -303,6 +303,7 @@ export async function runAgent(userPrompt, existingHistory = [], onStep = null) 
         }
 
         if (textPart) {
+            console.log(`Agent text response (step ${stepCount}): "${textPart.text.substring(0, 200)}"`);
             const answerStep = {
                 type: 'answer',
                 content: textPart.text,
@@ -312,6 +313,12 @@ export async function runAgent(userPrompt, existingHistory = [], onStep = null) 
             if (onStep) onStep(answerStep);
             break;
         }
+
+        // Neither tool call nor text — unexpected
+        console.log(`Agent: unexpected response parts: ${JSON.stringify(parts.map(p => Object.keys(p))).substring(0, 200)}`);
+        steps.push({ type: 'error', content: 'Unexpected Gemini response — no tool call or text', latencyMs });
+        if (onStep) onStep(steps[steps.length - 1]);
+        break;
     }
 
     if (stepCount >= MAX_STEPS) {
