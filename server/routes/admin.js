@@ -72,16 +72,18 @@ router.post('/agent/stream', async (req, res) => {
             return res.status(400).json({ error: 'Prompt is required' });
         }
 
-        // SSE headers
+        // SSE headers — X-Accel-Buffering disables Cloud Run/nginx proxy buffering
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no');
         res.flushHeaders();
 
         console.log(`Agent stream request: "${prompt.substring(0, 100)}"`);
 
         const onStep = (step) => {
             res.write(`data: ${JSON.stringify(step)}\n\n`);
+            if (res.flush) res.flush();
         };
 
         const result = await runAgent(prompt, history || [], onStep);

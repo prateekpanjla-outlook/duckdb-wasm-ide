@@ -38,8 +38,8 @@ async function main() {
 
     const page = await context.newPage();
 
-    // --- Step 1: Load the app and login as guest ---
-    console.log('Step 1: Loading app and starting as guest...');
+    // --- Step 1: Load the app and register a new user ---
+    console.log('Step 1: Loading app and registering...');
     await page.goto(BASE_URL);
     await page.waitForFunction(() => {
         const overlay = document.getElementById('loadingOverlay');
@@ -47,14 +47,25 @@ async function main() {
     }, { timeout: 60000 });
     await sleep(1500);
 
-    // Start as guest so the page has full layout
-    await page.click('#guestModeBtn');
+    // Open auth modal and switch to register
+    await page.click('#loginPromptBtn');
+    await page.waitForSelector('#authModal.visible', { timeout: 5000 });
+    await page.click('#authToggleBtn');
+    await sleep(500);
+
+    // Fill in credentials and submit
+    const email = `demo_${Date.now()}@test.com`;
+    await page.fill('#authEmail', email);
+    await page.fill('#authPassword', 'demo1234');
+    await page.click('.auth-submit-btn');
+
+    // Wait for login to complete and DuckDB to connect
     await page.waitForSelector('.status.connected', { timeout: 150000 });
     await page.waitForFunction(() => {
         const dd = document.getElementById('questionDropdown');
         return dd && dd.options.length > 1;
     }, { timeout: 30000 });
-    console.log('  → Guest session started, questions loaded');
+    console.log(`  → Registered as ${email}, questions loaded`);
     await sleep(2000);
 
     // --- Step 2: Open Agent panel ---
@@ -80,8 +91,8 @@ async function main() {
     console.log('Step 5: Sending prompt — watch the reasoning chain build...');
     await page.click('#agentSendBtn');
 
-    // Wait for first tool call (SSE streaming)
-    await page.waitForSelector('.step-tool-call', { timeout: 30000 });
+    // Wait for first tool call (SSE streaming — may take time due to rate limiting)
+    await page.waitForSelector('.step-tool-call', { timeout: 90000 });
     console.log('  → First tool call appeared');
 
     // Wait for question preview card
