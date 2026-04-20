@@ -213,40 +213,72 @@ export async function runAgent(userPrompt, existingHistory = [], onStep = null) 
 
         console.log(`Agent Gemini call #${stepCount}: sending ${messages.length} messages`);
 
-        // Call Gemini
+        // Call Gemini with retry on 503/429 (backoff: 1m, 5m, 10m, 20m, 1h, then cancel)
+        const RETRY_DELAYS_MS = [60000, 300000, 600000, 1200000, 3600000];
         const startTime = Date.now();
         let data;
-        try {
-            const response = await fetch(
-                `${GEMINI_BASE_URL}/${MODEL}:generateContent?key=${API_KEY}`,
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: messages,
-                        tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
-                        toolConfig: { functionCallingConfig: { mode: 'AUTO' } },
-                        generationConfig: {
-                            temperature: 0.3,
-                            maxOutputTokens: 4096
-                        }
-                    }),
-                    signal: AbortSignal.timeout(30000)
+        let retryAttempt = 0;
+
+        while (true) {
+            try {
+                const response = await fetch(
+                    `${GEMINI_BASE_URL}/${MODEL}:generateContent?key=${API_KEY}`,
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: messages,
+                            tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
+                            toolConfig: { functionCallingConfig: { mode: 'AUTO' } },
+                            generationConfig: {
+                                temperature: 0.3,
+                                maxOutputTokens: 4096
+                            }
+                        }),
+                        signal: AbortSignal.timeout(30000)
+                    }
+                );
+
+                if (!response.ok) {
+                    const errText = await response.text();
+                    const status = response.status;
+
+                    // Retry on 503 (overloaded) and 429 (rate limited)
+                    if ((status === 503 || status === 429) && retryAttempt < RETRY_DELAYS_MS.length) {
+                        const delayMs = RETRY_DELAYS_MS[retryAttempt];
+                        const delayLabel = delayMs >= 60000 ? `${delayMs / 60000}m` : `${delayMs / 1000}s`;
+                        retryAttempt++;
+
+                        const retryStep = {
+                            type: 'tool_call',
+                            tool: 'system',
+                            input: { action: `Gemini ${status} — retrying in ${delayLabel} (attempt ${retryAttempt}/${RETRY_DELAYS_MS.length})` },
+                            latencyMs: Date.now() - startTime
+                        };
+                        steps.push(retryStep);
+                        if (onStep) onStep(retryStep);
+                        console.log(`Agent: Gemini ${status}, retrying in ${delayLabel} (attempt ${retryAttempt})`);
+
+                        await new Promise(resolve => setTimeout(resolve, delayMs));
+                        continue;
+                    }
+
+                    throw new Error(`Gemini API ${status}: ${errText.substring(0, 200)}`);
                 }
-            );
 
-            if (!response.ok) {
-                const errText = await response.text();
-                throw new Error(`Gemini API ${response.status}: ${errText.substring(0, 200)}`);
+                data = await response.json();
+                break; // success — exit retry loop
+            } catch (error) {
+                // If we've been retrying and still failing, or it's a non-retryable error
+                const errStep = { type: 'error', content: `Gemini call failed: ${error.message}`, latencyMs: Date.now() - startTime };
+                steps.push(errStep);
+                if (onStep) onStep(errStep);
+                break;
             }
-
-            data = await response.json();
-        } catch (error) {
-            const errStep = { type: 'error', content: `Gemini call failed: ${error.message}`, latencyMs: Date.now() - startTime };
-            steps.push(errStep);
-            if (onStep) onStep(errStep);
-            break;
         }
+
+        // If fetch loop ended without data, break outer agent loop
+        if (!data) break;
 
         const latencyMs = Date.now() - startTime;
 
