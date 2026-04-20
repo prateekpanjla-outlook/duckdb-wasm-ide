@@ -70,7 +70,17 @@ async function main() {
 
     // --- Step 2: Open Agent panel ---
     console.log('Step 2: Opening Agent panel...');
+    // Highlight the Agent button
+    await page.evaluate(() => {
+        const btn = document.getElementById('adminAgentBtn');
+        btn.style.outline = '3px solid red';
+        btn.style.outlineOffset = '3px';
+    });
+    await sleep(2000);
     await page.click('#adminAgentBtn');
+    await page.evaluate(() => {
+        document.getElementById('adminAgentBtn').style.outline = '';
+    });
     await sleep(1500);
 
     // --- Step 3: Enter admin key ---
@@ -130,6 +140,12 @@ async function main() {
     if (await approveBtn.isVisible()) {
         await approveBtn.scrollIntoViewIfNeeded();
         await sleep(1000);
+        // Highlight the approve button
+        await approveBtn.evaluate(el => {
+            el.style.outline = '3px solid red';
+            el.style.outlineOffset = '3px';
+        });
+        await sleep(2000);
         await approveBtn.click();
         await sleep(3000);
         console.log('  → Question approved!');

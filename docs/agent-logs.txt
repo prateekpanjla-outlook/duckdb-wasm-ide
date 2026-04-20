@@ -1,16 +1,26 @@
-2026-04-19 11:34:17 GET 200 https://duckdb-ide-frxi6yk4jq-uc.a.run.app/js/services/agent-panel.js
-2026-04-19 11:34:49 POST 200 https://duckdb-ide-frxi6yk4jq-uc.a.run.app/api/admin/agent
-2026-04-19 11:34:49 Agent request: "hello"
-2026-04-19 11:34:50 Agent completed: 1 steps, 1 Gemini calls, daily usage: 3/250
-2026-04-19 11:36:04 POST 200 https://duckdb-ide-frxi6yk4jq-uc.a.run.app/api/admin/agent
-2026-04-19 11:36:04 Agent request: "add a question about having in sql"
-2026-04-19 11:36:05 Agent tool call: list_existing_questions({})
-2026-04-19 11:36:05 Agent: rate limit wait 5848ms
-2026-04-19 11:36:17 Agent tool call: validate_question({"sql_data":"\nCREATE TABLE Orders (\n    order_id INTEGER PRIMARY KEY,\n    customer_id INTEGER,\n )
-2026-04-19 11:36:17 Agent: rate limit wait 861ms
-2026-04-19 11:36:21 Agent completed: 5 steps, 3 Gemini calls, daily usage: 6/250
-2026-04-19 12:56:36 POST 200 https://duckdb-ide-frxi6yk4jq-uc.a.run.app/api/admin/agent
-2026-04-19 12:56:36 Agent request: "Show me coverage gaps"
-2026-04-19 12:56:37 Agent tool call: get_coverage_gaps({})
-2026-04-19 12:56:37 Agent: rate limit wait 5995ms
-2026-04-19 12:56:45 Agent completed: 3 steps, 2 Gemini calls, daily usage: 2/250
+2026-04-20 11:01:00     '                MAX(completed_at) as last_attempt\n' +
+2026-04-20 11:01:20 POST 200 https://duckdb-ide-frxi6yk4jq-uc.a.run.app/api/admin/agent/stream
+2026-04-20 11:01:20 Agent stream request: "add a question about rank window function"
+2026-04-20 11:01:23 Agent completed: 1 steps, 1 Gemini calls, daily usage: 2/250
+2026-04-20 11:16:18     '                BOOL_OR(is_correct) as completed,\n' +
+2026-04-20 11:16:18     '                MAX(completed_at) as last_attempt\n' +
+2026-04-20 11:28:07 GET 200 https://duckdb-ide-frxi6yk4jq-uc.a.run.app/js/services/agent-panel.js
+2026-04-20 11:28:12 GET 200 https://duckdb-ide-frxi6yk4jq-uc.a.run.app/node_modules/apache-arrow/io/stream.mjs
+2026-04-20 11:28:21     '                BOOL_OR(is_correct) as completed,\n' +
+2026-04-20 11:28:21     '                MAX(completed_at) as last_attempt\n' +
+2026-04-20 11:28:30 POST 200 https://duckdb-ide-frxi6yk4jq-uc.a.run.app/api/admin/agent/stream
+2026-04-20 11:28:30 Agent stream request: "Add a question about RANK() window function"
+2026-04-20 11:28:31 Agent tool call: get_coverage_gaps({})
+2026-04-20 11:28:31 Agent: rate limit wait 5552ms
+2026-04-20 11:28:38 Agent tool call: list_existing_questions({})
+2026-04-20 11:28:38 Agent: rate limit wait 5653ms
+2026-04-20 11:28:49 Agent tool call: validate_question({"sql_data":"\nCREATE TABLE student_scores_rank (\n    student_id INTEGER,\n    student_name VARCHAR)
+2026-04-20 11:28:49 Agent: rate limit wait 1961ms
+2026-04-20 11:28:52 Agent tool call: check_concept_overlap({"concepts":["RANK","PARTITION BY","ORDER BY"]})
+2026-04-20 11:28:52 Agent: rate limit wait 6078ms
+2026-04-20 11:29:06 Agent text response (step 5): "```json
+2026-04-20 11:29:06 Agent completed: 9 steps, 5 Gemini calls, daily usage: 5/250
+2026-04-20 11:29:25 POST 200 https://duckdb-ide-frxi6yk4jq-uc.a.run.app/api/admin/agent/approve
+2026-04-20 11:29:25 Agent: question approved and inserted, id=10
+2026-04-20 11:29:31     '                BOOL_OR(is_correct) as completed,\n' +
+2026-04-20 11:29:31     '                MAX(completed_at) as last_attempt\n' +
