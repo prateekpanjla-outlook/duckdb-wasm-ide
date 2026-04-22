@@ -24,6 +24,8 @@ End-to-end tests for the SQL Practice Platform using Playwright.
 | File | Purpose | Config |
 |------|---------|--------|
 | [tests/e2e/app.spec.js](../tests/e2e/app.spec.js) | Local E2E: auth flow, question selector, DuckDB query execution | `playwright.config.js` |
+| [tests/e2e/guest.spec.js](../tests/e2e/guest.spec.js) | Guest access: landing page, guest session, upgrade, logout | `playwright.config.js` |
+| [tests/e2e/agent.spec.js](../tests/e2e/agent.spec.js) | Admin agent: reasoning chain generation, question insertion | `playwright.config.js` |
 | [tests/e2e/cloud.spec.js](../tests/e2e/cloud.spec.js) | Smoke tests against Cloud Run deployment | `playwright.cloud.config.js` |
 
 ## Running Tests

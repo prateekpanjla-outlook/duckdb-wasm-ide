@@ -1,6 +1,6 @@
 # Pending Tasks
 
-Tracked in local [Vikunja](https://vikunja.io/) instance (project ID 2). Last updated: 2026-04-19.
+Tracked in local [Vikunja](https://vikunja.io/) instance (project ID 2). Last updated: 2026-04-22.
 
 ## Bug
 
@@ -12,11 +12,9 @@ Tracked in local [Vikunja](https://vikunja.io/) instance (project ID 2). Last up
 
 | # | Task | Status |
 |---|------|--------|
-| 90 | Establish CI/CD pipeline and release strategy | Deploy workflow live, CI deferred |
 | 91 | Use PostgreSQL schemas for Blue/Green database isolation | Design complete |
 | 92 | Establish versioning and release tagging strategy | Analysis done |
 | 93 | Environment-specific Terraform deployments (dev/test/prod) | Depends on #91 |
-| 94 | Workload Identity Federation for Terraform and CI/CD | WIF pool + provider done |
 | 95 | Enable branch protection on main — require PR with passing CI | Deferred — needs staging (#93) |
 | 96 | Production switch strategy — data sync at Blue/Green cutover | Brief clone approach recommended |
 
@@ -34,17 +32,23 @@ Tracked in local [Vikunja](https://vikunja.io/) instance (project ID 2). Last up
 | # | Task |
 |---|------|
 | 59 | Add proper progress tracking with visual indicators |
-| ~~31~~ | ~~Guest user access — instant start without registration~~ **(DONE 2026-04-19)** |
 | 30 | Add advanced sign-in: Google OAuth, GitHub OAuth, magic links |
 
-## Agentic AI (new 2026-04-19)
+## Agentic AI
 
 | # | Task | Status |
 |---|------|--------|
-| 99 | Question Authoring Agent with Gemini function calling | Deployed, needs full flow testing |
 | 100 | Enable local/VM testing with Gemini API key | Open |
-| 101 | SQL concept taxonomy and per-question tagging | Deployed |
-| 102 | Close concept loop: save tags on question insertion | Deployed |
+
+### Completed (2026-04-19 to 2026-04-20)
+- ~~#31~~ Guest user access (done 2026-04-19)
+- ~~#97~~ Gemini Flash 2.5 AI hints integration (done 2026-04-19)
+- ~~#99~~ Question Authoring Agent — 8 tools, SSE streaming, exponential backoff (done 2026-04-20)
+- ~~#101~~ SQL concept taxonomy — 38 concepts, coverage gap detection (done 2026-04-20)
+- ~~#102~~ Close concept loop: save tags on question insertion (done 2026-04-19)
+- ~~#90~~ CI/CD pipeline — GitHub Actions deploy workflow live (done)
+- ~~#94~~ Workload Identity Federation for CI/CD (done)
+- ~~#42~~ Replace DuckDB with SQL.js — closed as not planned (conflicts with window functions taxonomy)
 
 ## Email Verification (#33 — deferred)
 
@@ -79,5 +83,4 @@ Tracked in local [Vikunja](https://vikunja.io/) instance (project ID 2). Last up
 
 | # | Task |
 |---|------|
-| 42 | Replace DuckDB WASM with SQL.js for broader browser support |
 | 67 | Understand git bundle (learning) |

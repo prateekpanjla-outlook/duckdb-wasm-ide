@@ -1,6 +1,6 @@
 # Task Cross-Reference: Vikunja ↔ GitHub Issues
 
-Generated 2026-04-13. Maps Vikunja task IDs to GitHub Issue numbers after the migration.
+Generated 2026-04-13, updated 2026-04-22. Maps Vikunja task IDs to GitHub Issue numbers after the migration.
 
 ## Migrated tasks (Vikunja → GitHub Issues)
 
@@ -8,10 +8,10 @@ Generated 2026-04-13. Maps Vikunja task IDs to GitHub Issue numbers after the mi
 |-----------|--------------|----------|--------|
 | 14 | Add ESLint/Prettier config | 2 | Open |
 | 30 | Add advanced sign-in: Google OAuth, GitHub OAuth, magic links | 3 | Open |
-| 31 | Guest user access — instant start without registration | 4 | **Closed** (2026-04-19) |
+| 31 | Guest user access — instant start without registration | 4 | **Closed** (2026-04-22) |
 | 32 | Analyze concurrent session handling: multi-tab, multi-browser, multi-IP | 5 | Open |
 | 33 | Add email verification on new account signup | 6 | Open |
-| 42 | Replace DuckDB WASM with SQL.js for broader browser support | 7 | Open |
+| 42 | Replace DuckDB WASM with SQL.js for broader browser support | 7 | **Closed** — not planned (conflicts with window functions taxonomy) |
 | 47 | Analyze whether Clear History button is needed | 8 | Open |
 | — | Analyze cloud to local Postgres sync strategy for debugging | 9 | Open |
 | — | Add proper progress tracking with visual indicators | 10 | Open |
@@ -30,14 +30,14 @@ Generated 2026-04-13. Maps Vikunja task IDs to GitHub Issue numbers after the mi
 | — | Bug: Submit Code without Run doesn't show results | 23 | Open |
 | — | Analyze stale UI after deployment — push refresh to clients | 24 | Open |
 | — | Analyze: Terraform provisioning secrets from scratch | 25 | Open |
-| — | Establish CI/CD pipeline and release strategy | 26 | Closed |
+| — | Establish CI/CD pipeline and release strategy | 26 | **Closed** |
 | — | Use PostgreSQL schemas for Blue/Green database isolation | 27 | Open |
 | — | Establish versioning and release tagging strategy | 28 | Open |
 | — | Environment-specific Terraform deployments (dev/test/prod) | 29 | Open |
-| — | Use Workload Identity Federation for Terraform and CI/CD | 30 | Closed |
+| — | Use Workload Identity Federation for Terraform and CI/CD | 30 | **Closed** |
 | — | Enable branch protection on main | 31 | Open |
 | — | Production switch strategy — data sync at Blue/Green cutover | 32 | Open |
-| — | Integrate Gemini Flash 2 for AI-powered SQL hints | 33 | Open |
+| — | Integrate Gemini Flash 2 for AI-powered SQL hints | 33 | **Closed** (deployed 2026-04-14) |
 
 ## Vikunja-only tasks (completed, not migrated)
 
@@ -100,21 +100,26 @@ These tasks were created directly in GitHub Issues and have no Vikunja equivalen
 | 22-29 | Infrastructure & CI/CD tasks | Created during Terraform/deploy work |
 | 30 | WIF for Terraform and CI/CD | Created for #94 equivalent work |
 | 31-32 | Branch protection, Blue/Green | Created during CI/CD planning |
-| 33 | Gemini AI integration | Created 2026-04-12 |
+| 33 | Gemini AI integration | **Closed** (deployed 2026-04-14) |
 | 34 | Learn GitHub Actions internals | Created 2026-04-14 |
-| 35 | Question Authoring Agent with Gemini function calling | Created 2026-04-19 |
-| 36 | Enable local/VM testing with Gemini API key | Created 2026-04-19 |
-| 37 | SQL concept taxonomy and per-question tagging | Created 2026-04-19 |
-| 38 | Close concept loop: save tags on insertion | Created 2026-04-19 |
+| 35 | Question Authoring Agent with Gemini function calling | **Closed** (deployed 2026-04-20) |
+| 36 | Enable local/VM testing with Gemini API key | Open |
+| 37 | SQL concept taxonomy and per-question tagging | **Closed** (deployed 2026-04-20) |
+| 38 | Close concept loop: save tags on insertion | Closed |
+| 39 | Fix Gemini response truncation: cap thinking tokens | Open |
+| 40 | QA Agent improvements: formatting, transparency | Open |
+| 41 | Session 5: Agent upgrades — ReACT labels | Open |
+| 42 | Agent sometimes stops mid-workflow | Open |
 
 ## Vikunja tasks created 2026-04-19
 
 | Vikunja # | Title | GitHub # | Status |
 |-----------|-------|----------|--------|
-| 99 | Question Authoring Agent with Gemini function calling | 35 | Deployed |
+| 97 | Gemini Flash 2.5 AI hints integration | 33 | **Closed** (2026-04-14) |
+| 99 | Question Authoring Agent with Gemini function calling | 35 | **Closed** (2026-04-20) |
 | 100 | Enable local/VM testing with Gemini API key | 36 | Open |
-| 101 | SQL concept taxonomy and per-question tagging | 37 | Deployed |
-| 102 | Close concept loop: save tags on insertion | 38 | Deployed |
+| 101 | SQL concept taxonomy and per-question tagging | 37 | **Closed** (2026-04-20) |
+| 102 | Close concept loop: save tags on insertion | 38 | **Closed** |
 
 ## Notes
 

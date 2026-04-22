@@ -95,10 +95,10 @@ graph TB
     AIRoute --> Cache
     Cache -->|miss| PromptBuilder
     PromptBuilder --> GeminiClient
-    GeminiClient --> Gemini
-    Gemini -->|stream chunks| GeminiClient
-    GeminiClient -->|SSE| APIClient
-    APIClient --> AIPanel
+    GeminiClient -->|POST| Gemini
+    Gemini -->|JSON response| GeminiClient
+    GeminiClient -->|JSON| APIClient
+    APIClient -->|typing animation| AIPanel
     AIRoute -->|record usage| UsageTracker
     UsageTracker --> CloudSQL
 ```
@@ -192,7 +192,7 @@ Server fetches context from DB — does NOT trust client-sent schema (prevents p
     }]
   },
   "generationConfig": {
-    "maxOutputTokens": 200,
+    "maxOutputTokens": 500,
     "temperature": 0.7
   }
 }
