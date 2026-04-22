@@ -21,6 +21,35 @@ Get AI-powered help while practicing SQL — powered by Gemini 2.5 Flash (server
 - **Explain This Error** — explains DuckDB syntax errors in plain language
 - **Explain What's Wrong** — analyzes why your query returns incorrect results
 
+### Question Authoring Agent (Gemini 2.5 Flash)
+[![Agent demo](https://img.youtube.com/vi/RPB8i3xnakU/maxresdefault.jpg)](https://youtu.be/RPB8i3xnakU)
+
+[Watch on YouTube](https://youtu.be/RPB8i3xnakU)
+
+With limited questions on the platform, I built an AI agent that generates, validates, and inserts new SQL practice questions autonomously.
+
+**How it works:** The platform maintains a concept taxonomy of 38 SQL concepts (WHERE, JOIN, RANK, CTE, etc.). Each question is tagged with which concepts it covers (intended vs alternative solutions). When the admin asks "Add a question about DENSE_RANK()", the agent:
+
+1. Checks the concept map to see if DENSE_RANK is already covered (for the admin's information — it generates regardless)
+2. Generates the question, schema, sample data, and solution
+3. Validates the SQL (syntax, distinguishability from SELECT *, table name collisions)
+4. Presents a structured preview for human approval
+5. On approval, inserts the question into the database — it immediately appears in the question list
+
+The agent uses 7 custom tools, each solving a specific failure mode:
+
+| Tool | Why |
+|------|-----|
+| `get_coverage_gaps` | Agent knows what's missing — generates questions that fill gaps, not repeat existing topics |
+| `list_existing_questions` | Prevents table name collisions (DuckDB crashes if two questions use the same table name in the browser). Sends existing table names to Gemini to avoid reuse |
+| `validate_question` | Catches SQL syntax errors + verifies solution is distinguishable from SELECT * — before human reviews |
+| `check_concept_overlap` | Shows admin which concepts are already covered — informed approve/reject decision |
+| `list_concepts` | Full coverage picture so agent picks correct difficulty and category |
+| `execute_sql` | Agent can test individual SQL statements during generation |
+| `insert_question` | Only callable after human approval — human-in-the-loop gate |
+
+The reasoning chain streams in real-time via SSE — each tool call, result, and retry is visible in the admin panel. Gemini 503 errors trigger exponential backoff (1m, 5m, 10m, 20m, 1h) with visible retry steps.
+
 ## How It Works
 
 1. **Start as guest** (instant, no signup) or **register** with email and password
@@ -132,6 +161,7 @@ Project: `sql-practice-project-489106` | Run cost: ~$9/month (Cloud SQL db-f1-mi
 | [docs/pending_tasks.md](docs/pending_tasks.md) | Full list of open work items |
 | [GCP_DEPLOYMENT.md](GCP_DEPLOYMENT.md) | GCP deployment architecture |
 | [docs/gemini-integration.md](docs/gemini-integration.md) | Gemini AI integration: architecture, prompts, issues, fine-tuning analysis |
+| [docs/question-authoring-agent.md](docs/question-authoring-agent.md) | Question Authoring Agent: 7 tools, SSE streaming, concept taxonomy |
 | [docs/terraform-learnings.md](docs/terraform-learnings.md) | Terraform/GCP gotchas and fixes (11 items) |
 | [infra/terraform/](infra/terraform/) | Terraform IaC — all GCP resources (35 managed) |
 
