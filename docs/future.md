@@ -226,7 +226,7 @@ ALTER TABLE users ADD COLUMN name VARCHAR(255);
 - See [gemini-integration.md](./gemini-integration.md)
 
 #### Question Generator — IMPLEMENTED (2026-04-19)
-- Question Authoring Agent via Gemini function calling (7 tools)
+- Question Authoring Agent via Gemini function calling (8 tools)
 - SQL concept taxonomy with coverage gap detection
 - Human-in-the-loop approval before insertion
 - See [question-authoring-agent.md](./question-authoring-agent.md)
