@@ -6,29 +6,36 @@ A browser-based SQL learning platform. Practice SQL against real data — querie
 
 ## Demo
 
-### App Walkthrough
-[![Watch the demo](https://img.youtube.com/vi/cG_GHg43-8c/maxresdefault.jpg)](https://youtu.be/cG_GHg43-8c)
+| Feature | Video |
+|---------|-------|
+| App Walkthrough | [![Watch](https://img.youtube.com/vi/cG_GHg43-8c/mqdefault.jpg)](https://youtu.be/cG_GHg43-8c) |
+| AI-Powered SQL Hints | [![Watch](https://img.youtube.com/vi/DbzvDvRmXlY/mqdefault.jpg)](https://youtu.be/DbzvDvRmXlY) |
+| Question Authoring Agent | [![Watch](https://img.youtube.com/vi/RPB8i3xnakU/mqdefault.jpg)](https://youtu.be/RPB8i3xnakU) |
 
-[Watch on YouTube](https://youtu.be/cG_GHg43-8c)
+## How It Works
 
-### AI-Powered SQL Hints (Gemini 2.5 Flash)
-[![AI Hints demo](https://img.youtube.com/vi/DbzvDvRmXlY/maxresdefault.jpg)](https://youtu.be/DbzvDvRmXlY)
+1. **Start as guest** (instant, no signup) or **register** with email and password
+2. **Select a question** from the dropdown — each comes with preloaded data tables
+3. **Write SQL** in the editor (CodeMirror with syntax highlighting, `Ctrl+Enter` to run, `Ctrl+Space` for autocomplete)
+4. **Submit** — your query runs in-browser and results are compared to the expected output (order-independent)
+5. **Ask for AI help** — click Get Hint, Explain Error, or Explain What's Wrong for Gemini-powered guidance
 
-[Watch on YouTube](https://youtu.be/DbzvDvRmXlY)
+## Features
 
-Get AI-powered help while practicing SQL — powered by Gemini 2.5 Flash (server-side, no API key exposed to the browser):
+### AI-Powered SQL Hints
+
+Get help while practicing — powered by Gemini 2.5 Flash (server-side, no API key exposed to the browser):
 - **Get Hint** — nudges you in the right direction without revealing the answer
 - **Explain This Error** — explains DuckDB syntax errors in plain language
 - **Explain What's Wrong** — analyzes why your query returns incorrect results
 
-### Question Authoring Agent (Gemini 2.5 Flash)
-[![Agent demo](https://img.youtube.com/vi/RPB8i3xnakU/maxresdefault.jpg)](https://youtu.be/RPB8i3xnakU)
-
-[Watch on YouTube](https://youtu.be/RPB8i3xnakU)
+### Question Authoring Agent
 
 With limited questions on the platform, I built an AI agent that generates, validates, and inserts new SQL practice questions autonomously.
 
-**How it works:** The platform maintains a concept taxonomy of 38 SQL concepts (WHERE, JOIN, RANK, CTE, etc.). Each question is tagged with which concepts it covers (intended vs alternative solutions). When the admin asks "Add a question about DENSE_RANK()", the agent:
+The platform maintains a concept taxonomy of 38 SQL concepts (WHERE, JOIN, RANK, CTE, etc.). Each question is tagged with which concepts it covers (intended vs alternative solutions). Without a taxonomy, the agent would generate random questions. With it, the agent checks what's missing and fills curriculum gaps.
+
+When the admin asks "Add a question about DENSE_RANK()", the agent:
 
 1. Checks the concept map to see if DENSE_RANK is already covered (for the admin's information — it generates regardless)
 2. Generates the question, schema, sample data, and solution
@@ -49,14 +56,6 @@ The agent uses 7 custom tools, each solving a specific failure mode:
 | `insert_question` | Only callable after human approval — human-in-the-loop gate |
 
 The reasoning chain streams in real-time via SSE — each tool call, result, and retry is visible in the admin panel. Gemini 503 errors trigger exponential backoff (1m, 5m, 10m, 20m, 1h) with visible retry steps.
-
-## How It Works
-
-1. **Start as guest** (instant, no signup) or **register** with email and password
-2. **Select a question** from the dropdown — each comes with preloaded data tables
-3. **Write SQL** in the editor (CodeMirror with syntax highlighting, `Ctrl+Enter` to run, `Ctrl+Space` for autocomplete)
-4. **Submit** — your query runs in-browser and results are compared to the expected output (order-independent)
-5. **Ask for AI help** — click Get Hint, Explain Error, or Explain What's Wrong for Gemini-powered guidance
 
 ## Architecture
 
@@ -161,7 +160,7 @@ Project: `sql-practice-project-489106` | Run cost: ~$9/month (Cloud SQL db-f1-mi
 | [docs/pending_tasks.md](docs/pending_tasks.md) | Full list of open work items |
 | [GCP_DEPLOYMENT.md](GCP_DEPLOYMENT.md) | GCP deployment architecture |
 | [docs/gemini-integration.md](docs/gemini-integration.md) | Gemini AI integration: architecture, prompts, issues, fine-tuning analysis |
-| [docs/question-authoring-agent.md](docs/question-authoring-agent.md) | Question Authoring Agent: 7 tools, SSE streaming, concept taxonomy |
+| [docs/question-authoring-agent.md](docs/question-authoring-agent.md) | Question Authoring Agent: tools, SSE streaming, concept taxonomy |
 | [docs/terraform-learnings.md](docs/terraform-learnings.md) | Terraform/GCP gotchas and fixes (11 items) |
 | [infra/terraform/](infra/terraform/) | Terraform IaC — all GCP resources (35 managed) |
 
