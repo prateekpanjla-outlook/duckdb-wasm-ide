@@ -1299,6 +1299,11 @@ table tbody tr.no-data td {
     border-left: 4px solid #dc3545;
 }
 
+.notification-bottom {
+    top: auto;
+    bottom: 20px;
+}
+
 /* ==================== Button Variants ==================== */
 .btn-success {
     background: var(--success-color);

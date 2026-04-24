@@ -80,6 +80,7 @@ class QuestionDropdownManager {
         if (question) {
             this.showQuestionInfo(question);
             this.selectedQuestion = question;
+            this.loadSelectedQuestion();
         } else {
             this.hideQuestionInfo();
             this.selectedQuestion = null;
@@ -181,20 +182,17 @@ class QuestionDropdownManager {
             return;
         }
 
+        const loadBtn = document.getElementById('loadQuestionBtn');
+
         try {
-            // Show loading
-            const loadBtn = document.getElementById('loadQuestionBtn');
+            // Show loading state
             if (loadBtn) {
-                loadBtn.textContent = 'Loading...';
+                loadBtn.textContent = 'Loading Question...';
                 loadBtn.disabled = true;
             }
 
-            // Fetch full question details
-            const data = await apiClient.getQuestion(this.selectedQuestion.id);
-
-            // Start practice mode with this question
+            // Ensure PracticeManager exists
             if (!window.practiceManager) {
-                // Create PracticeManager if it doesn't exist
                 if (window.app && window.app.dbManager) {
                     window.app.practiceManager = new PracticeManager(window.app.dbManager);
                     window.practiceManager = window.app.practiceManager;
@@ -203,24 +201,38 @@ class QuestionDropdownManager {
                 }
             }
 
-            await window.practiceManager.startQuestion(data.question);
+            // Use question already in memory — sql_data is included in the dropdown fetch
+            await window.practiceManager.startQuestion(this.selectedQuestion);
 
             // Reset button
             if (loadBtn) {
-                loadBtn.textContent = 'Load Question';
+                loadBtn.textContent = 'Reload Question';
                 loadBtn.disabled = false;
             }
+
+            this.showNotification('Question loaded', 'success');
 
         } catch (error) {
             console.error('Error loading question:', error);
-            alert('Failed to load question: ' + error.message);
+            this.showNotification('Failed to load question: ' + error.message, 'error');
 
-            const loadBtn = document.getElementById('loadQuestionBtn');
             if (loadBtn) {
-                loadBtn.textContent = 'Load Question';
+                loadBtn.textContent = 'Reload Question';
                 loadBtn.disabled = false;
             }
         }
+    }
+
+    /**
+     * Show notification at bottom-right
+     */
+    showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.className = `notification notification-bottom notification-${type}`;
+        notification.textContent = message;
+        document.body.appendChild(notification);
+
+        setTimeout(() => notification.remove(), 3000);
     }
 
     /**
