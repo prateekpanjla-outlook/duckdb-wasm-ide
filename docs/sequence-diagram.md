@@ -8,6 +8,7 @@ sequenceDiagram
     participant HTML as index.html
     participant App as App (app.js)
     participant Auth as AuthManager
+    participant QDD as QuestionDropdownManager
     participant API as APIClient
     participant BE as Express Backend
     participant DB as Cloud SQL
@@ -19,18 +20,32 @@ sequenceDiagram
     App->>Auth: new AuthManager()
     App->>App: Read localStorage: auth_token, user_data
 
-    alt Has saved token
+    alt Has saved token (registered user)
         App->>Auth: updateUIForLoggedInUser(user)
         App->>App: showQuestionSelector()
+        App->>QDD: new QuestionDropdownManager()
+        QDD->>QDD: loadQuestions()
         Note over App: DuckDB init is non-blocking —<br/>question selector works without it
         App->>DM: initializeDuckDB() (async, not awaited)
         DM-->>App: DuckDB connected (later)
         App->>App: new PracticeManager(dbManager)
         App->>App: loadDefaultPracticeData()
         App->>App: restoreSession() — best-effort
+
+    else Has saved token (guest user)
+        App->>Auth: updateUIForGuestUser(user)
+        Note over Auth: Shows "Guest" in header instead of email
+        App->>App: showQuestionSelector()
+        App->>QDD: new QuestionDropdownManager()
+        QDD->>QDD: loadQuestions()
+        App->>DM: initializeDuckDB() (async, not awaited)
+        DM-->>App: DuckDB connected (later)
+        App->>App: new PracticeManager(dbManager)
+        App->>App: loadDefaultPracticeData()
+
     else No token
         App->>App: showLoginPrompt()
-        Note over App: App wires #loginPromptBtn click → authManager.openModal()
+        Note over App: Shows "Start Practicing" (guest) +<br/>"Login / Register" buttons
         U->>App: Click #loginPromptBtn
         App->>Auth: openModal()
         U->>Auth: Enter email + password, submit
@@ -44,6 +59,8 @@ sequenceDiagram
         Auth->>App: await window.app.initializeDuckDB()
         Auth->>Auth: new PracticeManager(window.app.dbManager)
         Auth->>App: window.app.showQuestionSelector()
+        App->>QDD: new QuestionDropdownManager()
+        QDD->>QDD: loadQuestions()
     end
 ```
 
@@ -82,9 +99,9 @@ sequenceDiagram
     App->>API: getQuestions()
     API-->>App: questions[]
     loop Each question's sql_data
-        App->>DM: executeQuery(CREATE TABLE... / INSERT INTO...)
+        App->>DM: executeQuery(CREATE OR REPLACE TABLE... / INSERT INTO...)
     end
-    Note over App: SQL Editor now has all tables pre-loaded
+    Note over App: CREATE OR REPLACE handles duplicate table names<br/>across questions (e.g. two questions using 'sales')
 
     App->>App: restoreSession() — check mid-question state
 ```
@@ -318,57 +335,67 @@ sequenceDiagram
     Note over U,DB: All progress preserved (same user_id)
 ```
 
-## 10. Question Authoring Agent Flow
+## 10. Question Authoring Agent Flow (SSE Streaming)
 
 ```mermaid
 sequenceDiagram
     participant A as Admin (Browser)
+    participant AP as AgentPanel (JS)
     participant BE as Express Server
     participant G as Gemini API
     participant DB as PostgreSQL
 
-    A->>BE: POST /api/admin/agent (X-Admin-Key)
-    Note over BE: Verify admin key
+    A->>AP: Enter prompt + admin key, click Send
+    AP->>BE: POST /api/admin/agent/stream (X-Admin-Key, SSE)
+    Note over BE: Verify admin key, set SSE headers
 
     BE->>G: generateContent (+ tool declarations)
+    alt Gemini 503 (overloaded)
+        G-->>BE: 503
+        BE-->>AP: SSE: {type: "tool_call", tool: "system", action: "Retrying in 1m"}
+        Note over BE: Exponential backoff: 1m → 5m → 10m → 20m → 1h → cancel
+        BE->>G: retry generateContent
+    end
     G-->>BE: functionCall: get_coverage_gaps()
+    BE-->>AP: SSE: {type: "tool_call", tool: "get_coverage_gaps"}
     BE->>DB: SELECT uncovered concepts
-    DB-->>BE: 29 gaps
+    DB-->>BE: 26 gaps
+    BE-->>AP: SSE: {type: "tool_result", result: {total_gaps: 26}}
     BE->>G: functionResponse (gaps)
 
     Note over BE: wait 7s (rate limit)
 
-    BE->>G: generateContent (+ history)
-    G-->>BE: functionCall: list_existing_questions()
-    BE->>DB: SELECT all questions
-    DB-->>BE: 7 questions
-    BE->>G: functionResponse (questions)
-
-    Note over BE: wait 7s (rate limit)
-
-    BE->>G: generateContent (+ history)
+    BE->>G: generateContent (+ full history)
     G-->>BE: functionCall: validate_question(sql_data, sql_solution)
-    BE->>DB: BEGIN; CREATE TABLE; INSERT; SELECT; ROLLBACK
-    DB-->>BE: valid, 12 rows, no table collisions
+    BE-->>AP: SSE: {type: "tool_call", tool: "validate_question"}
+    BE->>DB: BEGIN; CREATE SCHEMA; CREATE TABLE; INSERT; SELECT; ROLLBACK
+    DB-->>BE: valid, distinguishable, no table collisions
+    BE-->>AP: SSE: {type: "tool_result", result: {schema_valid: true}}
     BE->>G: functionResponse (validation)
 
     Note over BE: wait 7s (rate limit)
 
-    BE->>G: generateContent (+ history)
-    G-->>BE: functionCall: check_concept_overlap(["HAVING"])
+    BE->>G: generateContent (+ full history)
+    G-->>BE: functionCall: check_concept_overlap(concepts)
+    BE-->>AP: SSE: {type: "tool_call", tool: "check_concept_overlap"}
     BE->>DB: SELECT overlapping questions for concepts
     DB-->>BE: overlap details
+    BE-->>AP: SSE: {type: "tool_result", result: {concepts: [...]}}
     BE->>G: functionResponse (overlap)
 
     Note over BE: wait 7s (rate limit)
 
-    BE->>G: generateContent (+ history)
+    BE->>G: generateContent (+ full history)
     G-->>BE: text: JSON preview with concepts
-    BE-->>A: { steps[], history }
+    BE-->>AP: SSE: {type: "answer", content: "```json {...}```"}
+    BE-->>AP: SSE: {type: "done", history: [...]}
+    Note over AP: Parse JSON from answer, show preview card
 
-    Note over A: Admin reviews preview
-    A->>BE: POST /api/admin/agent/approve
+    Note over A: Admin reviews structured preview
+    A->>AP: Click "Approve & Insert"
+    AP->>BE: POST /api/admin/agent/approve (X-Admin-Key)
     BE->>DB: INSERT INTO questions
     BE->>DB: INSERT INTO question_concepts (tags)
-    BE-->>A: { id: 8, concepts_tagged: ["HAVING"] }
+    BE-->>AP: { id: 11, concepts_tagged: ["DENSE_RANK", ...] }
+    AP->>AP: Show success message
 ```

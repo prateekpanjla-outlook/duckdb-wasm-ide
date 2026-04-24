@@ -79,7 +79,9 @@ The reasoning chain streams in real-time via SSE — each tool call, result, and
                 ▼
 ┌──────────────────────────────────────────────┐
 │  Cloud SQL (PostgreSQL 16)                   │
-│  users, questions, user_attempts, sessions   │
+│  users, questions, user_attempts,            │
+│  user_sessions, ai_usage,                    │
+│  sql_concepts, question_concepts             │
 └──────────────────────────────────────────────┘
 ```
 
