@@ -65,7 +65,7 @@ async def startup():
 
 # ── Routes ──
 
-@app.get("/js/app-bridge.js")
+@app.get("/bridge/app-bridge.js")
 async def serve_bridge():
     """Serve the patched app-bridge.js from FastMCP."""
     from fastapi.responses import Response
@@ -348,7 +348,7 @@ LANDING_PAGE = """\
         // ── Prefab AppBridge — using FastMCP's patched app-bridge.js ──
         try {
             const { AppBridge, PostMessageTransport }
-                = await import("/js/app-bridge.js");
+                = await import("/bridge/app-bridge.js");
             const { Client }
                 = await import("https://esm.sh/@modelcontextprotocol/sdk@1.25.2/client/index.js");
             const { StreamableHTTPClientTransport }
