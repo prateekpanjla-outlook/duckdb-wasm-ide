@@ -114,7 +114,7 @@ LANDING_PAGE = """\
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SQL Practice — Question Authoring Agent (MCP)</title>
-    <!-- All JS served locally from /js/ — zero CDN -->
+    <script type="importmap">{"imports":{"zod/v4":"/js/zod-v4.js"}}</script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
