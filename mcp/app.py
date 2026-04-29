@@ -194,7 +194,7 @@ LANDING_PAGE = """\
         <div class="prefab-container">
             <h3>Prefab UI</h3>
             <div class="empty-state" id="prefabEmpty">Tool results will render here</div>
-            <iframe id="prefabFrame" src="/ui-resource?uri=renderer"></iframe>
+            <iframe id="prefabFrame"></iframe>
         </div>
     </div>
 
@@ -318,6 +318,7 @@ LANDING_PAGE = """\
 
     <script type="module">
         // ── Prefab AppBridge (bundled locally — no CDN) ──
+        // Key: setup bridge BEFORE loading iframe, same as fastmcp dev apps
         try {
             const { AppBridge, PostMessageTransport, Client, StreamableHTTPClientTransport }
                 = await import("/js/mcp-bundle.js");
@@ -325,21 +326,23 @@ LANDING_PAGE = """\
             const iframe = document.getElementById('prefabFrame');
             const prefabEmpty = document.getElementById('prefabEmpty');
 
+            // 1. Connect MCP client
             const client = new Client({ name: "mcp-agent-ui", version: "1.0.0" });
             const mcpUrl = new URL("/mcp", window.location.origin);
-            mcpUrl.protocol = window.location.protocol; // force same protocol (https)
             console.log("[Prefab] Connecting MCP client to:", mcpUrl.href);
             await client.connect(
                 new StreamableHTTPClientTransport(mcpUrl)
             );
+            console.log("[Prefab] MCP client connected");
 
             const serverCaps = client.getServerCapabilities();
 
-            // Wait for iframe load
-            await new Promise(r => iframe.addEventListener("load", r, { once: true }));
-
+            // 2. Create bridge with null source BEFORE iframe loads
+            // The renderer sends ui/initialize very early (before load event)
+            // so we must be listening before setting iframe.src
             const transport = new PostMessageTransport(
-                iframe.contentWindow, iframe.contentWindow
+                iframe.contentWindow,
+                null  // accept messages from any source initially
             );
 
             const bridge = new AppBridge(
@@ -363,14 +366,31 @@ LANDING_PAGE = """\
 
             bridge.onopenlink = async ({ url }) => { window.open(url, "_blank"); return {}; };
             bridge.onmessage = async () => ({});
-            bridge.oninitialized = async () => { console.log("[Prefab] Bridge ready"); };
 
+            // When renderer initializes: we can send tool results
+            bridge.oninitialized = async () => {
+                console.log("[Prefab] Bridge initialized — ready for tool results");
+            };
+
+            // 3. Start listening BEFORE loading iframe
             await bridge.connect(transport);
-            console.log("[Prefab] AppBridge connected");
+            console.log("[Prefab] AppBridge listening");
+
+            // 4. NOW load the iframe — renderer will send ui/initialize
+            // and our bridge will respond
+            const loaded = new Promise(r => iframe.addEventListener("load", r, { once: true }));
+            iframe.src = "/ui-resource?uri=renderer";
+            await loaded;
+
+            // 5. Update transport to the real iframe window
+            transport.eventTarget = iframe.contentWindow;
+            transport.eventSource = iframe.contentWindow;
+            console.log("[Prefab] Iframe loaded, transport updated");
 
             // Expose render function to the non-module script
             window._prefabRender = async function(toolName, toolResult) {
                 try {
+                    // Call the MCP tool to get structuredContent (Prefab UI)
                     const result = await client.callTool({
                         name: toolName,
                         arguments: {},
@@ -385,9 +405,10 @@ LANDING_PAGE = """\
                     console.warn("[Prefab] Render failed:", err);
                 }
             };
+
+            console.log("[Prefab] Ready — waiting for agent tool results");
         } catch (err) {
             console.warn("[Prefab] Module init failed (Prefab UI disabled):", err.message);
-            // Agent SSE still works — Prefab is optional enhancement
         }
     </script>
 </body>
