@@ -205,7 +205,7 @@ LANDING_PAGE = """\
         <h1>MCP Agent</h1>
         <input type="password" id="adminKey" placeholder="Admin Key">
         <input type="text" id="prompt" placeholder="e.g. Add a question about INNER JOIN">
-        <button id="runBtn" onclick="runAgent()">Run Agent</button>
+        <button id="runBtn">Run Agent</button>
     </div>
     <div class="content">
         <div class="agent-log" id="agentLog">
@@ -219,75 +219,14 @@ LANDING_PAGE = """\
         </div>
     </div>
 
-    <script type="module">
-        import { AppBridge, PostMessageTransport }
-            from "/js/app-bridge.js";
-        import { Client }
-            from "https://esm.sh/@modelcontextprotocol/sdk@1.25.2/client/index.js";
-        import { StreamableHTTPClientTransport }
-            from "https://esm.sh/@modelcontextprotocol/sdk@1.25.2/client/streamableHttp.js";
-
+    <script>
+        // ── Agent SSE log (no module imports needed) ──
         const logEl = document.getElementById('agentLog');
         const runBtn = document.getElementById('runBtn');
         const iframe = document.getElementById('prefabFrame');
         const prefabEmpty = document.getElementById('prefabEmpty');
         let running = false;
-        let bridge = null;
 
-        // ── Setup AppBridge to Prefab iframe ──
-        async function setupBridge() {
-            try {
-                const client = new Client({ name: "mcp-agent-ui", version: "1.0.0" });
-                await client.connect(
-                    new StreamableHTTPClientTransport(new URL("/mcp", window.location.origin))
-                );
-
-                const serverCaps = client.getServerCapabilities();
-                const transport = new PostMessageTransport(
-                    iframe.contentWindow, iframe.contentWindow
-                );
-
-                bridge = new AppBridge(
-                    client,
-                    { name: "mcp-agent-ui", version: "1.0.0" },
-                    {
-                        openLinks: {},
-                        serverTools: serverCaps?.tools,
-                        serverResources: serverCaps?.resources,
-                    },
-                    {
-                        hostContext: {
-                            theme: "light",
-                            platform: "web",
-                            containerDimensions: { maxHeight: 8000 },
-                            displayMode: "inline",
-                            availableDisplayModes: ["inline"],
-                        },
-                    }
-                );
-
-                bridge.onopenlink = async ({ url }) => {
-                    window.open(url, "_blank");
-                    return {};
-                };
-                bridge.onmessage = async () => ({});
-                bridge.oninitialized = async () => {
-                    console.log("[Prefab] Bridge initialized");
-                };
-
-                await bridge.connect(transport);
-                console.log("[Prefab] AppBridge connected");
-            } catch (err) {
-                console.warn("[Prefab] Bridge setup failed:", err);
-            }
-        }
-
-        // Wait for iframe to load, then setup bridge
-        iframe.addEventListener("load", () => {
-            setupBridge();
-        });
-
-        // ── Agent Log helpers ──
         function addStep(type, content) {
             const empty = document.getElementById('logEmpty');
             if (empty) empty.remove();
@@ -304,29 +243,7 @@ LANDING_PAGE = """\
             return d.innerHTML;
         }
 
-        // ── Send tool result to Prefab iframe ──
-        async function sendToPrefab(toolName, args) {
-            if (!bridge) return;
-            try {
-                // Call the tool via MCP to get structuredContent (Prefab UI)
-                const result = await bridge._client.callTool({
-                    name: toolName,
-                    arguments: args || {},
-                });
-                // Send result to iframe
-                if (result) {
-                    await bridge.sendToolInput({ arguments: args || {} });
-                    await bridge.sendToolResult(result);
-                    prefabEmpty.style.display = 'none';
-                    iframe.style.display = 'block';
-                }
-            } catch (err) {
-                console.warn("[Prefab] Tool render failed:", err);
-            }
-        }
-
-        // ── Run Agent ──
-        window.runAgent = async function() {
+        async function runAgent() {
             if (running) return;
             const adminKey = document.getElementById('adminKey').value.trim();
             const prompt = document.getElementById('prompt').value.trim();
@@ -338,15 +255,17 @@ LANDING_PAGE = """\
             runBtn.disabled = true;
             logEl.innerHTML = '<h3>Agent Log</h3>';
 
-            let lastToolName = null;
-            let lastToolArgs = null;
-
             try {
                 const response = await fetch('/agent/stream', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ prompt, admin_key: adminKey }),
                 });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || 'Request failed');
+                }
 
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
@@ -365,8 +284,6 @@ LANDING_PAGE = """\
 
                         switch (step.type) {
                             case 'tool_call':
-                                lastToolName = step.tool;
-                                lastToolArgs = step.input;
                                 addStep('tool-call',
                                     '<span class="tool-name">' + esc(step.tool) + '</span>'
                                     + (step.input ? '<br><small>' + esc(JSON.stringify(step.input).substring(0, 100)) + '</small>' : '')
@@ -377,10 +294,8 @@ LANDING_PAGE = """\
                                     esc(step.tool) + ' result'
                                     + (step.result ? '<br><small>' + esc(JSON.stringify(step.result).substring(0, 150)) + '</small>' : '')
                                 );
-                                // Send to Prefab for rich rendering
-                                if (step.tool) {
-                                    sendToPrefab(step.tool, lastToolArgs);
-                                }
+                                // Trigger Prefab render for this tool
+                                renderPrefab(step.tool, step.result);
                                 break;
                             case 'answer':
                                 addStep('answer', '<strong>Answer:</strong><br><small>' + esc((step.content || '').substring(0, 300)) + '...</small>');
@@ -404,11 +319,95 @@ LANDING_PAGE = """\
             running = false;
             runBtn.textContent = 'Run Agent';
             runBtn.disabled = false;
-        };
+        }
 
+        // Trigger Prefab rendering by calling the MCP tool directly
+        // The iframe + AppBridge will handle the Prefab rendering
+        async function renderPrefab(toolName, toolResult) {
+            // For now, show the last tool result in the Prefab area
+            // Full AppBridge integration loaded via module script below
+            if (window._prefabRender) {
+                window._prefabRender(toolName, toolResult);
+            }
+        }
+
+        runBtn.addEventListener('click', runAgent);
         document.getElementById('prompt').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') window.runAgent();
+            if (e.key === 'Enter') runAgent();
         });
+    </script>
+
+    <script type="module">
+        // ── Prefab AppBridge (module — needs esm.sh imports) ──
+        try {
+            const { AppBridge, PostMessageTransport } = await import("/js/app-bridge.js");
+            const { Client } = await import("https://esm.sh/@modelcontextprotocol/sdk@1.25.2/client/index.js");
+            const { StreamableHTTPClientTransport } = await import("https://esm.sh/@modelcontextprotocol/sdk@1.25.2/client/streamableHttp.js");
+
+            const iframe = document.getElementById('prefabFrame');
+            const prefabEmpty = document.getElementById('prefabEmpty');
+
+            const client = new Client({ name: "mcp-agent-ui", version: "1.0.0" });
+            await client.connect(
+                new StreamableHTTPClientTransport(new URL("/mcp", window.location.origin))
+            );
+
+            const serverCaps = client.getServerCapabilities();
+
+            // Wait for iframe load
+            await new Promise(r => iframe.addEventListener("load", r, { once: true }));
+
+            const transport = new PostMessageTransport(
+                iframe.contentWindow, iframe.contentWindow
+            );
+
+            const bridge = new AppBridge(
+                client,
+                { name: "mcp-agent-ui", version: "1.0.0" },
+                {
+                    openLinks: {},
+                    serverTools: serverCaps?.tools,
+                    serverResources: serverCaps?.resources,
+                },
+                {
+                    hostContext: {
+                        theme: "light",
+                        platform: "web",
+                        containerDimensions: { maxHeight: 8000 },
+                        displayMode: "inline",
+                        availableDisplayModes: ["inline"],
+                    },
+                }
+            );
+
+            bridge.onopenlink = async ({ url }) => { window.open(url, "_blank"); return {}; };
+            bridge.onmessage = async () => ({});
+            bridge.oninitialized = async () => { console.log("[Prefab] Bridge ready"); };
+
+            await bridge.connect(transport);
+            console.log("[Prefab] AppBridge connected");
+
+            // Expose render function to the non-module script
+            window._prefabRender = async function(toolName, toolResult) {
+                try {
+                    const result = await client.callTool({
+                        name: toolName,
+                        arguments: {},
+                    });
+                    if (result) {
+                        await bridge.sendToolInput({ arguments: {} });
+                        await bridge.sendToolResult(result);
+                        prefabEmpty.style.display = 'none';
+                        iframe.style.display = 'block';
+                    }
+                } catch (err) {
+                    console.warn("[Prefab] Render failed:", err);
+                }
+            };
+        } catch (err) {
+            console.warn("[Prefab] Module init failed (Prefab UI disabled):", err.message);
+            // Agent SSE still works — Prefab is optional enhancement
+        }
     </script>
 </body>
 </html>
