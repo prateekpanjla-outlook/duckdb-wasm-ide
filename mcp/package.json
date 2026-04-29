@@ -2,6 +2,10 @@
   "name": "mcp-static-deps",
   "private": true,
   "dependencies": {
+    "@modelcontextprotocol/ext-apps": "^1.7.1",
     "@modelcontextprotocol/sdk": "^1.25.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0"
   }
 }

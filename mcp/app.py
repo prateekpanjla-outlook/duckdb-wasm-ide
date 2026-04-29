@@ -6,7 +6,6 @@ The browser loads MCP SDK from esm.sh CDN (client-side only — server is self-c
 Run locally: PYTHONIOENCODING=utf-8 uvicorn app:app --port 8080
 """
 
-import asyncio
 import json
 import os
 import pathlib
@@ -27,31 +26,7 @@ app = FastAPI(title="SQL Practice MCP Agent")
 mcp_app = mcp.http_app(transport="streamable-http")
 app.mount("/mcp", mcp_app)
 
-# ── Fetch app-bridge.js at startup (same as fastmcp dev apps does) ──
-_bridge_js = None
-_import_map = None
-_bridge_ready = asyncio.Event()
-
-
-async def _init_bridge():
-    """Fetch app-bridge.js from npm on first startup."""
-    global _bridge_js, _import_map
-    try:
-        from fastmcp.cli.apps_dev import _fetch_app_bridge_bundle
-        _bridge_js, _import_map = await _fetch_app_bridge_bundle(
-            version="latest",
-            sdk_version="1.25.2",
-        )
-    except Exception as e:
-        print(f"Warning: Could not fetch app-bridge: {e}")
-        _bridge_js = "// app-bridge not available"
-        _import_map = "{}"
-    _bridge_ready.set()
-
-
-@app.on_event("startup")
-async def startup():
-    asyncio.create_task(_init_bridge())
+# No startup bridge fetch needed — JS bundled locally in static/js/mcp-bundle.js
 
 
 # ── Routes ──
@@ -59,13 +34,6 @@ async def startup():
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": "duckdb-ide-mcp"}
-
-
-@app.get("/js/app-bridge.js")
-async def serve_bridge():
-    """Serve the app-bridge.js bundle."""
-    await _bridge_ready.wait()
-    return HTMLResponse(_bridge_js, media_type="application/javascript")
 
 
 @app.get("/ui-resource")
@@ -84,8 +52,7 @@ async def ui_resource(uri: str = ""):
 @app.get("/", response_class=HTMLResponse)
 async def index():
     """Serve the landing page with agent log + Prefab iframe."""
-    await _bridge_ready.wait()
-    return HTMLResponse(LANDING_PAGE.replace("{IMPORT_MAP}", _import_map or "{}"))
+    return HTMLResponse(LANDING_PAGE)
 
 
 @app.post("/agent/stream")
@@ -132,9 +99,7 @@ LANDING_PAGE = """\
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SQL Practice — Question Authoring Agent (MCP)</title>
-    <script type="importmap">
-    {IMPORT_MAP}
-    </script>
+    <!-- No import map needed — all JS bundled locally -->
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -338,11 +303,10 @@ LANDING_PAGE = """\
     </script>
 
     <script type="module">
-        // ── Prefab AppBridge (module — needs esm.sh imports) ──
+        // ── Prefab AppBridge (bundled locally — no CDN) ──
         try {
-            const { AppBridge, PostMessageTransport } = await import("/js/app-bridge.js");
-            const { Client } = await import("https://esm.sh/@modelcontextprotocol/sdk@1.25.2/client/index.js");
-            const { StreamableHTTPClientTransport } = await import("https://esm.sh/@modelcontextprotocol/sdk@1.25.2/client/streamableHttp.js");
+            const { AppBridge, PostMessageTransport, Client, StreamableHTTPClientTransport }
+                = await import("/js/mcp-bundle.js");
 
             const iframe = document.getElementById('prefabFrame');
             const prefabEmpty = document.getElementById('prefabEmpty');
