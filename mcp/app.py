@@ -52,7 +52,7 @@ def _fetch_bridge_sync():
     global _bridge_js, _import_map_json
     try:
         from fastmcp.cli.apps_dev import _fetch_app_bridge_bundle_sync
-        _bridge_js, _import_map_json = _fetch_app_bridge_bundle_sync("latest", "1.25.2")
+        _bridge_js, _import_map_json = _fetch_app_bridge_bundle_sync("1.7.1", "1.25.2")
         print("[startup] app-bridge.js fetched successfully")
     except Exception as e:
         print(f"[startup] Warning: Could not fetch app-bridge: {e}")
