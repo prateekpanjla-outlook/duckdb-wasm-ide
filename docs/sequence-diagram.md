@@ -64,6 +64,16 @@ sequenceDiagram
     end
 ```
 
+**Source files:**
+- [app.js:29](../js/app.js#L29) — `init()` entry point
+- [app.js:43](../js/app.js#L43) — guest vs registered detection on refresh
+- [app.js:168](../js/app.js#L168) — `showQuestionSelector()` → creates QuestionDropdownManager
+- [app.js:133](../js/app.js#L133) — `showLoginPrompt()`
+- [auth-manager.js:144](../js/services/auth-manager.js#L144) — `openModal()`
+- [auth-manager.js:241](../js/services/auth-manager.js#L241) — `updateUIForLoggedInUser()`
+- [auth-manager.js:315](../js/services/auth-manager.js#L315) — `updateUIForGuestUser()`
+- [auth.js:51](../server/routes/auth.js#L51) — `POST /api/auth/login`
+
 ## 2. DuckDB Init & Question Loading
 
 ```mermaid
@@ -106,6 +116,15 @@ sequenceDiagram
     App->>App: restoreSession() — check mid-question state
 ```
 
+**Source files:**
+- [question-dropdown-manager.js:35](../js/services/question-dropdown-manager.js#L35) — `loadQuestions()`
+- [question-dropdown-manager.js:49](../js/services/question-dropdown-manager.js#L49) — `populateDropdown()`
+- [duckdb-manager.js:8](../js/duckdb-manager.js#L8) — `initialize()` — selectBundle, createWorker, instantiate
+- [duckdb-manager.js:57](../js/duckdb-manager.js#L57) — `executeQuery()`
+- [app.js:107](../js/app.js#L107) — `loadDefaultPracticeData()` — CREATE OR REPLACE TABLE
+- [app.js:88](../js/app.js#L88) — `restoreSession()`
+- [practice.js:94](../server/routes/practice.js#L94) — `GET /api/practice/questions`
+
 ## 3. Question Selection & Practice Start
 
 ```mermaid
@@ -138,6 +157,15 @@ sequenceDiagram
     Note over PM: Show question text, difficulty badge,<br/>inject Submit + Show Solution buttons
     PM->>PM: startTimer()
 ```
+
+**Source files:**
+- [question-dropdown-manager.js:76](../js/services/question-dropdown-manager.js#L76) — `onQuestionChange()` — shows info panel
+- [question-dropdown-manager.js:179](../js/services/question-dropdown-manager.js#L179) — `loadSelectedQuestion()`
+- [question-dropdown-manager.js:116](../js/services/question-dropdown-manager.js#L116) — `displayTableSchema()`
+- [practice-manager.js:153](../js/services/practice-manager.js#L153) — `startQuestion()`
+- [practice-manager.js:182](../js/services/practice-manager.js#L182) — `initializePracticeDuckDB()` — CREATE OR REPLACE TABLE
+- [practice-manager.js:200](../js/services/practice-manager.js#L200) — `showPracticeUI()`
+- [practice.js:122](../server/routes/practice.js#L122) — `GET /api/practice/question/:id`
 
 ## 4. SQL Execution (Run Query)
 
@@ -173,6 +201,15 @@ sequenceDiagram
         App->>RV: displayError(error.message)
     end
 ```
+
+**Source files:**
+- [app.js:213](../js/app.js#L213) — `runQuery()` — Ctrl+Enter handler
+- [query-editor.js:42](../js/query-editor.js#L42) — `getQuery()`
+- [query-editor.js:50](../js/query-editor.js#L50) — `addToHistory()`
+- [duckdb-manager.js:57](../js/duckdb-manager.js#L57) — `executeQuery()`
+- [duckdb-manager.js:75](../js/duckdb-manager.js#L75) — `formatResult()` — Arrow → {columns, rows}
+- [results-view.js:8](../js/results-view.js#L8) — `displayResults()`
+- [results-view.js:110](../js/results-view.js#L110) — `displayError()`
 
 ## 5. Solution Submission & Grading
 
@@ -215,6 +252,14 @@ sequenceDiagram
     end
 ```
 
+**Source files:**
+- [practice-manager.js:274](../js/services/practice-manager.js#L274) — `submitSolution()`
+- [practice-manager.js:338](../js/services/practice-manager.js#L338) — `compareResults()` — order-independent comparison
+- [practice-manager.js:395](../js/services/practice-manager.js#L395) — `showFeedback()`
+- [practice-manager.js:482](../js/services/practice-manager.js#L482) — `showNextQuestionButton()`
+- [api-client.js](../js/services/api-client.js) — `verifySolution()`
+- [practice.js:211](../server/routes/practice.js#L211) — `POST /api/practice/verify`
+
 ## 6. Show Solution & Next Question
 
 ```mermaid
@@ -247,6 +292,12 @@ sequenceDiagram
         Note over PM: "All questions completed!"
     end
 ```
+
+**Source files:**
+- [practice-manager.js:452](../js/services/practice-manager.js#L452) — `showSolution()`
+- [practice-manager.js:153](../js/services/practice-manager.js#L153) — `startQuestion()` — reused for next question
+- [practice-manager.js:182](../js/services/practice-manager.js#L182) — `initializePracticeDuckDB()`
+- [practice.js:50](../server/routes/practice.js#L50) — `GET /api/practice/next`
 
 ## 7. Registration Flow
 
@@ -286,6 +337,12 @@ sequenceDiagram
     end
 ```
 
+**Source files:**
+- [auth-manager.js:144](../js/services/auth-manager.js#L144) — `openModal()` — toggle login/register
+- [api-client.js](../js/services/api-client.js) — `register()`
+- [auth.js:16](../server/routes/auth.js#L16) — `POST /api/auth/register`
+- [server/middleware/validate.js](../server/middleware/validate.js) — `validateRegister` middleware
+
 ## 8. Guest Access Flow
 
 ```mermaid
@@ -307,6 +364,12 @@ sequenceDiagram
     Auth->>Auth: Show "Guest" in header
     Auth->>Auth: Initialize DuckDB + show questions
 ```
+
+**Source files:**
+- [auth-manager.js:291](../js/services/auth-manager.js#L291) — `startAsGuest()`
+- [auth-manager.js:315](../js/services/auth-manager.js#L315) — `updateUIForGuestUser()`
+- [api-client.js](../js/services/api-client.js) — `guestLogin()`
+- [auth.js:123](../server/routes/auth.js#L123) — `POST /api/auth/guest`
 
 ## 9. Guest Upgrade Flow
 
@@ -334,6 +397,12 @@ sequenceDiagram
     Auth->>Auth: Show email in header (not "Guest")
     Note over U,DB: All progress preserved (same user_id)
 ```
+
+**Source files:**
+- [auth-manager.js:390](../js/services/auth-manager.js#L390) — `showUpgradeForm()`
+- [auth-manager.js:413](../js/services/auth-manager.js#L413) — `handleUpgrade()`
+- [api-client.js](../js/services/api-client.js) — `upgradeGuest()`
+- [auth.js:158](../server/routes/auth.js#L158) — `POST /api/auth/guest/upgrade`
 
 ## 10. Question Authoring Agent Flow (SSE Streaming)
 
@@ -399,3 +468,15 @@ sequenceDiagram
     BE-->>AP: { id: 11, concepts_tagged: ["DENSE_RANK", ...] }
     AP->>AP: Show success message
 ```
+
+**Source files:**
+- [agent-panel.js:51](../js/services/agent-panel.js#L51) — `send()` — SSE fetch + stream reader
+- [agent-panel.js:166](../js/services/agent-panel.js#L166) — `renderSteps()` — tool call/result/answer rendering
+- [agent-panel.js:235](../js/services/agent-panel.js#L235) — `tryParsePreview()` — parse JSON from answer
+- [agent-panel.js:248](../js/services/agent-panel.js#L248) — `showApprovalButtons()` — preview card
+- [agent-panel.js:351](../js/services/agent-panel.js#L351) — `approveQuestion()`
+- [admin.js:67](../server/routes/admin.js#L67) — `POST /api/admin/agent/stream` — SSE endpoint
+- [admin.js:106](../server/routes/admin.js#L106) — `POST /api/admin/agent/approve`
+- [agent.js:189](../server/services/agent.js#L189) — `runAgent()` — agent loop with retry/backoff
+- [agent.js:34](../server/services/agent.js#L34) — `enforceRateLimit()` — 7s minimum between calls
+- [agentTools.js](../server/services/agentTools.js) — all 8 tool implementations

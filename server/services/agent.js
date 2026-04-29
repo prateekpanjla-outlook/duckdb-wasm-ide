@@ -232,7 +232,7 @@ export async function runAgent(userPrompt, existingHistory = [], onStep = null) 
                             toolConfig: { functionCallingConfig: { mode: 'AUTO' } },
                             generationConfig: {
                                 temperature: 0.3,
-                                maxOutputTokens: 4096
+                                maxOutputTokens: 8192
                             }
                         }),
                         signal: AbortSignal.timeout(30000)
@@ -305,55 +305,65 @@ export async function runAgent(userPrompt, existingHistory = [], onStep = null) 
         const parts = data.candidates[0].content.parts;
         messages.push({ role: 'model', parts });
 
-        // Check for tool call
-        const toolCall = parts.find(p => p.functionCall);
+        // Check for tool calls (Gemini 3.x can return multiple in parallel)
+        const toolCalls = parts.filter(p => p.functionCall);
         const textPart = parts.find(p => p.text && p.text.trim());
 
-        if (toolCall) {
-            const { name, args } = toolCall.functionCall;
-            toolCallsMade++;
+        if (toolCalls.length > 0) {
+            const functionResponses = [];
 
-            const toolCallStep = {
-                type: 'tool_call',
-                tool: name,
-                input: args,
-                latencyMs
-            };
-            steps.push(toolCallStep);
-            if (onStep) onStep(toolCallStep);
+            for (const toolCall of toolCalls) {
+                const { name, args } = toolCall.functionCall;
+                toolCallsMade++;
 
-            console.log(`Agent step ${stepCount} CALL: ${name}(${JSON.stringify(args).substring(0, 500)})`);
+                const toolCallStep = {
+                    type: 'tool_call',
+                    tool: name,
+                    input: args,
+                    latencyMs
+                };
+                steps.push(toolCallStep);
+                if (onStep) onStep(toolCallStep);
 
-            // Execute the tool
-            let toolResult;
-            try {
-                const toolFn = TOOL_FUNCTIONS[name];
-                if (!toolFn) throw new Error(`Unknown tool: ${name}`);
-                toolResult = typeof args === 'object' ? await toolFn(args) : await toolFn();
-            } catch (error) {
-                toolResult = { error: error.message };
-            }
+                if (toolCall.thoughtSignature) {
+                    console.log(`Agent step ${stepCount} SIGNATURE: ${name} has thoughtSignature (${toolCall.thoughtSignature.length} chars)`);
+                }
+                console.log(`Agent step ${stepCount} CALL: ${name}(${JSON.stringify(args).substring(0, 500)})`);
 
-            console.log(`Agent step ${stepCount} RESULT: ${name} → ${JSON.stringify(toolResult).substring(0, 500)}`);
+                // Execute the tool
+                let toolResult;
+                try {
+                    const toolFn = TOOL_FUNCTIONS[name];
+                    if (!toolFn) throw new Error(`Unknown tool: ${name}`);
+                    toolResult = typeof args === 'object' ? await toolFn(args) : await toolFn();
+                } catch (error) {
+                    toolResult = { error: error.message };
+                }
 
-            const toolResultStep = {
-                type: 'tool_result',
-                tool: name,
-                result: toolResult
-            };
-            steps.push(toolResultStep);
-            if (onStep) onStep(toolResultStep);
+                console.log(`Agent step ${stepCount} RESULT: ${name} → ${JSON.stringify(toolResult).substring(0, 500)}`);
 
-            // Add tool result to conversation for next Gemini call
-            messages.push({
-                role: 'user',
-                parts: [{
+                const toolResultStep = {
+                    type: 'tool_result',
+                    tool: name,
+                    result: toolResult
+                };
+                steps.push(toolResultStep);
+                if (onStep) onStep(toolResultStep);
+
+                functionResponses.push({
                     functionResponse: {
                         name,
                         response: toolResult
                     }
-                }]
-            });
+                });
+            }
+
+            if (toolCalls.length > 1) {
+                console.log(`Agent step ${stepCount}: ${toolCalls.length} parallel tool calls dispatched`);
+            }
+
+            // Send ALL tool results in a single user message
+            messages.push({ role: 'user', parts: functionResponses });
 
             continue;
         }
