@@ -28,7 +28,22 @@ if static_js_dir.exists():
     app.mount("/js", StaticFiles(directory=str(static_js_dir)), name="js")
 
 # ── Mount FastMCP server at /mcp ──
+# Add middleware to fix X-Forwarded-Proto for Cloud Run (behind HTTPS LB)
+from starlette.middleware.trustedhost import TrustedHostMiddleware
+
 mcp_app = mcp.http_app(transport="streamable-http")
+
+# Wrap MCP app to forward HTTPS scheme from Cloud Run's load balancer
+from starlette.middleware import Middleware
+from starlette.datastructures import Headers
+
+@app.middleware("http")
+async def force_https_scheme(request, call_next):
+    """Cloud Run terminates TLS at the LB. Forward the original scheme."""
+    if request.headers.get("x-forwarded-proto") == "https":
+        request.scope["scheme"] = "https"
+    return await call_next(request)
+
 app.mount("/mcp", mcp_app)
 
 # No startup bridge fetch needed — JS bundled locally in static/js/mcp-bundle.js
@@ -317,8 +332,11 @@ LANDING_PAGE = """\
             const prefabEmpty = document.getElementById('prefabEmpty');
 
             const client = new Client({ name: "mcp-agent-ui", version: "1.0.0" });
+            const mcpUrl = new URL("/mcp", window.location.origin);
+            mcpUrl.protocol = window.location.protocol; // force same protocol (https)
+            console.log("[Prefab] Connecting MCP client to:", mcpUrl.href);
             await client.connect(
-                new StreamableHTTPClientTransport(new URL("/mcp", window.location.origin))
+                new StreamableHTTPClientTransport(mcpUrl)
             );
 
             const serverCaps = client.getServerCapabilities();
