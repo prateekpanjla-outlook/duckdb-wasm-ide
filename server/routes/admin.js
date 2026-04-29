@@ -151,4 +151,81 @@ router.post('/agent/generate-test', async (req, res) => {
     }
 });
 
+/**
+ * Individual tool endpoints — thin wrappers over TOOL_FUNCTIONS.
+ * Used by the Python MCP server to call tools via HTTP.
+ */
+
+router.get('/tools/coverage-gaps', async (req, res) => {
+    try {
+        const result = await TOOL_FUNCTIONS.get_coverage_gaps();
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.get('/tools/questions', async (req, res) => {
+    try {
+        const result = await TOOL_FUNCTIONS.list_existing_questions();
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.get('/tools/concepts', async (req, res) => {
+    try {
+        const result = await TOOL_FUNCTIONS.list_concepts();
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.post('/tools/validate', async (req, res) => {
+    try {
+        const result = await TOOL_FUNCTIONS.validate_question(req.body);
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.post('/tools/execute-sql', async (req, res) => {
+    try {
+        const result = await TOOL_FUNCTIONS.execute_sql(req.body);
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.post('/tools/concept-overlap', async (req, res) => {
+    try {
+        const result = await TOOL_FUNCTIONS.check_concept_overlap(req.body);
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.post('/tools/insert', async (req, res) => {
+    try {
+        const result = await TOOL_FUNCTIONS.insert_question(req.body);
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.post('/tools/generate-test', async (req, res) => {
+    try {
+        const result = TOOL_FUNCTIONS.generate_test(req.body);
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 export default router;
