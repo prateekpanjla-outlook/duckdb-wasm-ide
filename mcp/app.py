@@ -40,27 +40,16 @@ async def force_https_scheme(request, call_next):
 
 # MCP sub-app mounted after all routes — see bottom of file
 
-# Fetch app-bridge.js from npm at startup (patched by FastMCP — includes
+# Fetch app-bridge.js from npm at import time (patched by FastMCP — includes
 # the HOST-side AppBridge class which is NOT in the published npm package)
-import asyncio
-import concurrent.futures
-
-_bridge_js = "// loading..."
-_import_map_json = "{}"
-
-def _fetch_bridge_sync():
-    global _bridge_js, _import_map_json
-    try:
-        from fastmcp.cli.apps_dev import _fetch_app_bridge_bundle_sync
-        _bridge_js, _import_map_json = _fetch_app_bridge_bundle_sync("1.7.1", "1.25.2")
-        print("[startup] app-bridge.js fetched successfully")
-    except Exception as e:
-        print(f"[startup] Warning: Could not fetch app-bridge: {e}")
-
-@app.on_event("startup")
-async def startup():
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, _fetch_bridge_sync)
+try:
+    from fastmcp.cli.apps_dev import _fetch_app_bridge_bundle_sync
+    _bridge_js, _import_map_json = _fetch_app_bridge_bundle_sync("1.7.1", "1.25.2")
+    print(f"[startup] app-bridge.js fetched: {len(_bridge_js)} bytes, import map: {len(_import_map_json)} bytes")
+except Exception as e:
+    print(f"[startup] Warning: Could not fetch app-bridge: {e}")
+    _bridge_js = "// app-bridge not available"
+    _import_map_json = "{}"
 
 
 # ── Routes ──
