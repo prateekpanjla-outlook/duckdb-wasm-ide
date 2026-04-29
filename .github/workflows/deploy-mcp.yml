@@ -1,0 +1,57 @@
+name: Deploy MCP Agent to Cloud Run
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mcp/**'
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: sql-practice-project-489106
+  REGION: us-central1
+  SERVICE: duckdb-ide-mcp
+  DEPLOYER_SA: sql-practice-deployer@sql-practice-project-489106.iam.gserviceaccount.com
+  WIF_PROVIDER: projects/192834930119/locations/global/workloadIdentityPools/sql-practice-github/providers/github-actions
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP via Workload Identity Federation
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SA }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build and deploy via Cloud Build
+        run: |
+          gcloud builds submit \
+            --config=mcp/cloudbuild.yaml \
+            --region=${{ env.REGION }} \
+            --project=${{ env.PROJECT_ID }} \
+            --substitutions=COMMIT_SHA=${{ github.sha }} \
+            --gcs-source-staging-dir=gs://sql-practice-cloudbuild-source/source \
+            --gcs-log-dir=gs://sql-practice-cloudbuild-logs/logs
+
+      - name: Health check
+        run: |
+          URL=$(gcloud run services describe ${{ env.SERVICE }} \
+            --region=${{ env.REGION }} \
+            --project=${{ env.PROJECT_ID }} \
+            --format="value(status.url)")
+          echo "Service URL: $URL"
+          STATUS=$(curl -s -o /dev/null -w '%{http_code}' "$URL/health")
+          echo "Health check: HTTP $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::Health check failed with HTTP $STATUS"
+            exit 1
+          fi

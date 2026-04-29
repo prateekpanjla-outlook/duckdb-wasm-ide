@@ -1,0 +1,7 @@
+{
+  "name": "mcp-static-deps",
+  "private": true,
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.25.0"
+  }
+}
