@@ -40,10 +40,37 @@ async def force_https_scheme(request, call_next):
 
 # MCP sub-app mounted after all routes — see bottom of file
 
-# No startup bridge fetch needed — JS bundled locally in static/js/mcp-bundle.js
+# Fetch app-bridge.js from npm at startup (patched by FastMCP — includes
+# the HOST-side AppBridge class which is NOT in the published npm package)
+import asyncio
+import concurrent.futures
+
+_bridge_js = "// loading..."
+_import_map_json = "{}"
+
+def _fetch_bridge_sync():
+    global _bridge_js, _import_map_json
+    try:
+        from fastmcp.cli.apps_dev import _fetch_app_bridge_bundle_sync
+        _bridge_js, _import_map_json = _fetch_app_bridge_bundle_sync("latest", "1.25.2")
+        print("[startup] app-bridge.js fetched successfully")
+    except Exception as e:
+        print(f"[startup] Warning: Could not fetch app-bridge: {e}")
+
+@app.on_event("startup")
+async def startup():
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _fetch_bridge_sync)
 
 
 # ── Routes ──
+
+@app.get("/js/app-bridge.js")
+async def serve_bridge():
+    """Serve the patched app-bridge.js from FastMCP."""
+    from fastapi.responses import Response
+    return Response(_bridge_js, media_type="application/javascript")
+
 
 @app.get("/health")
 async def health():
@@ -66,7 +93,8 @@ async def ui_resource(uri: str = ""):
 @app.get("/", response_class=HTMLResponse)
 async def index():
     """Serve the landing page with agent log + Prefab iframe."""
-    return HTMLResponse(LANDING_PAGE)
+    html = LANDING_PAGE.replace("IMPORT_MAP_PLACEHOLDER", _import_map_json)
+    return HTMLResponse(html)
 
 
 @app.post("/agent/stream")
@@ -113,7 +141,7 @@ LANDING_PAGE = """\
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SQL Practice — Question Authoring Agent (MCP)</title>
-    <!-- No import map needed — all JS bundled locally -->
+    <script type="importmap">IMPORT_MAP_PLACEHOLDER</script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -317,11 +345,14 @@ LANDING_PAGE = """\
     </script>
 
     <script type="module">
-        // ── Prefab AppBridge (bundled locally — no CDN) ──
-        // Replicates the fastmcp dev apps launch page pattern exactly
+        // ── Prefab AppBridge — using FastMCP's patched app-bridge.js ──
         try {
-            const { AppBridge, PostMessageTransport, Client, StreamableHTTPClientTransport }
-                = await import("/js/mcp-bundle.js");
+            const { AppBridge, PostMessageTransport }
+                = await import("/js/app-bridge.js");
+            const { Client }
+                = await import("https://esm.sh/@modelcontextprotocol/sdk@1.25.2/client/index.js");
+            const { StreamableHTTPClientTransport }
+                = await import("https://esm.sh/@modelcontextprotocol/sdk@1.25.2/client/streamableHttp.js");
 
             const iframe = document.getElementById('prefabFrame');
             const prefabEmpty = document.getElementById('prefabEmpty');
