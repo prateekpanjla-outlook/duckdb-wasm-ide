@@ -44,7 +44,7 @@ async def force_https_scheme(request, call_next):
         request.scope["scheme"] = "https"
     return await call_next(request)
 
-app.mount("/mcp", mcp_app)
+# MCP sub-app mounted after all routes — see bottom of file
 
 # No startup bridge fetch needed — JS bundled locally in static/js/mcp-bundle.js
 
@@ -399,6 +399,12 @@ LANDING_PAGE = """\
 </body>
 </html>
 """
+
+
+# Mount MCP sub-app LAST — it has a /mcp route internally.
+# Mounted at "/" so the route is reachable at /mcp.
+# FastAPI routes above (@app.get, @app.post) take priority.
+app.mount("/", mcp_app)
 
 
 if __name__ == "__main__":
