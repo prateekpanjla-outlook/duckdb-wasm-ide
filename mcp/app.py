@@ -1,18 +1,21 @@
-"""FastAPI web app — serves landing page, SSE agent endpoint, MCP server, and Prefab renderer.
+"""FastAPI web app — serves landing page, SSE agent endpoint, and Prefab UI.
 
-Replaces `fastmcp dev apps` as a deployable web service.
+Uses FastMCP's built-in app-bridge and Prefab renderer machinery.
+The browser loads MCP SDK from esm.sh CDN (client-side only — server is self-contained).
 
 Run locally: PYTHONIOENCODING=utf-8 uvicorn app:app --port 8080
 """
 
+import asyncio
 import json
 import os
 import pathlib
 import sys
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.routing import Mount
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from agent_harness import run_agent
@@ -20,54 +23,69 @@ from mcp_server import mcp
 
 app = FastAPI(title="SQL Practice MCP Agent")
 
-# Serve bundled JS from static/js/
-static_dir = pathlib.Path(__file__).parent / "static"
-if (static_dir / "js").exists():
-    app.mount("/js", StaticFiles(directory=str(static_dir / "js")), name="js")
-
-# Mount FastMCP server at /mcp
+# ── Mount FastMCP server at /mcp ──
 mcp_app = mcp.http_app(transport="streamable-http")
 app.mount("/mcp", mcp_app)
 
+# ── Fetch app-bridge.js at startup (same as fastmcp dev apps does) ──
+_bridge_js = None
+_import_map = None
+_bridge_ready = asyncio.Event()
+
+
+async def _init_bridge():
+    """Fetch app-bridge.js from npm on first startup."""
+    global _bridge_js, _import_map
+    try:
+        from fastmcp.cli.apps_dev import _fetch_app_bridge_bundle
+        _bridge_js, _import_map = await _fetch_app_bridge_bundle(
+            version="latest",
+            sdk_version="1.25.2",
+        )
+    except Exception as e:
+        print(f"Warning: Could not fetch app-bridge: {e}")
+        _bridge_js = "// app-bridge not available"
+        _import_map = "{}"
+    _bridge_ready.set()
+
+
+@app.on_event("startup")
+async def startup():
+    asyncio.create_task(_init_bridge())
+
+
+# ── Routes ──
 
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": "duckdb-ide-mcp"}
 
 
-@app.get("/", response_class=HTMLResponse)
-async def index():
-    """Serve the landing page."""
-    index_path = static_dir / "index.html"
-    if index_path.exists():
-        return HTMLResponse(index_path.read_text(encoding="utf-8"))
-    return HTMLResponse("<h1>MCP Agent — index.html not found</h1>", status_code=404)
+@app.get("/js/app-bridge.js")
+async def serve_bridge():
+    """Serve the app-bridge.js bundle."""
+    await _bridge_ready.wait()
+    return HTMLResponse(_bridge_js, media_type="application/javascript")
 
 
 @app.get("/ui-resource")
-async def ui_resource(uri: str):
-    """Serve Prefab renderer HTML/JS from the prefab-ui Python package."""
+async def ui_resource(uri: str = ""):
+    """Serve Prefab renderer HTML from the prefab-ui package."""
     try:
         import prefab_ui
-        prefab_dir = pathlib.Path(prefab_ui.__file__).parent
-
-        # Map MCP UI resource URIs to files in the prefab-ui package
-        # URI format: ui://prefab/tool/<hash>/renderer.html
-        if "renderer.html" in uri:
-            renderer_path = prefab_dir / "renderer" / "index.html"
-            if not renderer_path.exists():
-                # Try alternative paths
-                for candidate in prefab_dir.rglob("renderer*.html"):
-                    renderer_path = candidate
-                    break
-
-            if renderer_path.exists():
-                content = renderer_path.read_text(encoding="utf-8")
-                return HTMLResponse(content)
-
-        return JSONResponse({"error": f"Resource not found: {uri}"}, status_code=404)
+        renderer_path = pathlib.Path(prefab_ui.__file__).parent / "renderer" / "app.html"
+        if renderer_path.exists():
+            return HTMLResponse(renderer_path.read_text(encoding="utf-8"))
+        return JSONResponse({"error": "Renderer not found"}, status_code=404)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/", response_class=HTMLResponse)
+async def index():
+    """Serve the landing page with agent log + Prefab iframe."""
+    await _bridge_ready.wait()
+    return HTMLResponse(LANDING_PAGE.replace("{IMPORT_MAP}", _import_map or "{}"))
 
 
 @app.post("/agent/stream")
@@ -80,7 +98,6 @@ async def agent_stream(request: Request):
     if not prompt:
         return JSONResponse({"error": "Prompt is required"}, status_code=400)
 
-    # Override admin key if provided (for API client to use)
     if admin_key:
         os.environ["ADMIN_KEY"] = admin_key
 
@@ -101,6 +118,301 @@ async def agent_stream(request: Request):
             "X-Accel-Buffering": "no",
         },
     )
+
+
+# ── Landing Page HTML ──
+# Agent log on left, Prefab iframe on right.
+# When agent completes, the final tool's structuredContent is sent to the
+# Prefab iframe via AppBridge for rich rendering.
+
+LANDING_PAGE = """\
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQL Practice — Question Authoring Agent (MCP)</title>
+    <script type="importmap">
+    {IMPORT_MAP}
+    </script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #0f172a; color: #e2e8f0;
+            height: 100vh; display: flex; flex-direction: column;
+        }
+        .header {
+            padding: 12px 20px; background: #1e293b;
+            border-bottom: 1px solid #334155;
+            display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+        }
+        .header h1 { font-size: 16px; font-weight: 600; white-space: nowrap; }
+        .header input {
+            padding: 7px 10px; border-radius: 6px;
+            border: 1px solid #475569; background: #0f172a;
+            color: #e2e8f0; font-size: 13px;
+        }
+        .header input[type="password"] { width: 140px; }
+        .header input[type="text"] { flex: 1; min-width: 200px; }
+        .header button {
+            padding: 7px 18px; border-radius: 6px; border: none;
+            background: #3b82f6; color: white; font-size: 13px;
+            font-weight: 500; cursor: pointer; white-space: nowrap;
+        }
+        .header button:hover { background: #2563eb; }
+        .header button:disabled { background: #475569; cursor: not-allowed; }
+        .content { display: flex; flex: 1; overflow: hidden; }
+        .agent-log {
+            width: 340px; min-width: 260px; background: #1e293b;
+            border-right: 1px solid #334155;
+            overflow-y: auto; padding: 10px; flex-shrink: 0;
+        }
+        .agent-log h3 {
+            font-size: 12px; font-weight: 600; color: #94a3b8;
+            text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;
+        }
+        .step {
+            padding: 6px 8px; margin-bottom: 5px;
+            border-radius: 5px; font-size: 12px; line-height: 1.3;
+            word-break: break-word;
+        }
+        .step-tool-call { background: #1e3a5f; border-left: 3px solid #3b82f6; }
+        .step-tool-call .tool-name { color: #60a5fa; font-weight: 600; }
+        .step-tool-result { background: #1a3329; border-left: 3px solid #22c55e; color: #86efac; }
+        .step-answer { background: #312e81; border-left: 3px solid #818cf8; }
+        .step-error { background: #3b1320; border-left: 3px solid #ef4444; color: #fca5a5; }
+        .step-system { background: #422006; border-left: 3px solid #f59e0b; color: #fcd34d; }
+        .prefab-container {
+            flex: 1; display: flex; flex-direction: column;
+            background: #ffffff; overflow: hidden;
+        }
+        .prefab-container h3 {
+            font-size: 12px; font-weight: 600; color: #475569;
+            text-transform: uppercase; letter-spacing: 0.5px;
+            padding: 10px 14px; background: #f8fafc;
+            border-bottom: 1px solid #e2e8f0; flex-shrink: 0;
+        }
+        #prefabFrame { flex: 1; border: none; width: 100%; display: none; }
+        .empty-state {
+            display: flex; align-items: center; justify-content: center;
+            height: 100%; color: #64748b; font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>MCP Agent</h1>
+        <input type="password" id="adminKey" placeholder="Admin Key">
+        <input type="text" id="prompt" placeholder="e.g. Add a question about INNER JOIN">
+        <button id="runBtn" onclick="runAgent()">Run Agent</button>
+    </div>
+    <div class="content">
+        <div class="agent-log" id="agentLog">
+            <h3>Agent Log</h3>
+            <div class="empty-state" id="logEmpty">Enter a prompt and click Run Agent</div>
+        </div>
+        <div class="prefab-container">
+            <h3>Prefab UI</h3>
+            <div class="empty-state" id="prefabEmpty">Tool results will render here</div>
+            <iframe id="prefabFrame" src="/ui-resource?uri=renderer"></iframe>
+        </div>
+    </div>
+
+    <script type="module">
+        import { AppBridge, PostMessageTransport }
+            from "/js/app-bridge.js";
+        import { Client }
+            from "https://esm.sh/@modelcontextprotocol/sdk@1.25.2/client/index.js";
+        import { StreamableHTTPClientTransport }
+            from "https://esm.sh/@modelcontextprotocol/sdk@1.25.2/client/streamableHttp.js";
+
+        const logEl = document.getElementById('agentLog');
+        const runBtn = document.getElementById('runBtn');
+        const iframe = document.getElementById('prefabFrame');
+        const prefabEmpty = document.getElementById('prefabEmpty');
+        let running = false;
+        let bridge = null;
+
+        // ── Setup AppBridge to Prefab iframe ──
+        async function setupBridge() {
+            try {
+                const client = new Client({ name: "mcp-agent-ui", version: "1.0.0" });
+                await client.connect(
+                    new StreamableHTTPClientTransport(new URL("/mcp", window.location.origin))
+                );
+
+                const serverCaps = client.getServerCapabilities();
+                const transport = new PostMessageTransport(
+                    iframe.contentWindow, iframe.contentWindow
+                );
+
+                bridge = new AppBridge(
+                    client,
+                    { name: "mcp-agent-ui", version: "1.0.0" },
+                    {
+                        openLinks: {},
+                        serverTools: serverCaps?.tools,
+                        serverResources: serverCaps?.resources,
+                    },
+                    {
+                        hostContext: {
+                            theme: "light",
+                            platform: "web",
+                            containerDimensions: { maxHeight: 8000 },
+                            displayMode: "inline",
+                            availableDisplayModes: ["inline"],
+                        },
+                    }
+                );
+
+                bridge.onopenlink = async ({ url }) => {
+                    window.open(url, "_blank");
+                    return {};
+                };
+                bridge.onmessage = async () => ({});
+                bridge.oninitialized = async () => {
+                    console.log("[Prefab] Bridge initialized");
+                };
+
+                await bridge.connect(transport);
+                console.log("[Prefab] AppBridge connected");
+            } catch (err) {
+                console.warn("[Prefab] Bridge setup failed:", err);
+            }
+        }
+
+        // Wait for iframe to load, then setup bridge
+        iframe.addEventListener("load", () => {
+            setupBridge();
+        });
+
+        // ── Agent Log helpers ──
+        function addStep(type, content) {
+            const empty = document.getElementById('logEmpty');
+            if (empty) empty.remove();
+            const div = document.createElement('div');
+            div.className = 'step step-' + type;
+            div.innerHTML = content;
+            logEl.appendChild(div);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        function esc(text) {
+            const d = document.createElement('div');
+            d.textContent = text;
+            return d.innerHTML;
+        }
+
+        // ── Send tool result to Prefab iframe ──
+        async function sendToPrefab(toolName, args) {
+            if (!bridge) return;
+            try {
+                // Call the tool via MCP to get structuredContent (Prefab UI)
+                const result = await bridge._client.callTool({
+                    name: toolName,
+                    arguments: args || {},
+                });
+                // Send result to iframe
+                if (result) {
+                    await bridge.sendToolInput({ arguments: args || {} });
+                    await bridge.sendToolResult(result);
+                    prefabEmpty.style.display = 'none';
+                    iframe.style.display = 'block';
+                }
+            } catch (err) {
+                console.warn("[Prefab] Tool render failed:", err);
+            }
+        }
+
+        // ── Run Agent ──
+        window.runAgent = async function() {
+            if (running) return;
+            const adminKey = document.getElementById('adminKey').value.trim();
+            const prompt = document.getElementById('prompt').value.trim();
+            if (!adminKey) { alert('Enter admin key'); return; }
+            if (!prompt) { alert('Enter a prompt'); return; }
+
+            running = true;
+            runBtn.textContent = 'Running...';
+            runBtn.disabled = true;
+            logEl.innerHTML = '<h3>Agent Log</h3>';
+
+            let lastToolName = null;
+            let lastToolArgs = null;
+
+            try {
+                const response = await fetch('/agent/stream', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt, admin_key: adminKey }),
+                });
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+                    const events = buffer.split('\\n\\n');
+                    buffer = events.pop();
+
+                    for (const event of events) {
+                        if (!event.startsWith('data: ')) continue;
+                        const step = JSON.parse(event.slice(6));
+
+                        switch (step.type) {
+                            case 'tool_call':
+                                lastToolName = step.tool;
+                                lastToolArgs = step.input;
+                                addStep('tool-call',
+                                    '<span class="tool-name">' + esc(step.tool) + '</span>'
+                                    + (step.input ? '<br><small>' + esc(JSON.stringify(step.input).substring(0, 100)) + '</small>' : '')
+                                );
+                                break;
+                            case 'tool_result':
+                                addStep('tool-result',
+                                    esc(step.tool) + ' result'
+                                    + (step.result ? '<br><small>' + esc(JSON.stringify(step.result).substring(0, 150)) + '</small>' : '')
+                                );
+                                // Send to Prefab for rich rendering
+                                if (step.tool) {
+                                    sendToPrefab(step.tool, lastToolArgs);
+                                }
+                                break;
+                            case 'answer':
+                                addStep('answer', '<strong>Answer:</strong><br><small>' + esc((step.content || '').substring(0, 300)) + '...</small>');
+                                break;
+                            case 'error':
+                                addStep('error', esc(step.content || 'Unknown error'));
+                                break;
+                            case 'system':
+                                addStep('system', esc(step.content || ''));
+                                break;
+                            case 'done':
+                                addStep('system', 'Agent complete');
+                                break;
+                        }
+                    }
+                }
+            } catch (err) {
+                addStep('error', esc(err.message));
+            }
+
+            running = false;
+            runBtn.textContent = 'Run Agent';
+            runBtn.disabled = false;
+        };
+
+        document.getElementById('prompt').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') window.runAgent();
+        });
+    </script>
+</body>
+</html>
+"""
 
 
 if __name__ == "__main__":
