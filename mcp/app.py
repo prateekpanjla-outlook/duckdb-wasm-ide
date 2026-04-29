@@ -40,26 +40,11 @@ async def force_https_scheme(request, call_next):
 
 # MCP sub-app mounted after all routes — see bottom of file
 
-# Fetch app-bridge.js from npm at import time (patched by FastMCP — includes
-# the HOST-side AppBridge class which is NOT in the published npm package)
-try:
-    from fastmcp.cli.apps_dev import _fetch_app_bridge_bundle_sync
-    _bridge_js, _import_map_json = _fetch_app_bridge_bundle_sync("1.7.1", "1.25.2")
-    print(f"[startup] app-bridge.js fetched: {len(_bridge_js)} bytes, import map: {len(_import_map_json)} bytes")
-except Exception as e:
-    print(f"[startup] Warning: Could not fetch app-bridge: {e}")
-    _bridge_js = "// app-bridge not available"
-    _import_map_json = "{}"
+# app-bridge.js and sdk-bundle.js are pre-built and served from static/js/
+# No runtime fetch needed. No CDN. See bundle_bridge.js for build steps.
 
 
 # ── Routes ──
-
-@app.get("/bridge/app-bridge.js")
-async def serve_bridge():
-    """Serve the patched app-bridge.js from FastMCP."""
-    from fastapi.responses import Response
-    return Response(_bridge_js, media_type="application/javascript")
-
 
 @app.get("/health")
 async def health():
@@ -82,8 +67,7 @@ async def ui_resource(uri: str = ""):
 @app.get("/", response_class=HTMLResponse)
 async def index():
     """Serve the landing page with agent log + Prefab iframe."""
-    html = LANDING_PAGE.replace("IMPORT_MAP_PLACEHOLDER", _import_map_json)
-    return HTMLResponse(html)
+    return HTMLResponse(LANDING_PAGE)
 
 
 @app.post("/agent/stream")
@@ -130,7 +114,7 @@ LANDING_PAGE = """\
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SQL Practice — Question Authoring Agent (MCP)</title>
-    <script type="importmap">IMPORT_MAP_PLACEHOLDER</script>
+    <!-- All JS served locally from /js/ — zero CDN -->
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -337,11 +321,9 @@ LANDING_PAGE = """\
         // ── Prefab AppBridge — using FastMCP's patched app-bridge.js ──
         try {
             const { AppBridge, PostMessageTransport }
-                = await import("/bridge/app-bridge.js");
-            const { Client }
-                = await import("https://esm.sh/@modelcontextprotocol/sdk@1.25.2/client/index.js");
-            const { StreamableHTTPClientTransport }
-                = await import("https://esm.sh/@modelcontextprotocol/sdk@1.25.2/client/streamableHttp.js");
+                = await import("/js/app-bridge.js");
+            const { Client, StreamableHTTPClientTransport }
+                = await import("/js/sdk-bundle.js");
 
             const iframe = document.getElementById('prefabFrame');
             const prefabEmpty = document.getElementById('prefabEmpty');
