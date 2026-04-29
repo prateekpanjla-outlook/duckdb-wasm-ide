@@ -22,6 +22,11 @@ from mcp_server import mcp
 
 app = FastAPI(title="SQL Practice MCP Agent")
 
+# Serve bundled JS from static/js/
+static_js_dir = pathlib.Path(__file__).parent / "static" / "js"
+if static_js_dir.exists():
+    app.mount("/js", StaticFiles(directory=str(static_js_dir)), name="js")
+
 # ── Mount FastMCP server at /mcp ──
 mcp_app = mcp.http_app(transport="streamable-http")
 app.mount("/mcp", mcp_app)
