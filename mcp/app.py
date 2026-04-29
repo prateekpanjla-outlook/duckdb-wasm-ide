@@ -318,7 +318,7 @@ LANDING_PAGE = """\
 
     <script type="module">
         // ── Prefab AppBridge (bundled locally — no CDN) ──
-        // Key: setup bridge BEFORE loading iframe, same as fastmcp dev apps
+        // Replicates the fastmcp dev apps launch page pattern exactly
         try {
             const { AppBridge, PostMessageTransport, Client, StreamableHTTPClientTransport }
                 = await import("/js/mcp-bundle.js");
@@ -326,23 +326,25 @@ LANDING_PAGE = """\
             const iframe = document.getElementById('prefabFrame');
             const prefabEmpty = document.getElementById('prefabEmpty');
 
-            // 1. Connect MCP client
+            // 1. Connect MCP client to our server
             const client = new Client({ name: "mcp-agent-ui", version: "1.0.0" });
             const mcpUrl = new URL("/mcp", window.location.origin);
             console.log("[Prefab] Connecting MCP client to:", mcpUrl.href);
-            await client.connect(
-                new StreamableHTTPClientTransport(mcpUrl)
-            );
+            await client.connect(new StreamableHTTPClientTransport(mcpUrl));
             console.log("[Prefab] MCP client connected");
 
             const serverCaps = client.getServerCapabilities();
 
-            // 2. Create bridge with null source BEFORE iframe loads
-            // The renderer sends ui/initialize very early (before load event)
-            // so we must be listening before setting iframe.src
+            // 2. Load iframe with Prefab renderer
+            const loaded = new Promise(r => iframe.addEventListener("load", r, { once: true }));
+            iframe.src = "/ui-resource?uri=renderer";
+            await loaded;
+            console.log("[Prefab] Iframe loaded");
+
+            // 3. Create transport and bridge AFTER iframe has loaded
             const transport = new PostMessageTransport(
                 iframe.contentWindow,
-                null  // accept messages from any source initially
+                iframe.contentWindow
             );
 
             const bridge = new AppBridge(
@@ -366,47 +368,35 @@ LANDING_PAGE = """\
 
             bridge.onopenlink = async ({ url }) => { window.open(url, "_blank"); return {}; };
             bridge.onmessage = async () => ({});
-
-            // When renderer initializes: we can send tool results
             bridge.oninitialized = async () => {
                 console.log("[Prefab] Bridge initialized — ready for tool results");
             };
 
-            // 3. Start listening BEFORE loading iframe
             await bridge.connect(transport);
-            console.log("[Prefab] AppBridge listening");
+            console.log("[Prefab] AppBridge connected");
 
-            // 4. NOW load the iframe — renderer will send ui/initialize
-            // and our bridge will respond
-            const loaded = new Promise(r => iframe.addEventListener("load", r, { once: true }));
-            iframe.src = "/ui-resource?uri=renderer";
-            await loaded;
-
-            // 5. Update transport to the real iframe window
-            transport.eventTarget = iframe.contentWindow;
-            transport.eventSource = iframe.contentWindow;
-            console.log("[Prefab] Iframe loaded, transport updated");
-
-            // Expose render function to the non-module script
-            window._prefabRender = async function(toolName, toolResult) {
+            // Expose render function to the non-module agent script
+            window._prefabRender = async function(toolName, toolArgs) {
                 try {
-                    // Call the MCP tool to get structuredContent (Prefab UI)
+                    console.log("[Prefab] Rendering tool:", toolName);
+                    // Call MCP tool to get structuredContent (Prefab UI)
                     const result = await client.callTool({
                         name: toolName,
-                        arguments: {},
+                        arguments: toolArgs || {},
                     });
                     if (result) {
-                        await bridge.sendToolInput({ arguments: {} });
+                        await bridge.sendToolInput({ arguments: toolArgs || {} });
                         await bridge.sendToolResult(result);
                         prefabEmpty.style.display = 'none';
                         iframe.style.display = 'block';
+                        console.log("[Prefab] Rendered:", toolName);
                     }
                 } catch (err) {
-                    console.warn("[Prefab] Render failed:", err);
+                    console.warn("[Prefab] Render failed:", toolName, err.message);
                 }
             };
 
-            console.log("[Prefab] Ready — waiting for agent tool results");
+            console.log("[Prefab] Ready");
         } catch (err) {
             console.warn("[Prefab] Module init failed (Prefab UI disabled):", err.message);
         }
