@@ -20,22 +20,16 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from agent_harness import run_agent
 from mcp_server import mcp
 
-app = FastAPI(title="SQL Practice MCP Agent")
+# MCP sub-app needs its lifespan passed to the parent app
+mcp_app = mcp.http_app(transport="streamable-http")
+app = FastAPI(title="SQL Practice MCP Agent", lifespan=mcp_app.lifespan)
 
 # Serve bundled JS from static/js/
 static_js_dir = pathlib.Path(__file__).parent / "static" / "js"
 if static_js_dir.exists():
     app.mount("/js", StaticFiles(directory=str(static_js_dir)), name="js")
 
-# ── Mount FastMCP server at /mcp ──
-# Add middleware to fix X-Forwarded-Proto for Cloud Run (behind HTTPS LB)
-from starlette.middleware.trustedhost import TrustedHostMiddleware
-
-mcp_app = mcp.http_app(transport="streamable-http")
-
-# Wrap MCP app to forward HTTPS scheme from Cloud Run's load balancer
-from starlette.middleware import Middleware
-from starlette.datastructures import Headers
+# ── HTTPS scheme fix for Cloud Run ──
 
 @app.middleware("http")
 async def force_https_scheme(request, call_next):
