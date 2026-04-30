@@ -1,10 +1,12 @@
-// Bundle the 4 SDK modules that app-bridge.js and the landing page need
+// Bundle all SDK modules that app-bridge.js and the landing page need
 // These replace the esm.sh CDN imports
 
-// For app-bridge.js internal imports:
-export * as sdkTypes from "@modelcontextprotocol/sdk/types.js";
-export * as sdkProtocol from "@modelcontextprotocol/sdk/shared/protocol.js";
+// All schemas + types (used by app-bridge.js)
+export * from "@modelcontextprotocol/sdk/types.js";
 
-// For landing page imports:
+// Protocol + mergeCapabilities (used by app-bridge.js)
+export * from "@modelcontextprotocol/sdk/shared/protocol.js";
+
+// Client + transport (used by landing page)
 export { Client } from "@modelcontextprotocol/sdk/client/index.js";
 export { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";

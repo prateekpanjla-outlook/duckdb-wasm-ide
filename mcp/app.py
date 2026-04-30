@@ -206,6 +206,12 @@ LANDING_PAGE = """\
         const iframe = document.getElementById('prefabFrame');
         const prefabEmpty = document.getElementById('prefabEmpty');
         let running = false;
+        // Track tool call arguments so we can re-call via MCP with correct args
+        const pendingToolArgs = {};
+        // Accumulated results for dashboard rendering
+        let dashboardResults = [];
+        let renderTimer = null;
+        let renderQueued = false;
 
         function addStep(type, content) {
             const empty = document.getElementById('logEmpty');
@@ -234,6 +240,9 @@ LANDING_PAGE = """\
             runBtn.textContent = 'Running...';
             runBtn.disabled = true;
             logEl.innerHTML = '<h3>Agent Log</h3>';
+            dashboardResults = [];
+            if (renderTimer) clearTimeout(renderTimer);
+            renderTimer = null;
 
             try {
                 const response = await fetch('/agent/stream', {
@@ -268,17 +277,37 @@ LANDING_PAGE = """\
                                     '<span class="tool-name">' + esc(step.tool) + '</span>'
                                     + (step.input ? '<br><small>' + esc(JSON.stringify(step.input).substring(0, 100)) + '</small>' : '')
                                 );
+                                // Save the tool's input args for Prefab re-call
+                                pendingToolArgs[step.tool] = step.input || {};
                                 break;
                             case 'tool_result':
                                 addStep('tool-result',
                                     esc(step.tool) + ' result'
                                     + (step.result ? '<br><small>' + esc(JSON.stringify(step.result).substring(0, 150)) + '</small>' : '')
                                 );
-                                // Trigger Prefab render for this tool
-                                renderPrefab(step.tool, step.result);
+                                // Accumulate result for dashboard
+                                // Merge tool input args into result so builders
+                                // can access inputs like sql_data for ER diagrams
+                                const toolInput = pendingToolArgs[step.tool] || {};
+                                const merged = { ...step.result, _input: toolInput };
+                                if (toolInput.sql_data) merged._sql_data = toolInput.sql_data;
+                                if (toolInput.sql) merged._sql = toolInput.sql;
+                                dashboardResults.push({
+                                    tool: step.tool,
+                                    data: merged
+                                });
+                                // Schedule dashboard render (10s debounce)
+                                scheduleDashboardRender();
                                 break;
                             case 'answer':
                                 addStep('answer', '<strong>Answer:</strong><br><small>' + esc((step.content || '').substring(0, 300)) + '...</small>');
+                                // Add answer to dashboard
+                                dashboardResults.push({
+                                    tool: '_answer',
+                                    data: { text: step.content || '' }
+                                });
+                                // Render immediately for the answer
+                                scheduleDashboardRender(true);
                                 break;
                             case 'error':
                                 addStep('error', esc(step.content || 'Unknown error'));
@@ -288,6 +317,9 @@ LANDING_PAGE = """\
                                 break;
                             case 'done':
                                 addStep('system', 'Agent complete');
+                                // Final render with all results
+                                if (renderTimer) clearTimeout(renderTimer);
+                                renderDashboard();
                                 break;
                         }
                     }
@@ -301,13 +333,29 @@ LANDING_PAGE = """\
             runBtn.disabled = false;
         }
 
-        // Trigger Prefab rendering by calling the MCP tool directly
-        // The iframe + AppBridge will handle the Prefab rendering
-        async function renderPrefab(toolName, toolResult) {
-            // For now, show the last tool result in the Prefab area
-            // Full AppBridge integration loaded via module script below
+        // Schedule a dashboard render with 10s debounce
+        function scheduleDashboardRender(immediate = false) {
+            if (immediate) {
+                if (renderTimer) clearTimeout(renderTimer);
+                renderTimer = null;
+                renderDashboard();
+                return;
+            }
+            if (!renderTimer) {
+                // First result — render immediately
+                renderDashboard();
+            }
+            // Schedule next render in 10s (debounced)
+            if (renderTimer) clearTimeout(renderTimer);
+            renderTimer = setTimeout(() => {
+                renderTimer = null;
+                renderDashboard();
+            }, 10000);
+        }
+
+        async function renderDashboard() {
             if (window._prefabRender) {
-                window._prefabRender(toolName, toolResult);
+                window._prefabRender(JSON.stringify(dashboardResults));
             }
         }
 
@@ -337,13 +385,9 @@ LANDING_PAGE = """\
 
             const serverCaps = client.getServerCapabilities();
 
-            // 2. Load iframe with Prefab renderer
-            const loaded = new Promise(r => iframe.addEventListener("load", r, { once: true }));
-            iframe.src = "/ui-resource?uri=renderer";
-            await loaded;
-            console.log("[Prefab] Iframe loaded");
-
-            // 3. Create transport and bridge AFTER iframe has loaded
+            // 2. Create transport and bridge BEFORE loading iframe
+            //    The renderer sends ui/initialize immediately on load,
+            //    so the bridge must already be listening.
             const transport = new PostMessageTransport(
                 iframe.contentWindow,
                 iframe.contentWindow
@@ -377,24 +421,31 @@ LANDING_PAGE = """\
             await bridge.connect(transport);
             console.log("[Prefab] AppBridge connected");
 
-            // Expose render function to the non-module agent script
-            window._prefabRender = async function(toolName, toolArgs) {
+            // 3. NOW load iframe — bridge is already listening for ui/initialize
+            iframe.src = "/ui-resource?uri=renderer";
+            await new Promise(r => iframe.addEventListener("load", r, { once: true }));
+            console.log("[Prefab] Iframe loaded");
+
+            // Expose render function — calls render_dashboard with all accumulated results
+            window._prefabRender = async function(resultsJson) {
                 try {
-                    console.log("[Prefab] Rendering tool:", toolName);
-                    // Call MCP tool to get structuredContent (Prefab UI)
+                    const count = JSON.parse(resultsJson).length;
+                    console.log("[Prefab] Rendering dashboard with", count, "results");
                     const result = await client.callTool({
-                        name: toolName,
-                        arguments: toolArgs || {},
+                        name: "render_dashboard",
+                        arguments: { results_json: resultsJson },
                     });
-                    if (result) {
-                        await bridge.sendToolInput({ arguments: toolArgs || {} });
+                    if (result && result.structuredContent) {
+                        await bridge.sendToolInput({ arguments: {} });
                         await bridge.sendToolResult(result);
                         prefabEmpty.style.display = 'none';
                         iframe.style.display = 'block';
-                        console.log("[Prefab] Rendered:", toolName);
+                        console.log("[Prefab] Dashboard rendered:", count, "sections");
+                    } else {
+                        console.warn("[Prefab] No structuredContent from render_dashboard");
                     }
                 } catch (err) {
-                    console.warn("[Prefab] Render failed:", toolName, err.message);
+                    console.warn("[Prefab] Dashboard render failed:", err.message);
                 }
             };
 

@@ -85,7 +85,7 @@ RULES:
 - Category should describe the main SQL concept tested
 - Create 8-15 rows of sample data
 - The solution must produce results clearly different from SELECT * (distinguishable)
-- When generating questions with multiple tables, ALWAYS include REFERENCES constraints for foreign keys so table relationships can be visualized
+- When generating questions with multiple tables, ALWAYS declare explicit FOREIGN KEY REFERENCES in the CREATE TABLE statements. This is REQUIRED for ER diagram generation. Example: "merchant_id INTEGER REFERENCES merchants(merchant_id)" — never leave foreign keys as bare INTEGER columns
 
 IMPORTANT: When presenting the final preview, output it as a JSON code block like:
 ```json

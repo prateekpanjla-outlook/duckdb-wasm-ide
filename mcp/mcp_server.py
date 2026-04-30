@@ -17,6 +17,7 @@ from ui.components import (
     build_question_preview,
     build_insert_result,
     build_test_code,
+    build_dashboard,
 )
 
 mcp = FastMCP("SQL Practice Agent")
@@ -93,6 +94,18 @@ async def generate_test(question_id: int, sql_solution: str, question_text: str)
     """Generate a Playwright E2E test for a question."""
     data = await api.generate_test(question_id, sql_solution, question_text)
     return build_test_code(data)
+
+
+@mcp.tool(app=True)
+async def render_dashboard(results_json: str) -> Column:
+    """Render a combined dashboard of all agent tool results.
+
+    Takes a JSON string: [{"tool": "name", "data": {...}}, ...]
+    Returns a scrollable Prefab Column with all results stacked.
+    """
+    import json
+    results = json.loads(results_json)
+    return build_dashboard(results)
 
 
 if __name__ == "__main__":

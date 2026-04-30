@@ -123,16 +123,6 @@ def build_validation_result(data: dict, sql_data: str = None) -> Column:
                     if error:
                         P(f"Error: {error}")
 
-        # ER diagram if multi-table with FK
-        if sql_data:
-            er = generate_er_diagram(sql_data)
-            if er:
-                with Card():
-                    with CardHeader():
-                        H4("Table Relationships")
-                    with CardContent():
-                        Mermaid(er)
-
     return layout
 
 
@@ -335,3 +325,111 @@ def build_test_code(data: dict) -> Column:
                 Code(code)
 
     return layout
+
+
+def build_answer_preview(answer_text: str) -> Column:
+    """Render the agent's final answer in a Prefab Card.
+
+    If the answer is a JSON question object, renders it using
+    build_question_preview for rich formatting with ER diagrams.
+    Otherwise renders as plain text paragraphs.
+    """
+    import json
+
+    # Try to parse as question JSON — strip markdown code fences if present
+    text = answer_text.strip()
+    if text.startswith("```"):
+        # Remove ```json ... ``` wrapper
+        text = text.split("\n", 1)[-1]  # remove first line (```json)
+        if text.endswith("```"):
+            text = text[:-3]
+        text = text.strip()
+    elif text.startswith("json"):
+        # Remove bare "json" prefix (no backticks)
+        text = text[4:].strip()
+
+    try:
+        data = json.loads(text)
+        if isinstance(data, dict) and "sql_data" in data and "sql_question" in data:
+            return build_question_preview(data, sql_data=data.get("sql_data"))
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    # Plain text fallback
+    with Column(gap=3) as layout:
+        H3("Agent Answer")
+
+        with Card():
+            with CardContent():
+                for para in answer_text.split("\n\n"):
+                    para = para.strip()
+                    if not para:
+                        continue
+                    if para.startswith("```"):
+                        Code(para.strip("`").strip())
+                    else:
+                        P(para)
+
+    return layout
+
+
+# ── Dashboard: combined view of all tool results ──
+
+# Map tool names to their builder functions
+TOOL_BUILDERS = {
+    "get_coverage_gaps": build_coverage_table,
+    "list_existing_questions": build_questions_table,
+    "list_concepts": build_concepts_table,
+    "validate_question": build_validation_result,
+    "execute_sql": build_sql_result,
+    "check_concept_overlap": build_concept_overlap,
+    "insert_question": build_insert_result,
+    "generate_test": build_test_code,
+}
+
+
+def build_dashboard(results: list[dict]) -> Column:
+    """Build a combined scrollable Column with all tool results stacked.
+
+    Each entry: {"tool": "tool_name", "data": {...tool result data...}}
+    Special entry: {"tool": "_answer", "data": {"text": "..."}}
+    """
+    sections = []
+    for entry in results:
+        tool_name = entry.get("tool", "")
+        data = entry.get("data", {})
+
+        try:
+            if tool_name == "_answer":
+                sections.append(build_answer_preview(data.get("text", "")))
+            elif tool_name in TOOL_BUILDERS:
+                builder = TOOL_BUILDERS[tool_name]
+                if tool_name == "validate_question":
+                    sections.append(builder(data, sql_data=data.get("_sql_data")))
+                elif tool_name == "execute_sql":
+                    sections.append(builder(data, sql=data.get("_sql")))
+                else:
+                    sections.append(builder(data))
+            else:
+                sections.append(
+                    Column(children=[
+                        Card(children=[
+                            CardContent(children=[
+                                H4(content=tool_name),
+                                P(content=str(data)[:300]),
+                            ])
+                        ])
+                    ])
+                )
+        except Exception as e:
+            sections.append(
+                Column(children=[
+                    Card(children=[
+                        CardContent(children=[
+                            P(content=f"Error rendering {tool_name}: {str(e)}"),
+                        ])
+                    ])
+                ])
+            )
+
+    return Column(children=sections, gap=4)
