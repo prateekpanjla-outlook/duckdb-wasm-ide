@@ -92,7 +92,7 @@ Date: 2026-04-30
 **Root cause:** FastAPI `StaticFiles` mount at `/js` intercepts the request before the `@app.get("/js/app-bridge.js")` route. StaticFiles looks for a physical file, finds none, returns 404.
 **Fix:** Serve app-bridge.js at `/bridge/app-bridge.js` instead.
 
-## Issue 19 (CURRENT): app-bridge.js imports from esm.sh CDN
+## Issue 19: app-bridge.js imports from esm.sh CDN
 **Problem:** FastMCP's patched `app-bridge.js` internally imports from `esm.sh`:
 - `https://esm.sh/@modelcontextprotocol/sdk@1.25.2/types.js`
 - `https://esm.sh/@modelcontextprotocol/sdk@1.25.2/shared/protocol.js`
@@ -103,13 +103,43 @@ And the landing page imports:
 
 **Root cause:** `AppBridge` (host-side class) is NOT in the published npm package. FastMCP patches the ext-apps source and rewrites bare `@modelcontextprotocol/sdk` imports to `esm.sh` URLs. There is no official way to get AppBridge without these CDN imports.
 
-**Potential fix:** 
+**Fix:** 
 1. Save `app-bridge.js` to disk
 2. Replace the 2 esm.sh URLs in app-bridge.js with local paths (e.g., `/js/sdk-types.js`, `/js/sdk-protocol.js`)
 3. Bundle those 4 SDK modules individually with esbuild (types.js, protocol.js, client/index.js, client/streamableHttp.js)
 4. Serve all from Cloud Run — zero CDN
 
-**Status:** Not yet implemented.
+**Status:** RESOLVED (commit `1d7cd1f`). Bundled all SDK modules locally with esbuild. Zero CDN achieved.
+
+## Issue 20: sdk-bundle.js not exporting Protocol
+**Error:** `The requested module '/js/sdk-bundle.js' does not provide an export named 'Protocol'`
+**Root cause:** `app-bridge.js` imports `Protocol` from the MCP SDK, but `bundle_bridge.js` only exported namespace objects (`sdkTypes`, `sdkProtocol`), not individual named exports like `Protocol`.
+**Fix:** Updated `bundle_bridge.js` to use `export *` instead of namespace exports, so all named exports (including `Protocol`) are available.
+**Status:** RESOLVED (commit `ff55009`).
+
+## Issue 21: Race condition — bridge connects after iframe loads
+**Problem:** Prefab iframe showed "Waiting for content..." and never rendered tool results.
+**Root cause:** `iframe.src` was set before `AppBridge.connect()` completed. The iframe loaded and tried to communicate before the bridge was ready.
+**Fix:** Call `AppBridge.connect()` BEFORE setting `iframe.src`.
+**Status:** RESOLVED (commit `ff55009`).
+
+## Issue 22: Answer rendering as raw JSON
+**Problem:** The agent's final answer was displayed as a raw JSON string instead of a formatted question preview card.
+**Root cause:** The answer SSE event contained JSON but the frontend rendered it as-is without parsing.
+**Fix:** Parse the JSON answer and use `build_question_preview` to render it as a Proposed Question card with schema, solution, concepts, and ER diagram.
+**Status:** RESOLVED (commit `ff55009`).
+
+## Issue 23: ER diagrams not showing
+**Problem:** Multi-table questions did not display ER diagrams even when foreign keys were present.
+**Root cause:** The Gemini prompt did not strongly enough require explicit REFERENCES constraints in the schema.
+**Fix:** Strengthened the FK prompt with an explicit REFERENCES example so the agent always includes foreign key constraints in generated schemas.
+**Status:** RESOLVED (commit `ff55009`).
+
+## Issue 24: Tool results replacing each other in dashboard
+**Problem:** Each new tool result replaced the previous one in the Prefab iframe instead of accumulating.
+**Root cause:** `render_dashboard` was replacing the entire iframe content on each tool call.
+**Fix:** Changed `render_dashboard` to accumulate all tool results, rendering them stacked and scrollable.
+**Status:** RESOLVED (commit `ff55009`).
 
 ## Key Learnings
 

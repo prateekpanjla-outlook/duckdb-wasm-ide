@@ -299,32 +299,32 @@ mcp/
 
 ## Implementation Steps
 
-### Step 1: Add REST endpoints to Express (30 min)
+### Step 1: Add REST endpoints to Express (30 min) -- DONE
 - Add 8 thin routes to `server/routes/admin.js` wrapping existing `TOOL_FUNCTIONS`
 - All behind `adminAuth` middleware
 - Commit, deploy to Cloud Run
 - Test: `curl -H "X-Admin-Key: ..." https://duckdb-ide-xxx.run.app/api/admin/tools/coverage-gaps`
 
-### Step 2: Project skeleton + FastAPI app (1 hr)
+### Step 2: Project skeleton + FastAPI app (1 hr) -- DONE
 - Create `mcp/` directory structure
 - `config.py` — existing Cloud Run URL, admin key, Gemini API key, model
 - `requirements.txt` + `package.json`
 - `app.py` — FastAPI with routes: `/`, `/js/*`, `/ui-resource`, `/mcp`, `/agent/stream`
 
-### Step 3: Bundle JS dependencies (30 min)
+### Step 3: Bundle JS dependencies (30 min) -- DONE
 - `npm install @modelcontextprotocol/sdk` (provides MCP client for browser)
 - Extract AppBridge JS from FastMCP dev apps source or npm
 - Copy bundled JS to `mcp/static/js/`
 - Serve Prefab renderer HTML from `prefab-ui` Python package path
 - Verify: zero external CDN requests
 
-### Step 4: ER diagram generator (1 hr)
+### Step 4: ER diagram generator (1 hr) -- DONE
 - `mcp/ui/er_diagram.py` — parse SQL schema → Mermaid ER diagram
 - Extract tables, columns, PK/FK via regex
 - Foreign keys present → Mermaid erDiagram string
 - Single table, no FK → None (no diagram)
 
-### Step 5: Prefab UI component helpers (1.5 hr)
+### Step 5: Prefab UI component helpers (1.5 hr) -- DONE
 - `mcp/ui/components.py` — one builder per tool, each returns `Column`:
   - `build_coverage_table(data)` → table + metric cards
   - `build_questions_table(data)` → table + next index badge
@@ -336,12 +336,12 @@ mcp/
   - `build_insert_result(data)` → success card with question ID
   - `build_test_code(data)` → code block with Playwright test
 
-### Step 6: MCP server with 8 tools (1.5 hr)
+### Step 6: MCP server with 8 tools (1.5 hr) -- DONE
 - `mcp/mcp_server.py` — 8 tools with `@mcp.tool(app=True)`
 - Each tool: call Express API via `api_client.py` → build Prefab UI → return Column
 - Mount via `mcp.http_app()` inside FastAPI at `/mcp`
 
-### Step 7: Agent harness + SSE endpoint (2 hr)
+### Step 7: Agent harness + SSE endpoint (2 hr) -- DONE
 - `mcp/agent_harness.py` — Gemini agent loop (adapted from `c:\tmp\test_gemini.py`)
 - Calls MCP tools internally (direct function call, not HTTP)
 - Returns steps as async generator for SSE streaming
@@ -350,19 +350,19 @@ mcp/
 - Browser receives SSE: updates agent log (left panel) + pushes Prefab card to iframe (right panel)
 - Handles parallel tool calls + thought signatures (Gemini 3.x)
 
-### Step 8: Landing page HTML (1 hr)
+### Step 8: Landing page HTML (1 hr) -- DONE
 - `mcp/static/index.html` — split layout:
   - Left: admin key input, prompt input, Run button, agent log (SSE consumer)
   - Right: Prefab iframe that grows with each tool result
   - AppBridge setup: connects iframe to `/mcp`, receives structuredContent per tool call
   - All JS from `/js/` (bundled, no CDN)
 
-### Step 9: System prompt update (30 min)
+### Step 9: System prompt update (30 min) -- DONE
 - Port from `agent.js`, add FK constraint instructions
 - "When generating questions with multiple tables, always include REFERENCES constraints"
 - "Include a table_relationships field describing FK relationships"
 
-### Step 10: Dockerfile + deploy (1 hr)
+### Step 10: Dockerfile + deploy (1 hr) -- DONE
 - Multi-stage Dockerfile: Python 3.14 + Node 18 (for npm install)
 - Stage 1: npm install (bundle JS deps)
 - Stage 2: pip install (Python deps)
@@ -371,12 +371,12 @@ mcp/
 - `.github/workflows/deploy-mcp.yml` — triggers on `mcp/**` changes
 - Separate Cloud Run service, separate SA, separate secrets
 
-### Step 11: Integration test + demo recording (1 hr)
+### Step 11: Integration test + demo recording (1 hr) -- IN PROGRESS
 - Open `https://duckdb-ide-mcp-xxx.run.app`
 - Enter admin key + prompt "Add a question about INNER JOIN"
 - Watch: agent log streams steps, Prefab cards appear one by one
 - Verify: ER diagram renders for multi-table question
-- Click Approve → verify question inserted
+- Click Approve → verify question inserted -- approve/reject/retry buttons not functional yet
 - Open `https://duckdb-ide-xxx.run.app` → verify question in dropdown
 - Record YouTube demo (~3 min)
 
