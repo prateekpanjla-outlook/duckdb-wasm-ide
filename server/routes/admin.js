@@ -228,4 +228,20 @@ router.post('/tools/generate-test', async (req, res) => {
     }
 });
 
+router.delete('/questions/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const { query } = await import('../config/database.js');
+        await query('DELETE FROM question_concepts WHERE question_id = $1', [id]);
+        await query('DELETE FROM user_attempts WHERE question_id = $1', [id]);
+        const result = await query('DELETE FROM questions WHERE id = $1 RETURNING id', [id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: `Question ${id} not found` });
+        }
+        res.json({ deleted: id });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 export default router;

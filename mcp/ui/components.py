@@ -255,8 +255,8 @@ def build_question_preview(question: dict, sql_data: str = None) -> Column:
                     H4("Schema")
                     Code(data)
 
-                    # ER diagram if multi-table with FK
-                    er = generate_er_diagram(data)
+                    # ER diagram: use Gemini-generated if available, else compute from sql_data
+                    er = question.get("er_diagram") or generate_er_diagram(data)
                     if er:
                         H4("Table Relationships")
                         Mermaid(er)
@@ -291,7 +291,7 @@ def build_question_preview(question: dict, sql_data: str = None) -> Column:
                             "difficulty": difficulty,
                             "category": category,
                             "order_index": order_index if isinstance(order_index, int) else 0,
-                            "er_diagram": question.get("er_diagram", ""),
+                            "er_diagram": er or "",
                         }
                     ))
                     Button("Reject", variant="destructive")

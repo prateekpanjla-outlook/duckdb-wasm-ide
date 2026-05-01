@@ -181,10 +181,17 @@ export class PracticeManager {
      */
     async initializePracticeDuckDB() {
         const data = this.currentQuestion.sql_data;
-        // Replace CREATE TABLE with CREATE OR REPLACE TABLE so reloading works
-        const sql = data.replace(/CREATE TABLE/gi, 'CREATE OR REPLACE TABLE');
-        const statements = sql.split(';').filter(s => s.trim());
 
+        // Extract table names from CREATE TABLE statements
+        const tableNames = [...data.matchAll(/CREATE\s+TABLE\s+(\w+)/gi)].map(m => m[1]);
+
+        // Drop tables in reverse order (children before parents) to avoid FK dependency errors
+        for (const name of [...tableNames].reverse()) {
+            await this.dbManager.executeQuery(`DROP TABLE IF EXISTS ${name} CASCADE`);
+        }
+
+        // Execute CREATE TABLE and INSERT statements as-is
+        const statements = data.split(';').filter(s => s.trim());
         for (const statement of statements) {
             if (statement.trim()) {
                 await this.dbManager.executeQuery(statement);
