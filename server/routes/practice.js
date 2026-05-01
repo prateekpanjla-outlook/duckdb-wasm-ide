@@ -34,7 +34,8 @@ router.get('/start', authenticate, async (req, res) => {
                 sql_solution: question.sql_solution,
                 sql_solution_explanation: question.sql_solution_explanation,
                 difficulty: question.difficulty,
-                category: question.category
+                category: question.category,
+                er_diagram: question.er_diagram
             }
         });
     } catch (error) {
@@ -78,7 +79,8 @@ router.get('/next', authenticate, async (req, res) => {
                 sql_solution: nextQuestion.sql_solution,
                 sql_solution_explanation: nextQuestion.sql_solution_explanation,
                 difficulty: nextQuestion.difficulty,
-                category: nextQuestion.category
+                category: nextQuestion.category,
+                er_diagram: nextQuestion.er_diagram
             }
         });
     } catch (error) {
@@ -105,7 +107,8 @@ router.get('/questions', authenticate, async (req, res) => {
                 category: q.category,
                 difficulty: q.difficulty,
                 sql_question: q.sql_question,
-                sql_data: q.sql_data
+                sql_data: q.sql_data,
+                er_diagram: q.er_diagram
             })),
             progress: progress
         });
@@ -141,7 +144,8 @@ router.get('/question/:id', authenticate, async (req, res) => {
                 sql_solution: question.sql_solution,
                 sql_solution_explanation: question.sql_solution_explanation,
                 difficulty: question.difficulty,
-                category: question.category
+                category: question.category,
+                er_diagram: question.er_diagram
             }
         });
     } catch (error) {
