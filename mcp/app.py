@@ -417,6 +417,17 @@ LANDING_PAGE = """\
             bridge.oninitialized = async () => {
                 console.log("[Prefab] Bridge initialized — ready for tool results");
             };
+            bridge.oncalltool = async (params) => {
+                console.log("[Prefab] CallTool action:", params.name);
+                const result = await client.callTool({
+                    name: params.name,
+                    arguments: params.arguments || {},
+                });
+                console.log("[Prefab] Tool result received, sending to iframe");
+                await bridge.sendToolInput({ arguments: params.arguments || {} });
+                await bridge.sendToolResult(result);
+                return result;
+            };
 
             await bridge.connect(transport);
             console.log("[Prefab] AppBridge connected");

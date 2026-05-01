@@ -110,7 +110,7 @@ app.use((req, res, next) => {
 
 // Serve frontend static files (in production, Express serves everything)
 app.use(express.static(staticRoot, {
-    maxAge: '1d',
+    maxAge: '1h',
     setHeaders: (res, filePath) => {
         if (filePath.endsWith('.wasm')) {
             res.set('Content-Type', 'application/wasm');
