@@ -1,7 +1,7 @@
 """FastAPI web app — serves landing page, SSE agent endpoint, and Prefab UI.
 
 Uses FastMCP's built-in app-bridge and Prefab renderer machinery.
-The browser loads MCP SDK from esm.sh CDN (client-side only — server is self-contained).
+Browser loads bundled MCP SDK from /js/ (no CDN dependency).
 
 Run locally: PYTHONIOENCODING=utf-8 uvicorn app:app --port 8080
 """
