@@ -9,6 +9,7 @@ Rules (from docs/mcp_prefab.md):
 """
 
 from prefab_ui.components import *
+from prefab_ui.actions.mcp import CallTool
 from .er_diagram import generate_er_diagram
 
 
@@ -281,7 +282,18 @@ def build_question_preview(question: dict, sql_data: str = None) -> Column:
 
             with CardFooter():
                 with Row(gap=2):
-                    Button("Approve & Insert", variant="default")
+                    Button("Approve & Insert", variant="default", on_click=CallTool(
+                        "insert_question", arguments={
+                            "sql_data": data,
+                            "sql_question": sql_question,
+                            "sql_solution": sql_solution,
+                            "sql_solution_explanation": explanation,
+                            "difficulty": difficulty,
+                            "category": category,
+                            "order_index": order_index if isinstance(order_index, int) else 0,
+                            "er_diagram": question.get("er_diagram", ""),
+                        }
+                    ))
                     Button("Reject", variant="destructive")
                     Button("Retry", variant="outline")
 

@@ -75,6 +75,7 @@ async def insert_question(
     difficulty: str,
     category: str,
     order_index: int,
+    er_diagram: str = "",
 ) -> Column:
     """Insert a validated and approved question into the database."""
     data = await api.insert_question({
@@ -85,6 +86,7 @@ async def insert_question(
         "difficulty": difficulty,
         "category": category,
         "order_index": order_index,
+        "er_diagram": er_diagram or None,
     })
     return build_insert_result(data)
 

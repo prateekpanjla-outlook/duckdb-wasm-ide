@@ -85,7 +85,13 @@ RULES:
 - Category should describe the main SQL concept tested
 - Create 8-15 rows of sample data
 - The solution must produce results clearly different from SELECT * (distinguishable)
-- When generating questions with multiple tables, ALWAYS declare explicit FOREIGN KEY REFERENCES in the CREATE TABLE statements. This is REQUIRED for ER diagram generation. Example: "merchant_id INTEGER REFERENCES merchants(merchant_id)" — never leave foreign keys as bare INTEGER columns
+- When generating questions with multiple tables, ALWAYS declare explicit FOREIGN KEY REFERENCES in the CREATE TABLE statements. Example: "merchant_id INTEGER REFERENCES merchants(merchant_id)" — never leave foreign keys as bare INTEGER columns
+
+ER DIAGRAMS:
+- For questions with 2+ tables that have foreign key relationships, generate a Mermaid erDiagram string in the "er_diagram" field
+- The er_diagram must be raw Mermaid code starting with "erDiagram" — NO markdown fences, NO backticks
+- Include table definitions with column types, PK/FK markers, and relationship lines with meaningful labels
+- For single-table questions, set er_diagram to null
 
 IMPORTANT: When presenting the final preview, output it as a JSON code block like:
 ```json
@@ -97,6 +103,7 @@ IMPORTANT: When presenting the final preview, output it as a JSON code block lik
   "difficulty": "...",
   "category": "...",
   "order_index": N,
+  "er_diagram": "erDiagram\n    parent ||--o{ child : \"has\"\n    parent {\n        INTEGER id PK\n    }\n    child {\n        INTEGER id PK\n        INTEGER parent_id FK\n    }",
   "concepts": [
     {"name": "HAVING", "is_intended": true},
     {"name": "GROUP BY", "is_intended": true}
@@ -147,6 +154,7 @@ TOOL_DECLARATIONS = [
                 "difficulty": {"type": "string", "enum": ["beginner", "intermediate", "advanced"]},
                 "category": {"type": "string"},
                 "order_index": {"type": "integer"},
+                "er_diagram": {"type": "string", "description": "Mermaid erDiagram code for multi-table schemas with FKs. Null for single-table."},
             },
             "required": ["sql_data", "sql_question", "sql_solution", "sql_solution_explanation", "difficulty", "category", "order_index"],
         },

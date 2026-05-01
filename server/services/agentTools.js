@@ -159,7 +159,8 @@ export async function insert_question(params) {
         sql_solution_explanation: params.sql_solution_explanation,
         difficulty: params.difficulty,
         category: params.category,
-        order_index: params.order_index
+        order_index: params.order_index,
+        er_diagram: params.er_diagram || null
     });
 
     // Tag question with concepts

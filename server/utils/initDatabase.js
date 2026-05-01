@@ -84,6 +84,11 @@ async function initDatabase() {
         `);
         console.log('✅ Questions table created');
 
+        // Add er_diagram column if missing (nullable — existing rows get NULL)
+        await dbClient.query(`
+            ALTER TABLE questions ADD COLUMN IF NOT EXISTS er_diagram TEXT
+        `);
+
         // User attempts table
         console.log('Creating user_attempts table...');
         await dbClient.query(`

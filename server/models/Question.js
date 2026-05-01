@@ -8,7 +8,7 @@ export class Question {
         const text = `
             SELECT
                 id, sql_data, sql_question, sql_solution,
-                sql_solution_explanation, difficulty, category
+                sql_solution_explanation, difficulty, category, er_diagram
             FROM questions
             ORDER BY order_index ASC, id ASC
             LIMIT 1
@@ -24,7 +24,7 @@ export class Question {
         const text = `
             SELECT
                 id, sql_data, sql_question, sql_solution,
-                sql_solution_explanation, difficulty, category
+                sql_solution_explanation, difficulty, category, er_diagram
             FROM questions
             WHERE order_index > (
                 SELECT order_index FROM questions WHERE id = $1
@@ -47,7 +47,7 @@ export class Question {
         const text = `
             SELECT
                 id, sql_data, sql_question, sql_solution,
-                sql_solution_explanation, difficulty, category
+                sql_solution_explanation, difficulty, category, er_diagram
             FROM questions
             WHERE id = $1
         `;
@@ -61,7 +61,7 @@ export class Question {
     static async getAll(filters = {}) {
         let text = `
             SELECT
-                id, sql_question, difficulty, category, order_index, sql_data
+                id, sql_question, difficulty, category, order_index, sql_data, er_diagram
             FROM questions
             WHERE 1=1
         `;
@@ -96,7 +96,8 @@ export class Question {
         sql_solution_explanation,
         difficulty = 'beginner',
         category = 'SELECT queries',
-        order_index = null
+        order_index = null,
+        er_diagram = null
     }) {
         // If order_index not provided, put it at the end
         if (order_index === null) {
@@ -109,9 +110,9 @@ export class Question {
         const text = `
             INSERT INTO questions (
                 sql_data, sql_question, sql_solution,
-                sql_solution_explanation, difficulty, category, order_index
+                sql_solution_explanation, difficulty, category, order_index, er_diagram
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING *
         `;
 
@@ -122,7 +123,8 @@ export class Question {
             JSON.stringify(sql_solution_explanation),
             difficulty,
             category,
-            order_index
+            order_index,
+            er_diagram
         ]);
 
         return result.rows[0];

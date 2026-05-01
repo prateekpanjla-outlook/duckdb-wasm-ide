@@ -208,6 +208,9 @@ export class PracticeManager {
         document.getElementById('practiceDifficulty').textContent = this.currentQuestion.difficulty;
         document.getElementById('practiceCategory').textContent = this.currentQuestion.category;
 
+        // Display ER diagram if available
+        this.displayERDiagram();
+
         // Add practice buttons to query section
         this.addPracticeButtons();
 
@@ -219,6 +222,34 @@ export class PracticeManager {
 
         // Clear results
         document.getElementById('resultsContainer').innerHTML = '<div class="results-placeholder"><p>Write your SQL query and click "Run Code" to see results</p></div>';
+    }
+
+    /**
+     * Display ER diagram in the practice question panel if available
+     */
+    displayERDiagram() {
+        const panel = document.getElementById('practiceQuestionPanel');
+        if (!panel) return;
+
+        // Remove existing diagram
+        const existing = panel.querySelector('.er-diagram-container');
+        if (existing) existing.remove();
+
+        if (!this.currentQuestion.er_diagram) return;
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'er-diagram-container';
+        wrapper.innerHTML = '<h5 class="er-diagram-title">Table Relationships</h5>';
+
+        const mermaidDiv = document.createElement('div');
+        mermaidDiv.className = 'mermaid';
+        mermaidDiv.textContent = this.currentQuestion.er_diagram;
+        wrapper.appendChild(mermaidDiv);
+        panel.appendChild(wrapper);
+
+        if (window.mermaid) {
+            mermaid.run({ nodes: [mermaidDiv] });
+        }
     }
 
     /**

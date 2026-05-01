@@ -160,6 +160,35 @@ class QuestionDropdownManager {
 
         // Append schema to info section
         infoSection.insertAdjacentHTML('beforeend', schemaHTML);
+
+        // Render ER diagram if available
+        this.displayERDiagram(question, infoSection);
+    }
+
+    /**
+     * Display Mermaid ER diagram if the question has one stored
+     */
+    displayERDiagram(question, container) {
+        // Remove existing diagram
+        const existing = container.querySelector('.er-diagram-container');
+        if (existing) existing.remove();
+
+        if (!question.er_diagram) return;
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'er-diagram-container';
+        wrapper.innerHTML = '<h5 class="er-diagram-title">Table Relationships</h5>';
+
+        const mermaidDiv = document.createElement('div');
+        mermaidDiv.className = 'mermaid';
+        mermaidDiv.textContent = question.er_diagram;
+        wrapper.appendChild(mermaidDiv);
+        container.appendChild(wrapper);
+
+        // Render with Mermaid.js
+        if (window.mermaid) {
+            mermaid.run({ nodes: [mermaidDiv] });
+        }
     }
 
     /**

@@ -85,15 +85,21 @@ app.use('/api/practice', practiceRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/admin', adminRoutes);
 
-// Serve pre-compressed WASM files (built by Docker: gzip -k -9)
-// Browser sends Accept-Encoding: gzip → we serve .wasm.gz with Content-Encoding: gzip
+// Serve pre-compressed static files (built by Docker: gzip -k -9)
+// Browser sends Accept-Encoding: gzip → we serve .gz with Content-Encoding: gzip
 // Zero runtime CPU cost, stays under Cloud Run 32MB HTTP/1.1 limit
 const staticRoot = path.join(__dirname, '..');
+const GZ_CONTENT_TYPES = {
+    '.wasm': 'application/wasm',
+    '.js': 'application/javascript',
+};
 app.use((req, res, next) => {
-    if (req.path.endsWith('.wasm') && req.headers['accept-encoding']?.includes('gzip')) {
+    const ext = path.extname(req.path);
+    const contentType = GZ_CONTENT_TYPES[ext];
+    if (contentType && req.headers['accept-encoding']?.includes('gzip')) {
         const gzPath = path.join(staticRoot, req.path + '.gz');
         if (fs.existsSync(gzPath)) {
-            res.set('Content-Type', 'application/wasm');
+            res.set('Content-Type', contentType);
             res.set('Content-Encoding', 'gzip');
             res.set('Cache-Control', 'public, max-age=31536000, immutable');
             return res.sendFile(gzPath);
@@ -169,6 +175,8 @@ async function ensureTables() {
             order_index INTEGER,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`);
+        // Migration: add er_diagram column to existing deployments
+        await client.query(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS er_diagram TEXT`);
         await client.query(`CREATE TABLE IF NOT EXISTS user_attempts (
             id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
