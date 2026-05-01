@@ -365,7 +365,7 @@ async def run_agent(prompt: str, api_key: str = None, model: str = None):
 
         if text_part:
             text = text_part["text"]
-            print(f"   TEXT ({len(text)} chars):\n{text[:1000]}")
+            print(f"   TEXT ({len(text)} chars):\n{text}")
 
             # Nudge if no tools used yet
             if tool_calls_made == 0 and step_count < MAX_STEPS:
