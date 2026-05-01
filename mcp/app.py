@@ -417,6 +417,11 @@ LANDING_PAGE = """\
             bridge.oninitialized = async () => {
                 console.log("[Prefab] Bridge initialized — ready for tool results");
             };
+
+            await bridge.connect(transport);
+            console.log("[Prefab] AppBridge connected");
+
+            // Set oncalltool AFTER connect() — connect() auto-sets it, so we override
             bridge.oncalltool = async (params) => {
                 console.log("[Prefab] CallTool action:", params.name);
                 const result = await client.callTool({
@@ -428,9 +433,6 @@ LANDING_PAGE = """\
                 await bridge.sendToolResult(result);
                 return result;
             };
-
-            await bridge.connect(transport);
-            console.log("[Prefab] AppBridge connected");
 
             // 3. NOW load iframe — bridge is already listening for ui/initialize
             iframe.src = "/ui-resource?uri=renderer";
