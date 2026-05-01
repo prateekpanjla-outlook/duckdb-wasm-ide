@@ -293,6 +293,10 @@ async def run_agent(prompt: str, api_key: str = None, model: str = None):
                     print(f"   Thought signature: {name} ({len(tc['thoughtSignature'])} chars)")
 
                 print(f"   CALL: {name}({json.dumps(args)[:200]})")
+                if name == "insert_question":
+                    print(f"   er_diagram in args: {'er_diagram' in args}")
+                    if 'er_diagram' in args:
+                        print(f"   er_diagram value: {str(args['er_diagram'])[:200]}")
 
                 yield {
                     "type": "tool_call",
@@ -361,7 +365,7 @@ async def run_agent(prompt: str, api_key: str = None, model: str = None):
 
         if text_part:
             text = text_part["text"]
-            print(f"   TEXT ({len(text)} chars)")
+            print(f"   TEXT ({len(text)} chars):\n{text[:1000]}")
 
             # Nudge if no tools used yet
             if tool_calls_made == 0 and step_count < MAX_STEPS:
