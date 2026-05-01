@@ -317,7 +317,6 @@ def build_insert_result(data: dict) -> Column:
                         with Row(gap=1):
                             for c in concepts:
                                 Badge(c, variant="default")
-                    Button("Generate Playwright Test", variant="outline")
 
     return layout
 
