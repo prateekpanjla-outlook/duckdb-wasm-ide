@@ -129,10 +129,13 @@ def mcp_tools_to_gemini(tools) -> list[dict]:
 def extract_text_result(result) -> dict:
     """Extract JSON dict from MCP CallToolResult text content.
 
-    MCP tools return ToolResult with content=[TextContent(text=json)]
-    plus structured_content (Prefab UI). We only need the text for Gemini.
+    fastmcp.Client.call_tool() returns a CallToolResult dataclass with:
+      - is_error (bool) — snake_case, not camelCase
+      - content (list[ContentBlock]) — text content for LLM
+      - structured_content (dict) — Prefab UI for browser
+    We only need the text content for Gemini.
     """
-    if result.isError:
+    if result.is_error:
         texts = [c.text for c in (result.content or []) if hasattr(c, "text")]
         return {"error": " ".join(texts) or "Unknown tool error"}
     for block in (result.content or []):
@@ -295,7 +298,7 @@ async def run_agent(prompt: str, api_key: str = None, model: str = None):
                         mcp_result = await client.call_tool(name, args)
                         tool_result = extract_text_result(mcp_result)
                         mcp_ms = int((time.time() - mcp_start) * 1000)
-                        has_structured = mcp_result.structuredContent is not None if hasattr(mcp_result, 'structuredContent') else False
+                        has_structured = mcp_result.structured_content is not None
                         text_bytes = len(json.dumps(tool_result))
                         print(f"[MCP] ← {mcp_ms}ms | text: {text_bytes} bytes | structuredContent: {'yes' if has_structured else 'no'}")
                         print(f"[MCP] Result: {json.dumps(tool_result)[:200]}")
