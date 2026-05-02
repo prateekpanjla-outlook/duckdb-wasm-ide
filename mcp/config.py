@@ -21,3 +21,7 @@ MAX_OUTPUT_TOKENS = 8192
 
 # Ensure UTF-8 for Prefab CLI on Windows
 os.environ["PYTHONIOENCODING"] = "utf-8"
+
+# MCP server URL (agent connects as MCP client)
+# Default uses in-memory transport; this is for reference/HTTP override
+MCP_URL = os.environ.get("MCP_URL", "http://localhost:8080/mcp")

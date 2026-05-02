@@ -1,14 +1,15 @@
-"""Agent harness — Gemini + MCP tool dispatch.
+"""Agent harness — Gemini + MCP client tool dispatch.
 
-Runs the question authoring agent loop:
-  1. Send prompt + history to Gemini
-  2. Gemini returns functionCall(s)
-  3. Call MCP tool(s) → get result
-  4. Feed result back to Gemini
-  5. Repeat until text answer or max steps
+Connects to the MCP server as an in-memory client, discovers tools
+dynamically via list_tools(), and calls them via MCP protocol.
 
-Adapted from c:\\tmp\\test_gemini.py with real MCP tool calls
-instead of mock responses.
+Flow:
+  1. Connect to MCP server → discover tools
+  2. Convert MCP tool schemas → Gemini functionDeclarations
+  3. Send prompt + history to Gemini
+  4. Gemini returns functionCall(s) → call MCP tools
+  5. Feed results back to Gemini
+  6. Repeat until text answer or max steps
 
 Usage:
   GEMINI_API_KEY=xxx ADMIN_KEY=yyy python agent_harness.py --prompt "Add a question about CTE"
@@ -22,6 +23,7 @@ import sys
 import time
 
 import httpx
+from fastmcp import Client
 
 # Add parent to path for config
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -30,29 +32,11 @@ from config import (
     MAX_STEPS, CALL_DELAY_SECONDS, MAX_OUTPUT_TOKENS,
 )
 
-# Import MCP tool functions directly (no stdio/HTTP — same process)
-from mcp_server import (
-    get_coverage_gaps,
-    list_existing_questions,
-    list_concepts,
-    validate_question,
-    execute_sql,
-    check_concept_overlap,
-    insert_question,
-    generate_test,
-)
+# Import MCP server instance for in-memory client connection
+from mcp_server import mcp as mcp_server
 
-# Map tool names to functions
-TOOL_FUNCTIONS = {
-    "get_coverage_gaps": get_coverage_gaps,
-    "list_existing_questions": list_existing_questions,
-    "list_concepts": list_concepts,
-    "validate_question": validate_question,
-    "execute_sql": execute_sql,
-    "check_concept_overlap": check_concept_overlap,
-    "insert_question": insert_question,
-    "generate_test": generate_test,
-}
+# Tools the agent should NOT send to Gemini (UI-only, not for LLM)
+EXCLUDED_TOOLS = {"render_dashboard"}
 
 # ── System Prompt (ported from agent.js + FK instructions) ───────────
 SYSTEM_PROMPT = """You are a Question Authoring Agent for a SQL practice platform that uses DuckDB (PostgreSQL-compatible syntax).
@@ -103,7 +87,7 @@ IMPORTANT: When presenting the final preview, output it as a JSON code block lik
   "difficulty": "...",
   "category": "...",
   "order_index": N,
-  "er_diagram": "erDiagram\n    parent ||--o{ child : \"has\"\n    parent {\n        INTEGER id PK\n    }\n    child {\n        INTEGER id PK\n        INTEGER parent_id FK\n    }",
+  "er_diagram": "erDiagram\\n    parent ||--o{ child : \\"has\\"\\n    parent {\\n        INTEGER id PK\\n    }\\n    child {\\n        INTEGER id PK\\n        INTEGER parent_id FK\\n    }",
   "concepts": [
     {"name": "HAVING", "is_intended": true},
     {"name": "GROUP BY", "is_intended": true}
@@ -111,101 +95,63 @@ IMPORTANT: When presenting the final preview, output it as a JSON code block lik
 }
 ```"""
 
-# ── Tool Declarations for Gemini (same as agent.js) ──────────────────
-TOOL_DECLARATIONS = [
-    {
-        "name": "list_existing_questions",
-        "description": "List all existing practice questions with their topics, difficulty levels, and order indices.",
-        "parameters": {"type": "object", "properties": {}},
-    },
-    {
-        "name": "execute_sql",
-        "description": "Execute a SQL query to test if it runs correctly.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "sql": {"type": "string", "description": "SQL statement to execute"},
-            },
-            "required": ["sql"],
-        },
-    },
-    {
-        "name": "validate_question",
-        "description": "Run the full validation pipeline for a generated question.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "sql_data": {"type": "string", "description": "CREATE TABLE and INSERT statements"},
-                "sql_solution": {"type": "string", "description": "The correct SQL solution query"},
-            },
-            "required": ["sql_data", "sql_solution"],
-        },
-    },
-    {
-        "name": "insert_question",
-        "description": "Insert a validated and approved question into the database.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "sql_data": {"type": "string"},
-                "sql_question": {"type": "string"},
-                "sql_solution": {"type": "string"},
-                "sql_solution_explanation": {"type": "array", "items": {"type": "string"}},
-                "difficulty": {"type": "string", "enum": ["beginner", "intermediate", "advanced"]},
-                "category": {"type": "string"},
-                "order_index": {"type": "integer"},
-                "er_diagram": {"type": "string", "description": "Mermaid erDiagram code for multi-table schemas with FKs. Null for single-table."},
-            },
-            "required": ["sql_data", "sql_question", "sql_solution", "sql_solution_explanation", "difficulty", "category", "order_index"],
-        },
-    },
-    {
-        "name": "generate_test",
-        "description": "Generate a Playwright E2E test for a question.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "question_id": {"type": "integer"},
-                "sql_solution": {"type": "string"},
-                "question_text": {"type": "string"},
-            },
-            "required": ["question_id", "sql_solution", "question_text"],
-        },
-    },
-    {
-        "name": "list_concepts",
-        "description": "List all SQL concepts in the taxonomy with coverage counts.",
-        "parameters": {"type": "object", "properties": {}},
-    },
-    {
-        "name": "get_coverage_gaps",
-        "description": "Get SQL concepts with ZERO intended questions — gaps in the curriculum.",
-        "parameters": {"type": "object", "properties": {}},
-    },
-    {
-        "name": "check_concept_overlap",
-        "description": "Check if concepts already have existing questions covering them.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "concepts": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "List of concept names to check",
-                },
-            },
-            "required": ["concepts"],
-        },
-    },
-]
+
+# ── MCP → Gemini schema conversion ──────────────────────────────────
+
+def mcp_tools_to_gemini(tools) -> list[dict]:
+    """Convert MCP tool schemas to Gemini functionDeclarations format.
+
+    Dynamically builds declarations from whatever the MCP server exposes,
+    instead of hardcoding them.
+    """
+    decls = []
+    for tool in tools:
+        if tool.name in EXCLUDED_TOOLS:
+            continue
+        schema = dict(tool.inputSchema) if tool.inputSchema else {"type": "object", "properties": {}}
+        # Strip fields Gemini doesn't understand
+        for key in ("$defs", "title", "additionalProperties"):
+            schema.pop(key, None)
+        for prop in schema.get("properties", {}).values():
+            if isinstance(prop, dict):
+                for key in ("title", "default"):
+                    prop.pop(key, None)
+        decls.append({
+            "name": tool.name,
+            "description": tool.description or "",
+            "parameters": schema,
+        })
+    return decls
 
 
-def call_gemini(messages: list, api_key: str, model: str) -> dict:
-    """Make a single Gemini API call."""
+# ── MCP result extraction ───────────────────────────────────────────
+
+def extract_text_result(result) -> dict:
+    """Extract JSON dict from MCP CallToolResult text content.
+
+    MCP tools return ToolResult with content=[TextContent(text=json)]
+    plus structured_content (Prefab UI). We only need the text for Gemini.
+    """
+    if result.isError:
+        texts = [c.text for c in (result.content or []) if hasattr(c, "text")]
+        return {"error": " ".join(texts) or "Unknown tool error"}
+    for block in (result.content or []):
+        if hasattr(block, "text") and block.text:
+            try:
+                return json.loads(block.text)
+            except json.JSONDecodeError:
+                return {"result": block.text}
+    return {"error": "No content returned"}
+
+
+# ── Gemini API call ─────────────────────────────────────────────────
+
+def call_gemini(messages: list, api_key: str, model: str, tool_declarations: list) -> dict:
+    """Make a single Gemini API call with dynamically-discovered tool declarations."""
     url = f"{GEMINI_BASE_URL}/{model}:generateContent?key={api_key}"
     body = {
         "contents": messages,
-        "tools": [{"functionDeclarations": TOOL_DECLARATIONS}],
+        "tools": [{"functionDeclarations": tool_declarations}],
         "toolConfig": {"functionCallingConfig": {"mode": "AUTO"}},
         "generationConfig": {
             "temperature": 0.3,
@@ -217,6 +163,8 @@ def call_gemini(messages: list, api_key: str, model: str) -> dict:
         raise Exception(f"Gemini API {resp.status_code}: {resp.text[:300]}")
     return resp.json()
 
+
+# ── Agent loop ──────────────────────────────────────────────────────
 
 async def run_agent(prompt: str, api_key: str = None, model: str = None):
     """Run the full agent loop. Yields step dicts for SSE streaming.
@@ -238,161 +186,179 @@ async def run_agent(prompt: str, api_key: str = None, model: str = None):
         yield {"type": "error", "content": "GEMINI_API_KEY not configured"}
         return
 
-    messages = [{"role": "user", "parts": [{"text": SYSTEM_PROMPT + "\n\nAdmin request: " + prompt}]}]
+    # ══════════════════════════════════════════════════════════════
+    # MCP Client Connection (in-memory transport to MCP server)
+    # ══════════════════════════════════════════════════════════════
+    print("=" * 62)
+    print(f"[AGENT] Starting — prompt: \"{prompt}\"")
+    print(f"[AGENT] Model: {model} | Max steps: {MAX_STEPS}")
+    print("=" * 62)
 
-    step_count = 0
-    tool_calls_made = 0
+    print("\n[MCP] Connecting to MCP server (in-memory transport)...")
 
-    while step_count < MAX_STEPS:
-        step_count += 1
+    async with Client(mcp_server) as client:
+        print(f"[MCP] Session initialized — server: \"{mcp_server.name}\"")
 
-        # Rate limit
-        if step_count > 1:
-            yield {"type": "system", "content": f"Waiting {CALL_DELAY_SECONDS}s before next Gemini call..."}
-            await asyncio.sleep(CALL_DELAY_SECONDS)
+        # ── Dynamic Tool Discovery ──
+        tools = await client.list_tools()
+        tool_names = [t.name for t in tools]
+        print(f"[MCP] list_tools() → {len(tools)} tools discovered:")
+        for t in tools:
+            excluded_tag = "  ← excluded (UI-only)" if t.name in EXCLUDED_TOOLS else ""
+            print(f"  │ {t.name}{excluded_tag}")
 
-        print(f"-- Gemini call #{step_count}: sending {len(messages)} messages --")
+        tool_declarations = mcp_tools_to_gemini(tools)
+        print(f"[MCP] → Gemini: {len(tool_declarations)} functionDeclarations prepared")
 
-        start = time.time()
-        try:
-            data = call_gemini(messages, api_key, model)
-        except Exception as e:
-            yield {"type": "error", "content": f"Gemini call failed: {e}", "latencyMs": int((time.time() - start) * 1000)}
-            break
+        yield {"type": "system", "content": f"MCP connected — {len(tool_declarations)} tools discovered"}
 
-        latency_ms = int((time.time() - start) * 1000)
+        messages = [{"role": "user", "parts": [{"text": SYSTEM_PROMPT + "\n\nAdmin request: " + prompt}]}]
+        step_count = 0
+        tool_calls_made = 0
+        tools_used = set()
 
-        # Parse response
-        candidates = data.get("candidates", [])
-        if not candidates or not candidates[0].get("content", {}).get("parts"):
-            finish = candidates[0].get("finishReason", "unknown") if candidates else "no candidates"
-            yield {"type": "error", "content": f"Empty Gemini response (finishReason: {finish})", "latencyMs": latency_ms}
-            break
+        while step_count < MAX_STEPS:
+            step_count += 1
 
-        parts = candidates[0]["content"]["parts"]
-        usage = data.get("usageMetadata", {})
-        print(f"   Latency: {latency_ms}ms | Tokens: in={usage.get('promptTokenCount', '?')}, out={usage.get('candidatesTokenCount', '?')}")
+            # Rate limit
+            if step_count > 1:
+                yield {"type": "system", "content": f"Waiting {CALL_DELAY_SECONDS}s before next Gemini call..."}
+                await asyncio.sleep(CALL_DELAY_SECONDS)
 
-        # Preserve full parts in message history (including thoughtSignature)
-        messages.append({"role": "model", "parts": parts})
+            print(f"\n{'─' * 10} Step {step_count} {'─' * 10}")
+            print(f"[LLM] Request #{step_count} → Gemini ({len(messages)} messages)")
 
-        # Handle ALL tool calls (Gemini 3.x can return multiple in parallel)
-        tool_calls = [p for p in parts if "functionCall" in p]
-        text_part = next((p for p in parts if p.get("text", "").strip()), None)
+            start = time.time()
+            try:
+                data = call_gemini(messages, api_key, model, tool_declarations)
+            except Exception as e:
+                latency = int((time.time() - start) * 1000)
+                print(f"[LLM] ERROR ← {e} ({latency}ms)")
+                yield {"type": "error", "content": f"Gemini call failed: {e}", "latencyMs": latency}
+                break
 
-        if tool_calls:
-            function_responses = []
+            latency_ms = int((time.time() - start) * 1000)
 
-            for tc in tool_calls:
-                fc = tc["functionCall"]
-                name = fc["name"]
-                args = fc.get("args", {})
-                tool_calls_made += 1
+            # Parse response
+            candidates = data.get("candidates", [])
+            if not candidates or not candidates[0].get("content", {}).get("parts"):
+                finish = candidates[0].get("finishReason", "unknown") if candidates else "no candidates"
+                print(f"[LLM] Empty response (finishReason: {finish})")
+                yield {"type": "error", "content": f"Empty Gemini response ({finish})", "latencyMs": latency_ms}
+                break
 
-                if tc.get("thoughtSignature"):
-                    print(f"   Thought signature: {name} ({len(tc['thoughtSignature'])} chars)")
+            parts = candidates[0]["content"]["parts"]
+            usage = data.get("usageMetadata", {})
+            print(f"[LLM] Response ← {latency_ms}ms | tokens: in={usage.get('promptTokenCount', '?')} out={usage.get('candidatesTokenCount', '?')}")
 
-                print(f"   CALL: {name}({json.dumps(args)[:200]})")
-                if name == "insert_question":
-                    print(f"   er_diagram in args: {'er_diagram' in args}")
-                    if 'er_diagram' in args:
-                        print(f"   er_diagram value: {str(args['er_diagram'])[:200]}")
+            # Preserve full parts in message history (including thoughtSignature)
+            messages.append({"role": "model", "parts": parts})
 
-                yield {
-                    "type": "tool_call",
-                    "tool": name,
-                    "input": args,
-                    "latencyMs": latency_ms,
-                }
+            # Handle ALL tool calls (Gemini can return multiple in parallel)
+            tool_calls = [p for p in parts if "functionCall" in p]
+            text_part = next((p for p in parts if p.get("text", "").strip()), None)
 
-                # Call MCP tool function directly
-                tool_fn = TOOL_FUNCTIONS.get(name)
-                if not tool_fn:
-                    tool_result = {"error": f"Unknown tool: {name}"}
-                else:
-                    try:
-                        # MCP tools return Prefab Column — we need the underlying data too
-                        # For now, call the API client directly to get JSON for Gemini
-                        from tools.api_client import ApiClient
-                        api_client = ApiClient()
+            if tool_calls:
+                if len(tool_calls) > 1:
+                    print(f"[LLM] ({len(tool_calls)} parallel tool calls)")
 
-                        if name == "get_coverage_gaps":
-                            tool_result = await api_client.get_coverage_gaps()
-                        elif name == "list_existing_questions":
-                            tool_result = await api_client.list_existing_questions()
-                        elif name == "list_concepts":
-                            tool_result = await api_client.list_concepts()
-                        elif name == "validate_question":
-                            tool_result = await api_client.validate_question(args.get("sql_data", ""), args.get("sql_solution", ""))
-                        elif name == "execute_sql":
-                            tool_result = await api_client.execute_sql(args.get("sql", ""))
-                        elif name == "check_concept_overlap":
-                            tool_result = await api_client.check_concept_overlap(args.get("concepts", []))
-                        elif name == "insert_question":
-                            tool_result = await api_client.insert_question(args)
-                        elif name == "generate_test":
-                            tool_result = await api_client.generate_test(
-                                args.get("question_id", 0),
-                                args.get("sql_solution", ""),
-                                args.get("question_text", ""),
-                            )
-                        else:
-                            tool_result = {"error": f"Unknown tool: {name}"}
-                    except Exception as e:
-                        tool_result = {"error": str(e)}
+                function_responses = []
 
-                print(f"   RESULT: {json.dumps(tool_result)[:200]}")
+                for tc in tool_calls:
+                    fc = tc["functionCall"]
+                    name = fc["name"]
+                    args = fc.get("args", {})
+                    tool_calls_made += 1
+                    tools_used.add(name)
 
-                yield {
-                    "type": "tool_result",
-                    "tool": name,
-                    "result": tool_result,
-                }
+                    if tc.get("thoughtSignature"):
+                        print(f"[LLM] Thought signature: {name} ({len(tc['thoughtSignature'])} chars)")
 
-                function_responses.append({
-                    "functionResponse": {
-                        "name": name,
-                        "response": tool_result,
+                    print(f"[LLM] functionCall: {name}({json.dumps(args)[:200]})")
+
+                    if name == "insert_question":
+                        print(f"[LLM] er_diagram in args: {'er_diagram' in args}")
+                        if "er_diagram" in args:
+                            print(f"[LLM] er_diagram value: {str(args['er_diagram'])[:200]}")
+
+                    yield {
+                        "type": "tool_call",
+                        "tool": name,
+                        "input": args,
+                        "latencyMs": latency_ms,
                     }
-                })
 
-            if len(tool_calls) > 1:
-                print(f"   ({len(tool_calls)} parallel tool calls dispatched)")
+                    # ── MCP Tool Execution ──
+                    mcp_start = time.time()
+                    print(f"\n[MCP] call_tool(\"{name}\", {json.dumps(args)[:100]})")
+                    try:
+                        mcp_result = await client.call_tool(name, args)
+                        tool_result = extract_text_result(mcp_result)
+                        mcp_ms = int((time.time() - mcp_start) * 1000)
+                        has_structured = mcp_result.structuredContent is not None if hasattr(mcp_result, 'structuredContent') else False
+                        text_bytes = len(json.dumps(tool_result))
+                        print(f"[MCP] ← {mcp_ms}ms | text: {text_bytes} bytes | structuredContent: {'yes' if has_structured else 'no'}")
+                        print(f"[MCP] Result: {json.dumps(tool_result)[:200]}")
+                    except Exception as e:
+                        mcp_ms = int((time.time() - mcp_start) * 1000)
+                        tool_result = {"error": str(e)}
+                        print(f"[MCP] ERROR ← {e} ({mcp_ms}ms)")
 
-            # Send ALL tool results in a single user message
-            messages.append({"role": "user", "parts": function_responses})
-            continue
+                    yield {
+                        "type": "tool_result",
+                        "tool": name,
+                        "result": tool_result,
+                    }
 
-        if text_part:
-            text = text_part["text"]
-            print(f"   TEXT ({len(text)} chars):\n{text}")
+                    function_responses.append({
+                        "functionResponse": {
+                            "name": name,
+                            "response": tool_result,
+                        }
+                    })
 
-            # Nudge if no tools used yet
-            if tool_calls_made == 0 and step_count < MAX_STEPS:
-                print("   Nudging Gemini to use tools...")
-                yield {"type": "system", "content": "Retrying -- agent skipped tools"}
-                messages.append({
-                    "role": "user",
-                    "parts": [{"text": "You MUST use the available tools before responding. Start by calling get_coverage_gaps, then list_existing_questions."}],
-                })
+                # Send ALL tool results in a single user message
+                messages.append({"role": "user", "parts": function_responses})
                 continue
 
-            yield {
-                "type": "answer",
-                "content": text,
-                "latencyMs": latency_ms,
-            }
+            if text_part:
+                text = text_part["text"]
+                print(f"[LLM] TEXT ({len(text)} chars):\n{text}")
+
+                # Nudge if no tools used yet
+                if tool_calls_made == 0 and step_count < MAX_STEPS:
+                    print("[LLM] Nudging — no tools used yet")
+                    yield {"type": "system", "content": "Retrying -- agent skipped tools"}
+                    messages.append({
+                        "role": "user",
+                        "parts": [{"text": "You MUST use the available tools before responding. Start by calling get_coverage_gaps, then list_existing_questions."}],
+                    })
+                    continue
+
+                yield {
+                    "type": "answer",
+                    "content": text,
+                    "latencyMs": latency_ms,
+                }
+                break
+
+            # Unexpected response
+            print(f"[LLM] Unexpected: {[list(p.keys()) for p in parts]}")
+            yield {"type": "error", "content": "Unexpected Gemini response", "latencyMs": latency_ms}
             break
 
-        # Unexpected response
-        print(f"   Unexpected: {[list(p.keys()) for p in parts]}")
-        yield {"type": "error", "content": "Unexpected Gemini response", "latencyMs": latency_ms}
-        break
+        if step_count >= MAX_STEPS:
+            yield {"type": "error", "content": "Agent reached maximum step limit"}
 
-    if step_count >= MAX_STEPS:
-        yield {"type": "error", "content": "Agent reached maximum step limit"}
-
-    print(f"== Agent complete: {step_count} steps, {tool_calls_made} tool calls ==")
+        # ── Summary ──
+        available_names = {t.name for t in tools} - EXCLUDED_TOOLS
+        unused = available_names - tools_used
+        print(f"\n{'=' * 62}")
+        print(f"[AGENT] Complete: {step_count} steps, {tool_calls_made} tool calls")
+        print(f"[AGENT] Tools used:      {', '.join(sorted(tools_used)) or '(none)'}")
+        if unused:
+            print(f"[AGENT] Tools available:  {', '.join(sorted(unused))} (not needed for this task)")
+        print(f"{'=' * 62}")
 
 
 async def main():
