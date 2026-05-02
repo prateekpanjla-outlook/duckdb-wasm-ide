@@ -32,10 +32,15 @@ api = ApiClient()
 
 
 def _dual(data: dict, column: Column) -> ToolResult:
-    """Return JSON text for LLM + Prefab structured content for browser."""
+    """Return JSON text for LLM + Prefab structured content for browser.
+
+    Pass the Column directly as structured_content — ToolResult.__init__
+    auto-converts Prefab components via _prefab_to_json(_PrefabApp(view=column)),
+    which produces the correct wire format for the Prefab renderer.
+    """
     return ToolResult(
         content=[TextContent(type="text", text=_json.dumps(data, default=str))],
-        structured_content=column.to_json(),
+        structured_content=column,
     )
 
 
