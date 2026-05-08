@@ -141,6 +141,15 @@ And the landing page imports:
 **Fix:** Changed `render_dashboard` to accumulate all tool results, rendering them stacked and scrollable.
 **Status:** RESOLVED (commit `ff55009`).
 
+## Issue 25: Stale Mermaid error persists in Prefab UI across agent runs
+**GitHub:** #50 | **Vikunja:** #114
+**Error:** "Syntax error in text — mermaid version 11.13.0" from a previous agent run stays visible in the Prefab UI even after a new run completes successfully (including runs with no ER diagram).
+**Root cause:** The Prefab renderer iframe is loaded once at page startup (`app.py:438`) and never cleared between agent runs. When `runAgent()` starts, the agent log (left panel) and `dashboardResults` array are reset, but the iframe is untouched. When Mermaid.js fails to parse (e.g., `VARCHAR(100)` breaks the erDiagram parser), it injects error SVG nodes directly into the iframe DOM — outside Prefab's managed component tree. Subsequent `sendToolResult()` calls replace Prefab's own nodes but cannot clean up Mermaid's orphaned error elements. There is no `bridge.clear()` or `bridge.reset()` API on AppBridge.
+**Architectural factor:** The two-connection architecture means the host page controls the iframe only via PostMessage — no direct DOM access. Bridge/transport objects hold references to `iframe.contentWindow`, so reloading the iframe invalidates them and requires rebuilding the full transport → bridge → connect chain.
+**Fix:** Extract bridge init into reusable `initBridge()`, expose `window._prefabReset()` that reloads iframe + rebuilds bridge on every agent run. Defense-in-depth: sanitize Mermaid types with `re.sub(r'(\w+)\([^)]*\)', r'\1', er)` to strip parameterized types like VARCHAR(100) → VARCHAR.
+**Files:** `mcp/app.py:368-469` (refactor module script), `mcp/app.py:242-245` (call reset in runAgent), `mcp/ui/components.py:259-262` (sanitize Mermaid input).
+**Status:** OPEN
+
 ## Key Learnings
 
 1. **`AppBridge` is NOT published** in the npm package — only FastMCP's patched source has it
