@@ -144,22 +144,23 @@ And the landing page imports:
 ## Issue 25: Stale Mermaid error persists in Prefab UI across agent runs
 **GitHub:** #50 | **Vikunja:** #114
 
-**Two independent causes compound:**
+The Prefab iframe is loaded once at startup and never cleared between agent runs. When Mermaid.js fails to parse (see Issue 26), it injects error SVG nodes directly into the iframe DOM — outside Prefab's managed component tree. Subsequent `sendToolResult()` calls replace Prefab's nodes but cannot clean up Mermaid's orphaned error elements. No `bridge.clear()` API exists on AppBridge.
 
-**Cause A — Mermaid parse error from LLM-generated types:**
-Gemini returned `DECIMAL(10, 2)` as a column type in the erDiagram. The [Mermaid docs](https://github.com/mermaid-js/mermaid/blob/develop/docs/syntax/entityRelationshipDiagram.md) say types may contain "digits, hyphens, underscores, parentheses and square brackets" — so `VARCHAR(100)` is valid, but **commas are not in the allowed list**. The comma in `DECIMAL(10, 2)` breaks the parser. [PR #5128](https://github.com/mermaid-js/mermaid/pull/5128) adds comma support but is still open/unmerged. Alternative explanation: parentheses themselves may fail on Mermaid v11.13.0 despite docs — not yet verified in isolation.
+**Fix:** Extract `initBridge()`, expose `window._prefabReset()` that reloads iframe + rebuilds transport/bridge on every agent run. MCP client stays connected.
+**Files:** `mcp/app.py:368-469` (refactor module script), `mcp/app.py:242-245` (call reset in runAgent)
+**Status:** OPEN
 
-**Cause B — Stale error persists across runs:**
-The Prefab iframe is loaded once at startup and never cleared between agent runs. When Mermaid.js fails, it injects error SVG nodes directly into the iframe DOM — outside Prefab's managed component tree. Subsequent `sendToolResult()` calls replace Prefab's nodes but cannot clean up Mermaid's orphaned error elements. No `bridge.clear()` API exists.
+## Issue 26: LLM generates invalid Mermaid erDiagram types
+**GitHub:** #51 | **Vikunja:** #115
 
-**Proposed fixes:**
-1. **Iframe reset** — Extract `initBridge()`, expose `_prefabReset()` that reloads iframe + rebuilds bridge on every agent run (solves Cause B)
-2. **Sanitize commas** — `re.sub(r'\(\s*[^)]*,\s*[^)]*\)', '', er)` strips only comma-containing type params like DECIMAL(10,2) → DECIMAL (solves Cause A, targeted)
-3. **Strip all params** — `re.sub(r'\([^)]*\)', '', er)` removes all parenthesized content (solves both, aggressive)
-4. **Prompt engineering** — Instruct LLM to use simple types in erDiagram (reduces frequency, not guaranteed)
-**Recommended:** Fix 1 + Fix 2 + Fix 4
+Gemini sometimes generates Mermaid erDiagram types with commas inside parentheses (e.g., `DECIMAL(10, 2)`). Mermaid allows parentheses but **not commas** in type names. [PR #5128](https://github.com/mermaid-js/mermaid/pull/5128) adds comma support but is still open/unmerged. `VARCHAR(100)` alone is valid per the [official docs](https://github.com/mermaid-js/mermaid/blob/develop/docs/syntax/entityRelationshipDiagram.md).
 
-**Files:** `mcp/app.py:368-469`, `mcp/app.py:242-245`, `mcp/ui/components.py:259-262`, `mcp/agent_harness.py` (system prompt)
+**Fix — two layers:**
+1. **Prompt hint (preventive):** Add instruction to system prompt: use simple types (VARCHAR not VARCHAR(100), DECIMAL not DECIMAL(10,2)). Reduces frequency but LLM compliance not guaranteed.
+2. **LLM self-correction loop (detect → feedback → retry):** Validate Mermaid syntax after agent's final answer. If invalid, feed error back to Gemini to self-correct (1-2 retries). Fallback: set `er_diagram` to null rather than show error.
+
+**Implementation options:** Post-answer validation in agent loop (Option A) or new `validate_mermaid` MCP tool that Gemini calls in the natural tool loop (Option B).
+**Files:** `mcp/agent_harness.py` (prompt + validation loop), optionally `mcp/mcp_server.py` (new tool), `mcp/ui/components.py` (fallback null-out)
 **Status:** OPEN
 
 ## Key Learnings
