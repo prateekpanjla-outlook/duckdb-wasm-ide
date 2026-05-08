@@ -143,11 +143,23 @@ And the landing page imports:
 
 ## Issue 25: Stale Mermaid error persists in Prefab UI across agent runs
 **GitHub:** #50 | **Vikunja:** #114
-**Error:** "Syntax error in text — mermaid version 11.13.0" from a previous agent run stays visible in the Prefab UI even after a new run completes successfully (including runs with no ER diagram).
-**Root cause:** The Prefab renderer iframe is loaded once at page startup (`app.py:438`) and never cleared between agent runs. When `runAgent()` starts, the agent log (left panel) and `dashboardResults` array are reset, but the iframe is untouched. When Mermaid.js fails to parse (e.g., `VARCHAR(100)` breaks the erDiagram parser), it injects error SVG nodes directly into the iframe DOM — outside Prefab's managed component tree. Subsequent `sendToolResult()` calls replace Prefab's own nodes but cannot clean up Mermaid's orphaned error elements. There is no `bridge.clear()` or `bridge.reset()` API on AppBridge.
-**Architectural factor:** The two-connection architecture means the host page controls the iframe only via PostMessage — no direct DOM access. Bridge/transport objects hold references to `iframe.contentWindow`, so reloading the iframe invalidates them and requires rebuilding the full transport → bridge → connect chain.
-**Fix:** Extract bridge init into reusable `initBridge()`, expose `window._prefabReset()` that reloads iframe + rebuilds bridge on every agent run. Defense-in-depth: sanitize Mermaid types with `re.sub(r'(\w+)\([^)]*\)', r'\1', er)` to strip parameterized types like VARCHAR(100) → VARCHAR.
-**Files:** `mcp/app.py:368-469` (refactor module script), `mcp/app.py:242-245` (call reset in runAgent), `mcp/ui/components.py:259-262` (sanitize Mermaid input).
+
+**Two independent causes compound:**
+
+**Cause A — Mermaid parse error from LLM-generated types:**
+Gemini returned `DECIMAL(10, 2)` as a column type in the erDiagram. The [Mermaid docs](https://github.com/mermaid-js/mermaid/blob/develop/docs/syntax/entityRelationshipDiagram.md) say types may contain "digits, hyphens, underscores, parentheses and square brackets" — so `VARCHAR(100)` is valid, but **commas are not in the allowed list**. The comma in `DECIMAL(10, 2)` breaks the parser. [PR #5128](https://github.com/mermaid-js/mermaid/pull/5128) adds comma support but is still open/unmerged. Alternative explanation: parentheses themselves may fail on Mermaid v11.13.0 despite docs — not yet verified in isolation.
+
+**Cause B — Stale error persists across runs:**
+The Prefab iframe is loaded once at startup and never cleared between agent runs. When Mermaid.js fails, it injects error SVG nodes directly into the iframe DOM — outside Prefab's managed component tree. Subsequent `sendToolResult()` calls replace Prefab's nodes but cannot clean up Mermaid's orphaned error elements. No `bridge.clear()` API exists.
+
+**Proposed fixes:**
+1. **Iframe reset** — Extract `initBridge()`, expose `_prefabReset()` that reloads iframe + rebuilds bridge on every agent run (solves Cause B)
+2. **Sanitize commas** — `re.sub(r'\(\s*[^)]*,\s*[^)]*\)', '', er)` strips only comma-containing type params like DECIMAL(10,2) → DECIMAL (solves Cause A, targeted)
+3. **Strip all params** — `re.sub(r'\([^)]*\)', '', er)` removes all parenthesized content (solves both, aggressive)
+4. **Prompt engineering** — Instruct LLM to use simple types in erDiagram (reduces frequency, not guaranteed)
+**Recommended:** Fix 1 + Fix 2 + Fix 4
+
+**Files:** `mcp/app.py:368-469`, `mcp/app.py:242-245`, `mcp/ui/components.py:259-262`, `mcp/agent_harness.py` (system prompt)
 **Status:** OPEN
 
 ## Key Learnings
