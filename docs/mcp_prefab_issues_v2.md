@@ -142,7 +142,7 @@ And the landing page imports:
 **Status:** RESOLVED (commit `ff55009`).
 
 ## Issue 25: Stale Mermaid error persists in Prefab UI across agent runs
-**GitHub:** #50 | **Vikunja:** #114
+**GitHub:** #63 | **Vikunja:** #114
 
 The Prefab iframe is loaded once at startup and never cleared between agent runs. When Mermaid.js fails to parse (see Issue 26), it injects error SVG nodes directly into the iframe DOM — outside Prefab's managed component tree. Subsequent `sendToolResult()` calls replace Prefab's nodes but cannot clean up Mermaid's orphaned error elements. No `bridge.clear()` API exists on AppBridge.
 
@@ -151,7 +151,7 @@ The Prefab iframe is loaded once at startup and never cleared between agent runs
 **Status:** OPEN
 
 ## Issue 26: LLM generates invalid Mermaid erDiagram types
-**GitHub:** #51 | **Vikunja:** #115
+**GitHub:** #64 | **Vikunja:** #115
 
 Gemini sometimes generates Mermaid erDiagram types with commas inside parentheses (e.g., `DECIMAL(10, 2)`). Mermaid allows parentheses but **not commas** in type names. [PR #5128](https://github.com/mermaid-js/mermaid/pull/5128) adds comma support but is still open/unmerged. `VARCHAR(100)` alone is valid per the [official docs](https://github.com/mermaid-js/mermaid/blob/develop/docs/syntax/entityRelationshipDiagram.md).
 
