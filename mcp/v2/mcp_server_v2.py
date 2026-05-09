@@ -1,0 +1,129 @@
+"""FastMCP server v2 — 8 tools with Prefab UI for the ReACT Question Authoring Agent.
+
+Each tool calls the Express API for real data and returns both:
+  - text content (JSON) for LLM consumption
+  - structured content (Prefab Column) for browser rendering
+
+Identical tools to v1, but imports from v2 package for isolation.
+"""
+
+import json as _json
+
+from fastmcp import FastMCP
+from fastmcp.tools.base import ToolResult
+from mcp.types import TextContent
+from prefab_ui.components import *
+from v2.tools.api_client_v2 import ApiClient
+from v2.ui.components_v2 import (
+    build_coverage_table,
+    build_questions_table,
+    build_validation_result,
+    build_concept_overlap,
+    build_concepts_table,
+    build_sql_result,
+    build_question_preview,
+    build_insert_result,
+    build_test_code,
+    build_dashboard,
+)
+
+mcp_v2 = FastMCP("SQL Practice Agent v2 — ReACT")
+api = ApiClient()
+
+
+def _dual(data: dict, column: Column) -> ToolResult:
+    """Return JSON text for LLM + Prefab structured content for browser."""
+    return ToolResult(
+        content=[TextContent(type="text", text=_json.dumps(data, default=str))],
+        structured_content=column,
+    )
+
+
+@mcp_v2.tool(app=True)
+async def get_coverage_gaps() -> ToolResult:
+    """Get SQL concepts with ZERO intended questions — gaps in the curriculum."""
+    data = await api.get_coverage_gaps()
+    return _dual(data, build_coverage_table(data))
+
+
+@mcp_v2.tool(app=True)
+async def list_existing_questions() -> ToolResult:
+    """List all existing practice questions with topics, difficulty, and order indices."""
+    data = await api.list_existing_questions()
+    return _dual(data, build_questions_table(data))
+
+
+@mcp_v2.tool(app=True)
+async def list_concepts() -> ToolResult:
+    """List all SQL concepts in the taxonomy with coverage counts."""
+    data = await api.list_concepts()
+    return _dual(data, build_concepts_table(data))
+
+
+@mcp_v2.tool(app=True)
+async def validate_question(sql_data: str, sql_solution: str) -> ToolResult:
+    """Validate a question: create tables, run solution, check distinguishability."""
+    data = await api.validate_question(sql_data, sql_solution)
+    return _dual(data, build_validation_result(data, sql_data=sql_data))
+
+
+@mcp_v2.tool(app=True)
+async def execute_sql(sql: str) -> ToolResult:
+    """Execute a SQL query to test if it runs correctly."""
+    data = await api.execute_sql(sql)
+    return _dual(data, build_sql_result(data, sql=sql))
+
+
+@mcp_v2.tool(app=True)
+async def check_concept_overlap(concepts: list[str]) -> ToolResult:
+    """Check if concepts already have questions covering them."""
+    data = await api.check_concept_overlap(concepts)
+    return _dual(data, build_concept_overlap(data))
+
+
+@mcp_v2.tool(app=True)
+async def insert_question(
+    sql_data: str,
+    sql_question: str,
+    sql_solution: str,
+    sql_solution_explanation: list[str],
+    difficulty: str,
+    category: str,
+    order_index: int,
+    er_diagram: str = "",
+) -> ToolResult:
+    """Insert a validated and approved question into the database."""
+    data = await api.insert_question({
+        "sql_data": sql_data,
+        "sql_question": sql_question,
+        "sql_solution": sql_solution,
+        "sql_solution_explanation": sql_solution_explanation,
+        "difficulty": difficulty,
+        "category": category,
+        "order_index": order_index,
+        "er_diagram": er_diagram or None,
+    })
+    return _dual(data, build_insert_result(data))
+
+
+@mcp_v2.tool(app=True)
+async def generate_test(question_id: int, sql_solution: str, question_text: str) -> ToolResult:
+    """Generate a Playwright E2E test for a question."""
+    data = await api.generate_test(question_id, sql_solution, question_text)
+    return _dual(data, build_test_code(data))
+
+
+@mcp_v2.tool(app=True)
+async def render_dashboard(results_json: str) -> Column:
+    """Render a combined dashboard of all agent tool results.
+
+    Takes a JSON string: [{"tool": "name", "data": {...}}, ...]
+    Returns a scrollable Prefab Column with all results stacked.
+    """
+    import json
+    results = json.loads(results_json)
+    return build_dashboard(results)
+
+
+if __name__ == "__main__":
+    mcp_v2.run()
