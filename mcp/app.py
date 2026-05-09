@@ -17,13 +17,26 @@ from fastapi.staticfiles import StaticFiles
 from starlette.routing import Mount
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from contextlib import asynccontextmanager
 from agent_harness import run_agent
 from mcp_server import mcp
 from v2.agent_harness_v2 import run_agent_v2
+from v2.mcp_server_v2 import mcp_v2
 
-# MCP sub-app needs its lifespan passed to the parent app
+# Both MCP sub-apps need their lifespans to run
 mcp_app = mcp.http_app(transport="streamable-http")
-app = FastAPI(title="SQL Practice MCP Agent", lifespan=mcp_app.lifespan)
+mcp_v2_app = mcp_v2.http_app(transport="streamable-http")
+
+
+@asynccontextmanager
+async def combined_lifespan(app_instance):
+    """Compose v1 and v2 MCP lifespans so both StreamableHTTP managers initialize."""
+    async with mcp_app.lifespan(app_instance):
+        async with mcp_v2_app.lifespan(app_instance):
+            yield
+
+
+app = FastAPI(title="SQL Practice MCP Agent", lifespan=combined_lifespan)
 
 # Serve bundled JS from static/js/
 static_js_dir = pathlib.Path(__file__).parent / "static" / "js"
@@ -801,7 +814,7 @@ LANDING_PAGE_V2 = """\
             const prefabEmpty = document.getElementById('prefabEmpty');
 
             const client = new Client({ name: "mcp-agent-v2", version: "2.0.0" });
-            const mcpUrl = new URL("/mcp", window.location.origin);
+            const mcpUrl = new URL("/v2-mcp/mcp", window.location.origin);
             await client.connect(new StreamableHTTPClientTransport(mcpUrl));
 
             const serverCaps = client.getServerCapabilities();
@@ -881,9 +894,11 @@ LANDING_PAGE_V2 = """\
 """
 
 
-# Mount MCP sub-app LAST — it has a /mcp route internally.
-# Mounted at "/" so the route is reachable at /mcp.
+# Mount MCP sub-apps LAST — they have /mcp routes internally.
+# v1 at "/" → reachable at /mcp
+# v2 at "/v2-mcp" → reachable at /v2-mcp/mcp
 # FastAPI routes above (@app.get, @app.post) take priority.
+app.mount("/v2-mcp", mcp_v2_app)
 app.mount("/", mcp_app)
 
 
