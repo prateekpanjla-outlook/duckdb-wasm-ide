@@ -358,7 +358,7 @@ async def run_agent(prompt: str, api_key: str = None, model: str = None):
                     if tc.get("thoughtSignature"):
                         print(f"[LLM] Thought signature: {name} ({len(tc['thoughtSignature'])} chars)")
 
-                    print(f"[LLM] functionCall: {name}({json.dumps(args)[:200]})")
+                    print(f"[LLM] functionCall: {name}({json.dumps(args)[:2000]})")
 
                     yield {
                         "type": "tool_call",
@@ -368,7 +368,7 @@ async def run_agent(prompt: str, api_key: str = None, model: str = None):
                     }
 
                     mcp_start = time.time()
-                    print(f"\n[MCP] call_tool(\"{name}\", {json.dumps(args)[:100]})")
+                    print(f"\n[MCP] call_tool(\"{name}\", {json.dumps(args)[:2000]})")
                     try:
                         mcp_result = await client.call_tool(name, args)
                         tool_result = extract_text_result(mcp_result)
@@ -376,7 +376,7 @@ async def run_agent(prompt: str, api_key: str = None, model: str = None):
                         has_structured = mcp_result.structured_content is not None
                         text_bytes = len(json.dumps(tool_result))
                         print(f"[MCP] ← {mcp_ms}ms | text: {text_bytes} bytes | structuredContent: {'yes' if has_structured else 'no'}")
-                        print(f"[MCP] Result: {json.dumps(tool_result)[:200]}")
+                        print(f"[MCP] Result: {json.dumps(tool_result)[:500]}")
                     except Exception as e:
                         mcp_ms = int((time.time() - mcp_start) * 1000)
                         tool_result = {"error": str(e)}
