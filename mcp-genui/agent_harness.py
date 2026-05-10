@@ -148,9 +148,10 @@ CRITICAL RULES for generate_prefab_ui:
 - Keep code under 30 lines.
 - If Mermaid diagram is available, add: Mermaid(er_diagram)
 
-IMPORTANT: When presenting the final preview, you can EITHER:
-1. Use generate_prefab_ui to create a custom visualization, OR
-2. Output a JSON code block like:
+IMPORTANT: When presenting the final preview, you MUST use generate_prefab_ui to create the visualization.
+Pass all question data via the data parameter and reference variables directly in the code.
+
+Also include the question data as a JSON code block for the Approve button:
 ```json
 {
   "sql_data": "...",
