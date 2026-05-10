@@ -115,14 +115,38 @@ When NOT to use it:
 - For intermediate tool calls (get_coverage_gaps, validate_question) — their built-in Prefab cards are fine
 - When a simple text answer suffices
 
-When writing generate_prefab_ui code:
-- Import ALL components you use: from prefab_ui.components import Column, Row, Card, CardContent, CardHeader, Badge, Code, Mermaid, H3, H4, P, Tabs, Tab, Metric, Table, TableHeader, TableBody, TableRow, TableHead, TableCell
-- Import PrefabApp: from prefab_ui.app import PrefabApp
-- Use "with PrefabApp() as app:" as the root context manager
-- Data passed via the "data" parameter is injected as TOP-LEVEL variables in the namespace. If you pass data={"sql_data": "..."}, access it as sql_data (NOT data["sql_data"])
-- Do NOT use reactive state (app.state, app.rx, Rx). Keep the UI static.
-- Do NOT use Tabs with state management. Use simple Column layout instead.
-- Keep code concise (under 40 lines)
+When writing generate_prefab_ui code, follow this EXACT pattern:
+
+```python
+from prefab_ui.components import Column, Row, Card, CardContent, CardHeader, Badge, Code, Mermaid, H3, H4, P, Metric, Table, TableHeader, TableBody, TableRow, TableHead, TableCell
+from prefab_ui.app import PrefabApp
+
+with PrefabApp() as app:
+    with Column(gap=4):
+        H3("Question Preview")
+        with Card():
+            with CardHeader():
+                with Row(gap=2):
+                    Badge(difficulty, variant="default")
+                    Badge(category, variant="outline")
+            with CardContent():
+                with Column(gap=3):
+                    H4("Question")
+                    P(sql_question)
+                    H4("Schema")
+                    Code(sql_data)
+                    H4("Solution")
+                    Code(sql_solution)
+```
+
+CRITICAL RULES for generate_prefab_ui:
+- ALWAYS use context managers: "with Card():" NOT "Card(CardContent(...))"
+- Components like Badge, P, Code, H3, H4 take a SINGLE string argument: P("text") not P(content="text")
+- Data is injected as TOP-LEVEL variables: if data={"sql_data": "..."}, use sql_data directly, NOT data["sql_data"]
+- Do NOT use reactive state (app.state, app.rx, Rx, SetState). Keep UI static.
+- Do NOT use Tabs — use simple Column with Cards instead.
+- Keep code under 30 lines.
+- If Mermaid diagram is available, add: Mermaid(er_diagram)
 
 IMPORTANT: When presenting the final preview, you can EITHER:
 1. Use generate_prefab_ui to create a custom visualization, OR
