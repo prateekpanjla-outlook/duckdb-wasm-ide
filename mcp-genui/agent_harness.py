@@ -116,10 +116,13 @@ When NOT to use it:
 - When a simple text answer suffices
 
 When writing generate_prefab_ui code:
-- Import from prefab_ui.components and prefab_ui.app
-- Use PrefabApp() context manager as the root
-- Reference data from previous tool results via the data parameter
-- Keep code concise (under 50 lines)
+- Import ALL components you use: from prefab_ui.components import Column, Row, Card, CardContent, CardHeader, Badge, Code, Mermaid, H3, H4, P, Tabs, Tab, Metric, Table, TableHeader, TableBody, TableRow, TableHead, TableCell
+- Import PrefabApp: from prefab_ui.app import PrefabApp
+- Use "with PrefabApp() as app:" as the root context manager
+- Data passed via the "data" parameter is injected as TOP-LEVEL variables in the namespace. If you pass data={"sql_data": "..."}, access it as sql_data (NOT data["sql_data"])
+- Do NOT use reactive state (app.state, app.rx, Rx). Keep the UI static.
+- Do NOT use Tabs with state management. Use simple Column layout instead.
+- Keep code concise (under 40 lines)
 
 IMPORTANT: When presenting the final preview, you can EITHER:
 1. Use generate_prefab_ui to create a custom visualization, OR
