@@ -1,0 +1,62 @@
+# Cloud Build config for MCP Generative UI Agent service
+# Separate from duckdb-ide and duckdb-ide-mcp services
+
+steps:
+  # Step 1: Build Docker image from mcp-genui/ directory
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/duckdb-ide-repo/duckdb-ide-genui:$COMMIT_SHA'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/duckdb-ide-repo/duckdb-ide-genui:latest'
+      - '-f'
+      - 'mcp-genui/Dockerfile'
+      - 'mcp-genui'
+
+  # Step 2: Push to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '--all-tags'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/duckdb-ide-repo/duckdb-ide-genui'
+
+  # Step 3: Deploy to Cloud Run
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'duckdb-ide-genui'
+      - '--image'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/duckdb-ide-repo/duckdb-ide-genui:$COMMIT_SHA'
+      - '--region'
+      - 'us-central1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--port'
+      - '8080'
+      - '--memory'
+      - '1Gi'
+      - '--cpu'
+      - '1'
+      - '--max-instances'
+      - '5'
+      - '--timeout'
+      - '3600'
+      - '--set-env-vars'
+      - 'CLOUD_RUN_BASE=https://duckdb-ide-frxi6yk4jq-uc.a.run.app,NODE_ENV=production'
+      - '--set-secrets'
+      - 'ADMIN_KEY=admin-secret:latest,GEMINI_API_KEY=gemini-api-key:latest'
+      - '--service-account'
+      - 'sql-practice-runtime@$PROJECT_ID.iam.gserviceaccount.com'
+
+serviceAccount: 'projects/$PROJECT_ID/serviceAccounts/sql-practice-deployer@$PROJECT_ID.iam.gserviceaccount.com'
+
+images:
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/duckdb-ide-repo/duckdb-ide-genui:$COMMIT_SHA'
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/duckdb-ide-repo/duckdb-ide-genui:latest'
+
+options:
+  logging: GCS_ONLY
+  pool: {}
