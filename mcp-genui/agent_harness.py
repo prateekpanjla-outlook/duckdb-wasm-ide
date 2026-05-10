@@ -105,15 +105,14 @@ Badge, Code, Mermaid, Heading, Text, P, H3, H4, Metric,
 Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
 BarChart, ChartSeries, DataTable, Tabs, Tab, Input, Select, Form.
 
-When to use generate_prefab_ui:
-- For the FINAL question preview: create a rich layout with Tabs (Schema | Solution | ER Diagram)
-- For coverage gap visualization: BarChart showing gaps by difficulty
-- For comparison views: side-by-side layouts
-- When the standard tool result cards are insufficient
+You MUST call generate_prefab_ui AFTER EVERY tool result to visualize it.
+The built-in tool result cards are disabled — you are responsible for ALL UI rendering.
 
-When NOT to use it:
-- For intermediate tool calls (get_coverage_gaps, validate_question) — their built-in Prefab cards are fine
-- When a simple text answer suffices
+After get_coverage_gaps → call generate_prefab_ui to show gaps (use Metric + Table)
+After list_existing_questions → call generate_prefab_ui to show questions (use Table)
+After validate_question → call generate_prefab_ui to show validation (use P with checkmarks)
+After check_concept_overlap → call generate_prefab_ui to show overlap (use P with bullets)
+For the FINAL question preview → call generate_prefab_ui with full layout (Card + Code + Mermaid)
 
 When writing generate_prefab_ui code, follow this EXACT pattern:
 
