@@ -15,7 +15,7 @@ GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
 # Agent settings
-MAX_STEPS = 10
+MAX_STEPS = 15
 CALL_DELAY_SECONDS = 10
 MAX_OUTPUT_TOKENS = 8192
 

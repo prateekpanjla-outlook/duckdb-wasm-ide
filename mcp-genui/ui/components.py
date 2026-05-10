@@ -456,6 +456,8 @@ def build_dashboard(results: list[dict]) -> Column:
                 sections.append(build_answer_preview(data.get("text", "")))
             elif tool_name == "_reasoning":
                 sections.append(build_reasoning_card(data.get("text", "")))
+            elif tool_name == "generate_prefab_ui" or tool_name == "search_prefab_components":
+                continue  # skip — these render directly via Prefab iframe
             elif tool_name in TOOL_BUILDERS:
                 builder = TOOL_BUILDERS[tool_name]
                 if tool_name == "validate_question":
