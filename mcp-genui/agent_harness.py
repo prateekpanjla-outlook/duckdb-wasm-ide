@@ -141,14 +141,17 @@ with PrefabApp() as app:
 CRITICAL RULES for generate_prefab_ui:
 - ALWAYS use context managers: "with Card():" NOT "Card(CardContent(...))"
 - Components like Badge, P, Code, H3, H4 take a SINGLE string argument: P("text") not P(content="text")
+- Metric requires STRING value: Metric(label="Count", value=str(total)) — ALWAYS wrap numbers with str()
+- TableCell requires STRING: TableCell(str(value)) — ALWAYS convert to str
 - Data is injected as TOP-LEVEL variables: if data={"sql_data": "..."}, use sql_data directly, NOT data["sql_data"]
 - Do NOT use reactive state (app.state, app.rx, Rx, SetState). Keep UI static.
 - Do NOT use Tabs — use simple Column with Cards instead.
-- Keep code under 30 lines.
+- Keep each generate_prefab_ui call focused on ONE thing. If you need to show multiple sections, make MULTIPLE calls — one per section.
+- Pass only the data that specific call needs — never the entire conversation context. Small, focused payloads avoid serialization errors.
+- Keep code under 25 lines per call. Keep it SIMPLE.
 - If Mermaid diagram is available, add: Mermaid(er_diagram)
 
-IMPORTANT: When presenting the final preview, you MUST use generate_prefab_ui to create the visualization.
-Pass all question data via the data parameter and reference variables directly in the code.
+IMPORTANT: You MUST call generate_prefab_ui after EVERY tool result to visualize it.
 
 Also include the question data as a JSON code block for the Approve button:
 ```json
