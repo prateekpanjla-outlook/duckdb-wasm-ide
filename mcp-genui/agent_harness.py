@@ -159,24 +159,8 @@ CRITICAL RULES for generate_prefab_ui:
 - If Mermaid diagram is available, add: Mermaid(er_diagram)
 
 IMPORTANT: You MUST call generate_prefab_ui after EVERY tool result to visualize it.
-
-Also include the question data as a JSON code block for the Approve button:
-```json
-{
-  "sql_data": "...",
-  "sql_question": "...",
-  "sql_solution": "...",
-  "sql_solution_explanation": ["...", "..."],
-  "difficulty": "...",
-  "category": "...",
-  "order_index": N,
-  "er_diagram": "erDiagram\\n    parent ||--o{ child : \\"has\\"\\n    ...",
-  "concepts": [
-    {"name": "HAVING", "is_intended": true},
-    {"name": "GROUP BY", "is_intended": true}
-  ]
-}
-```"""
+NEVER output raw JSON or plain text as your final answer. ALL output MUST go through generate_prefab_ui calls.
+If a generate_prefab_ui call fails, retry with an even smaller payload — do NOT fall back to text output."""
 
 
 # ── MCP → Gemini schema conversion ──────────────────────────────────
@@ -334,7 +318,7 @@ async def run_agent(prompt: str, api_key: str = None, model: str = None):
                     print(f"[LLM] MALFORMED_FUNCTION_CALL retry #{malformed_retries} — asking for smaller calls")
                     yield {"type": "system", "content": f"Serialization error — retrying with smaller payload (attempt {malformed_retries})"}
                     messages.append({"role": "model", "parts": [{"text": "I encountered a serialization error with my function call."}]})
-                    messages.append({"role": "user", "parts": [{"text": "Your last generate_prefab_ui call failed because the payload was too large. Split it into SMALLER calls — one section per call. For example, show the schema in one call and the solution in a separate call. Do NOT combine everything into one call."}]})
+                    messages.append({"role": "user", "parts": [{"text": "Your last generate_prefab_ui call failed because the payload was too large. Split it into SMALLER calls — one section per call. Do NOT output plain text or JSON — you MUST use generate_prefab_ui with a smaller payload."}]})
                     continue
                 yield {"type": "error", "content": f"Empty Gemini response ({finish})", "latencyMs": latency_ms}
                 break
