@@ -345,8 +345,8 @@ LANDING_PAGE = """\
                                     clearTimeout(genUiRenderTimer);
                                     genUiRenderTimer = null;
                                 }
-                                if (genUiSections.length > 0) {
-                                    _sendCombinedToIframe();
+                                if (genUiSections.length > 0 && window._sendCombinedToIframe) {
+                                    window._sendCombinedToIframe();
                                 }
                                 break;
                         }
@@ -447,26 +447,6 @@ LANDING_PAGE = """\
                 }, 500);
             };
 
-            function _buildSectionFunc(idx, code, data) {
-                // Each section becomes a function that creates components.
-                // Data is injected as local variables inside the function.
-                let func = `def _section_${idx}():\\n`;
-                for (const [key, val] of Object.entries(data)) {
-                    func += `    ${key} = ${JSON.stringify(val)}\\n`;
-                }
-                // Re-indent the original code body (skip imports/PrefabApp lines)
-                const lines = code.split('\\n').filter(line =>
-                    !line.match(/^\\s*(from |import )/) &&
-                    !line.match(/^\\s*with PrefabApp/)
-                );
-                for (const line of lines) {
-                    if (line.trim() === '') continue;
-                    func += `    ${line}\\n`;
-                }
-                func += `_section_${idx}()\\n`;
-                return func;
-            }
-
             function _sendCombinedToIframe() {
                 if (genUiSections.length === 0) return;
                 const sectionCount = genUiSections.length;
@@ -510,6 +490,7 @@ LANDING_PAGE = """\
                 bridge.sendToolInput({ arguments: { code: combined } });
                 console.log(`[Prefab GenUI] Sent to Pyodide via sendToolInput`);
             }
+            window._sendCombinedToIframe = _sendCombinedToIframe;
 
             // Signal Prefab ready — enable Run button
             prefabReady = true;
