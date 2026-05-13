@@ -218,9 +218,6 @@ LANDING_PAGE = """\
         let running = false;
         let prefabReady = false;
         const pendingToolArgs = {};
-        let dashboardResults = [];
-        let renderTimer = null;
-        let renderInFlight = false;
 
         // Fix 3: Disable Run button until Prefab is ready
         runBtn.disabled = true;
@@ -255,10 +252,10 @@ LANDING_PAGE = """\
             runBtn.textContent = 'Running...';
             runBtn.disabled = true;
             logEl.innerHTML = '<h3>Agent Log</h3>';
-            dashboardResults = [];
-            if (renderTimer) clearTimeout(renderTimer);
-            renderTimer = null;
-            renderInFlight = false;
+            genUiSections = [];
+            genUiCallCount = 0;
+            if (genUiRenderTimer) clearTimeout(genUiRenderTimer);
+            genUiRenderTimer = null;
 
             try {
                 const response = await fetch('/agent/stream', {
@@ -299,12 +296,6 @@ LANDING_PAGE = """\
                                     + '<div class="reasoning-detail">' + esc(reasonText) + '</div>'
                                 );
                                 el.addEventListener('click', () => el.classList.toggle('expanded'));
-                                dashboardResults.push({
-                                    tool: '_reasoning',
-                                    data: { text: reasonText }
-                                });
-                                // Fix 1: Don't render immediately for reasoning — debounce only
-                                scheduleDashboardRender();
                                 break;
                             }
                             case 'tool_call': {
@@ -328,31 +319,15 @@ LANDING_PAGE = """\
                                 }
                                 const toolInput = step.input || pendingToolArgs[step.tool] || {};
                                 if (step.tool === 'generate_prefab_ui') {
-                                    // Pass code + data for server-side rendering via build_dashboard
-                                    dashboardResults.push({
-                                        tool: 'generate_prefab_ui',
-                                        data: { code: toolInput.code || '', data: toolInput.data || {} }
-                                    });
-                                } else {
-                                    const merged = { ...step.result, _input: toolInput };
-                                    if (toolInput.sql_data) merged._sql_data = toolInput.sql_data;
-                                    if (toolInput.sql) merged._sql = toolInput.sql;
-                                    dashboardResults.push({
-                                        tool: step.tool,
-                                        data: merged
-                                    });
+                                    // Send code+data directly to iframe — Prefab's built-in Pyodide renders it
+                                    if (window._prefabExecCode) {
+                                        window._prefabExecCode(toolInput.code || '', toolInput.data || {});
+                                    }
                                 }
-                                // Fix 2: Always debounce, never immediate
-                                scheduleDashboardRender();
                                 break;
                             }
                             case 'answer':
                                 addStep('answer', '<strong>Answer:</strong><br><small>' + esc((step.content || '').substring(0, 300)) + '...</small>');
-                                dashboardResults.push({
-                                    tool: '_answer',
-                                    data: { text: step.content || '' }
-                                });
-                                scheduleDashboardRender();
                                 break;
                             case 'error':
                                 addStep('error', esc(step.content || 'Unknown error'));
@@ -362,9 +337,14 @@ LANDING_PAGE = """\
                                 break;
                             case 'done':
                                 addStep('system', 'Agent complete');
-                                // Final render — wait for any in-flight render to finish
-                                if (renderTimer) clearTimeout(renderTimer);
-                                setTimeout(() => renderDashboard(), renderInFlight ? 2000 : 100);
+                                // Flush pending genui sections immediately
+                                if (genUiRenderTimer) {
+                                    clearTimeout(genUiRenderTimer);
+                                    genUiRenderTimer = null;
+                                }
+                                if (genUiSections.length > 0) {
+                                    _sendCombinedToIframe();
+                                }
                                 break;
                         }
                     }
@@ -376,41 +356,6 @@ LANDING_PAGE = """\
             running = false;
             runBtn.textContent = 'Run Agent';
             runBtn.disabled = false;
-        }
-
-        // Fix 2: Increased debounce (5s), prevent overlapping renders
-        function scheduleDashboardRender() {
-            if (renderTimer) clearTimeout(renderTimer);
-            renderTimer = setTimeout(() => {
-                renderTimer = null;
-                if (!renderInFlight) {
-                    renderDashboard();
-                }
-            }, 5000);
-        }
-
-        // Fix 4: Render with retry on failure
-        async function renderDashboard() {
-            if (!window._prefabRender) return;
-            if (renderInFlight) return; // prevent concurrent MCP calls
-            renderInFlight = true;
-            try {
-                await window._prefabRender(JSON.stringify(dashboardResults));
-            } catch (err) {
-                console.warn("[Prefab GenUI] Render failed, will retry:", err.message);
-                // Retry once after 3s
-                setTimeout(async () => {
-                    try {
-                        if (window._prefabRender) {
-                            await window._prefabRender(JSON.stringify(dashboardResults));
-                        }
-                    } catch (retryErr) {
-                        console.warn("[Prefab GenUI] Retry also failed:", retryErr.message);
-                    }
-                }, 3000);
-            } finally {
-                renderInFlight = false;
-            }
         }
 
         runBtn.addEventListener('click', runAgent);
@@ -481,26 +426,91 @@ LANDING_PAGE = """\
             iframe.src = "/ui-resource?uri=renderer";
             await new Promise(r => iframe.addEventListener("load", r, { once: true }));
 
-            window._prefabRender = async function(resultsJson) {
-                try {
-                    const count = JSON.parse(resultsJson).length;
-                    console.log("[Prefab GenUI] Rendering dashboard with", count, "results");
-                    const result = await client.callTool({
-                        name: "render_dashboard",
-                        arguments: { results_json: resultsJson },
-                    });
-                    if (result && result.structuredContent) {
-                        await bridge.sendToolInput({ arguments: {} });
-                        await bridge.sendToolResult(result);
-                        prefabEmpty.style.display = 'none';
-                        iframe.style.display = 'block';
-                    }
-                } catch (err) {
-                    console.warn("[Prefab GenUI] Render failed:", err.message);
-                }
+            // Accumulate LLM-generated Prefab code sections for combined Pyodide execution
+            let genUiCallCount = 0;
+            let genUiSections = [];  // accumulated {code, data} entries
+            let genUiRenderTimer = null;
+
+            window._prefabExecCode = function(code, data) {
+                genUiCallCount++;
+                const callNum = genUiCallCount;
+                console.log(`[Prefab GenUI] Pyodide section #${callNum}: ${code.length} chars, data keys: ${Object.keys(data || {}).join(', ')}`);
+
+                genUiSections.push({ code, data: data || {} });
+
+                // Debounce: combine all sections and send after 500ms of quiet
+                if (genUiRenderTimer) clearTimeout(genUiRenderTimer);
+                genUiRenderTimer = setTimeout(() => {
+                    genUiRenderTimer = null;
+                    _sendCombinedToIframe();
+                }, 500);
             };
 
-            // Fix 3: Signal Prefab ready — enable Run button
+            function _buildSectionFunc(idx, code, data) {
+                // Each section becomes a function that creates components.
+                // Data is injected as local variables inside the function.
+                let func = `def _section_${idx}():\\n`;
+                for (const [key, val] of Object.entries(data)) {
+                    func += `    ${key} = ${JSON.stringify(val)}\\n`;
+                }
+                // Re-indent the original code body (skip imports/PrefabApp lines)
+                const lines = code.split('\\n').filter(line =>
+                    !line.match(/^\\s*(from |import )/) &&
+                    !line.match(/^\\s*with PrefabApp/)
+                );
+                for (const line of lines) {
+                    if (line.trim() === '') continue;
+                    func += `    ${line}\\n`;
+                }
+                func += `_section_${idx}()\\n`;
+                return func;
+            }
+
+            function _sendCombinedToIframe() {
+                if (genUiSections.length === 0) return;
+                const sectionCount = genUiSections.length;
+                console.log(`[Prefab GenUI] Combining ${sectionCount} sections for Pyodide`);
+
+                // Build combined Python script
+                let combined = 'from prefab_ui.components import *\\n';
+                combined += 'from prefab_ui.app import PrefabApp\\n\\n';
+                combined += 'with PrefabApp() as app:\\n';
+                combined += '    with Column(gap=4):\\n';
+
+                // Each section becomes a function call inside the Column
+                for (let i = 0; i < genUiSections.length; i++) {
+                    const s = genUiSections[i];
+                    // Inject data as variables, then inline the component code
+                    for (const [key, val] of Object.entries(s.data)) {
+                        combined += `        ${key} = ${JSON.stringify(val)}\\n`;
+                    }
+                    // Extract component lines (skip imports/PrefabApp/outer Column)
+                    const lines = s.code.split('\\n');
+                    for (const line of lines) {
+                        const trimmed = line.trimStart();
+                        // Skip import lines and PrefabApp/Column wrappers
+                        if (trimmed.startsWith('from ') || trimmed.startsWith('import ')) continue;
+                        if (trimmed.startsWith('with PrefabApp')) continue;
+                        if (trimmed === '') continue;
+                        // The LLM code is indented inside PrefabApp + Column (8 spaces)
+                        // We need it at 8 spaces (inside our Column)
+                        combined += `        ${trimmed}\\n`;
+                    }
+                    combined += '\\n';
+                }
+
+                console.log(`[Prefab GenUI] Combined code: ${combined.length} chars, ${sectionCount} sections`);
+
+                // Show iframe
+                prefabEmpty.style.display = 'none';
+                iframe.style.display = 'block';
+
+                // Send to iframe — Prefab's built-in Pyodide executes it
+                bridge.sendToolInput({ arguments: { code: combined } });
+                console.log(`[Prefab GenUI] Sent to Pyodide via sendToolInput`);
+            }
+
+            // Signal Prefab ready — enable Run button
             prefabReady = true;
             runBtn.disabled = false;
             runBtn.textContent = 'Run Agent';
