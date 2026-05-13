@@ -14,6 +14,7 @@ import sys
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.gzip import GZipMiddleware
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from agent_harness import run_agent
@@ -21,6 +22,9 @@ from mcp_server import mcp
 
 mcp_app = mcp.http_app(transport="streamable-http")
 app = FastAPI(title="SQL Practice — Generative UI Agent", lifespan=mcp_app.lifespan)
+
+# GZip compress responses — critical for large Pyodide files
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Serve bundled JS from static/js/
 static_js_dir = pathlib.Path(__file__).parent / "static" / "js"
@@ -429,41 +433,49 @@ LANDING_PAGE = """\
             iframe.src = "/ui-resource?uri=renderer";
             await new Promise(r => iframe.addEventListener("load", r, { once: true }));
 
-            // Warm up Pyodide — send a tiny test code and wait for it to render
-            // This triggers Pyodide loading + pydantic install + prefab mount
+            // Warm up Pyodide — send test code, detect ready via postMessage from iframe
             console.log("[Prefab GenUI] Warming up Pyodide...");
             runBtn.textContent = 'Loading Pyodide...';
+
+            // Listen for any postMessage from iframe — when Pyodide executes,
+            // the renderer sends JSON-RPC messages via PostMessageTransport
+            let pyodideReady = false;
+            const warmupStart = Date.now();
+
+            // The renderer sends postMessage when code result is ready.
+            // We detect Pyodide readiness by monitoring these messages.
+            const messageHandler = (event) => {
+                if (event.source === iframe.contentWindow && !pyodideReady) {
+                    // Any message from renderer after our sendToolInput = Pyodide working
+                    const elapsed = ((Date.now() - warmupStart) / 1000).toFixed(1);
+                    console.log(`[Prefab GenUI] Pyodide message detected after ${elapsed}s`);
+                    pyodideReady = true;
+                }
+            };
+            window.addEventListener('message', messageHandler);
+
+            // Send warmup code — triggers Pyodide load + pydantic + prefab
             bridge.sendToolInput({ arguments: { code: 'from prefab_ui.components import P\\nfrom prefab_ui.app import PrefabApp\\nwith PrefabApp() as app:\\n    P("Pyodide ready")' } });
 
-            // Wait for Pyodide to be ready by polling iframe content
-            let pyodideWarmupAttempts = 0;
+            // Wait: either message detected or timeout
             await new Promise((resolve) => {
                 const check = setInterval(() => {
-                    pyodideWarmupAttempts++;
-                    try {
-                        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-                        const text = iframeDoc.body ? iframeDoc.body.innerText : '';
-                        if (text.includes('Pyodide ready') || text.includes('ready')) {
-                            clearInterval(check);
-                            console.log(`[Prefab GenUI] Pyodide warm-up complete (${pyodideWarmupAttempts}s)`);
-                            resolve();
-                        } else if (pyodideWarmupAttempts >= 120) {
-                            clearInterval(check);
-                            console.warn("[Prefab GenUI] Pyodide warm-up timeout (120s)");
-                            resolve();
-                        } else if (pyodideWarmupAttempts % 10 === 0) {
-                            console.log(`[Prefab GenUI] Pyodide still loading... (${pyodideWarmupAttempts}s)`);
-                        }
-                    } catch (e) {
-                        // cross-origin — can't read iframe. Fall back to timeout
-                        if (pyodideWarmupAttempts >= 60) {
-                            clearInterval(check);
-                            console.warn("[Prefab GenUI] Pyodide warm-up: cross-origin, assuming ready after 60s");
-                            resolve();
-                        }
+                    const elapsed = Math.floor((Date.now() - warmupStart) / 1000);
+                    if (pyodideReady) {
+                        clearInterval(check);
+                        console.log(`[Prefab GenUI] Pyodide warm-up complete (${elapsed}s)`);
+                        resolve();
+                    } else if (elapsed >= 180) {
+                        clearInterval(check);
+                        console.warn("[Prefab GenUI] Pyodide warm-up timeout (180s)");
+                        resolve();
+                    } else if (elapsed % 15 === 0 && elapsed > 0) {
+                        console.log(`[Prefab GenUI] Pyodide still loading... (${elapsed}s)`);
+                        runBtn.textContent = `Loading Pyodide... (${elapsed}s)`;
                     }
                 }, 1000);
             });
+            window.removeEventListener('message', messageHandler);
 
             // Accumulate LLM-generated Prefab code sections for combined Pyodide execution
             // Variables declared in inline script scope — accessed here via closure

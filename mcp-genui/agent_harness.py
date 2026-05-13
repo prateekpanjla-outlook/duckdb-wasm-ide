@@ -234,7 +234,7 @@ def call_gemini(messages: list, api_key: str, model: str, tool_declarations: lis
         "generationConfig": {
             "temperature": 0.3,
             "maxOutputTokens": MAX_OUTPUT_TOKENS,
-            "thinkingConfig": {"thinkingBudget": 0},
+            "thinkingConfig": {"thinkingBudget": 1024},
         },
     }
     resp = httpx.post(url, json=body, timeout=60)
