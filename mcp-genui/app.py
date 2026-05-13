@@ -218,6 +218,9 @@ LANDING_PAGE = """\
         let running = false;
         let prefabReady = false;
         const pendingToolArgs = {};
+        let genUiSections = [];
+        let genUiCallCount = 0;
+        let genUiRenderTimer = null;
 
         // Fix 3: Disable Run button until Prefab is ready
         runBtn.disabled = true;
@@ -427,9 +430,7 @@ LANDING_PAGE = """\
             await new Promise(r => iframe.addEventListener("load", r, { once: true }));
 
             // Accumulate LLM-generated Prefab code sections for combined Pyodide execution
-            let genUiCallCount = 0;
-            let genUiSections = [];  // accumulated {code, data} entries
-            let genUiRenderTimer = null;
+            // Variables declared in inline script scope — accessed here via closure
 
             window._prefabExecCode = function(code, data) {
                 genUiCallCount++;
