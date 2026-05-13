@@ -216,9 +216,15 @@ LANDING_PAGE = """\
         const iframe = document.getElementById('prefabFrame');
         const prefabEmpty = document.getElementById('prefabEmpty');
         let running = false;
+        let prefabReady = false;
         const pendingToolArgs = {};
         let dashboardResults = [];
         let renderTimer = null;
+        let renderInFlight = false;
+
+        // Fix 3: Disable Run button until Prefab is ready
+        runBtn.disabled = true;
+        runBtn.textContent = 'Initializing...';
 
         function addStep(type, content) {
             const empty = document.getElementById('logEmpty');
@@ -239,6 +245,7 @@ LANDING_PAGE = """\
 
         async function runAgent() {
             if (running) return;
+            if (!prefabReady) { alert('Prefab bridge not ready yet. Please wait.'); return; }
             const adminKey = document.getElementById('adminKey').value.trim();
             const prompt = document.getElementById('prompt').value.trim();
             if (!adminKey) { alert('Enter admin key'); return; }
@@ -251,6 +258,7 @@ LANDING_PAGE = """\
             dashboardResults = [];
             if (renderTimer) clearTimeout(renderTimer);
             renderTimer = null;
+            renderInFlight = false;
 
             try {
                 const response = await fetch('/agent/stream', {
@@ -295,11 +303,11 @@ LANDING_PAGE = """\
                                     tool: '_reasoning',
                                     data: { text: reasonText }
                                 });
-                                scheduleDashboardRender(true);
+                                // Fix 1: Don't render immediately for reasoning — debounce only
+                                scheduleDashboardRender();
                                 break;
                             }
                             case 'tool_call': {
-                                // Highlight generate_prefab_ui calls differently
                                 const isGenUI = step.tool === 'generate_prefab_ui';
                                 const stepClass = isGenUI ? 'genui' : 'tool-call';
                                 const label = isGenUI ? '\\ud83c\\udfa8 ' : '';
@@ -310,11 +318,15 @@ LANDING_PAGE = """\
                                 pendingToolArgs[step.tool] = step.input || {};
                                 break;
                             }
-                            case 'tool_result':
+                            case 'tool_result': {
                                 addStep('tool-result',
                                     esc(step.tool) + ' result'
                                     + (step.result ? '<br><small>' + esc(JSON.stringify(step.result).substring(0, 150)) + '</small>' : '')
                                 );
+                                // Fix 1: Skip generate_prefab_ui results — they render directly in iframe
+                                if (step.tool === 'generate_prefab_ui' || step.tool === 'search_prefab_components') {
+                                    break;
+                                }
                                 const toolInput = pendingToolArgs[step.tool] || {};
                                 const merged = { ...step.result, _input: toolInput };
                                 if (toolInput.sql_data) merged._sql_data = toolInput.sql_data;
@@ -323,15 +335,17 @@ LANDING_PAGE = """\
                                     tool: step.tool,
                                     data: merged
                                 });
+                                // Fix 2: Always debounce, never immediate
                                 scheduleDashboardRender();
                                 break;
+                            }
                             case 'answer':
                                 addStep('answer', '<strong>Answer:</strong><br><small>' + esc((step.content || '').substring(0, 300)) + '...</small>');
                                 dashboardResults.push({
                                     tool: '_answer',
                                     data: { text: step.content || '' }
                                 });
-                                scheduleDashboardRender(true);
+                                scheduleDashboardRender();
                                 break;
                             case 'error':
                                 addStep('error', esc(step.content || 'Unknown error'));
@@ -341,8 +355,9 @@ LANDING_PAGE = """\
                                 break;
                             case 'done':
                                 addStep('system', 'Agent complete');
+                                // Final render — wait for any in-flight render to finish
                                 if (renderTimer) clearTimeout(renderTimer);
-                                renderDashboard();
+                                setTimeout(() => renderDashboard(), renderInFlight ? 2000 : 100);
                                 break;
                         }
                     }
@@ -356,26 +371,38 @@ LANDING_PAGE = """\
             runBtn.disabled = false;
         }
 
-        function scheduleDashboardRender(immediate = false) {
-            if (immediate) {
-                if (renderTimer) clearTimeout(renderTimer);
-                renderTimer = null;
-                renderDashboard();
-                return;
-            }
-            if (!renderTimer) {
-                renderDashboard();
-            }
+        // Fix 2: Increased debounce (5s), prevent overlapping renders
+        function scheduleDashboardRender() {
             if (renderTimer) clearTimeout(renderTimer);
             renderTimer = setTimeout(() => {
                 renderTimer = null;
-                renderDashboard();
-            }, 10000);
+                if (!renderInFlight) {
+                    renderDashboard();
+                }
+            }, 5000);
         }
 
+        // Fix 4: Render with retry on failure
         async function renderDashboard() {
-            if (window._prefabRender) {
-                window._prefabRender(JSON.stringify(dashboardResults));
+            if (!window._prefabRender) return;
+            if (renderInFlight) return; // prevent concurrent MCP calls
+            renderInFlight = true;
+            try {
+                await window._prefabRender(JSON.stringify(dashboardResults));
+            } catch (err) {
+                console.warn("[Prefab GenUI] Render failed, will retry:", err.message);
+                // Retry once after 3s
+                setTimeout(async () => {
+                    try {
+                        if (window._prefabRender) {
+                            await window._prefabRender(JSON.stringify(dashboardResults));
+                        }
+                    } catch (retryErr) {
+                        console.warn("[Prefab GenUI] Retry also failed:", retryErr.message);
+                    }
+                }, 3000);
+            } finally {
+                renderInFlight = false;
             }
         }
 
@@ -466,9 +493,18 @@ LANDING_PAGE = """\
                 }
             };
 
+            // Fix 3: Signal Prefab ready — enable Run button
+            prefabReady = true;
+            runBtn.disabled = false;
+            runBtn.textContent = 'Run Agent';
             console.log("[Prefab GenUI] Ready");
         } catch (err) {
             console.warn("[Prefab GenUI] Init failed:", err.message);
+            // Fix 4: Show error state but still allow running (dashboard won't work)
+            addStep('error', 'Prefab bridge init failed: ' + err.message + '. Agent will run but UI may not render.');
+            prefabReady = true;
+            runBtn.disabled = false;
+            runBtn.textContent = 'Run Agent (no Prefab)';
         }
     </script>
 </body>
