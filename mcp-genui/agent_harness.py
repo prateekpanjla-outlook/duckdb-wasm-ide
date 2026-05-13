@@ -112,30 +112,37 @@ After get_coverage_gaps → call generate_prefab_ui to show gaps (use Metric + T
 After list_existing_questions → call generate_prefab_ui to show questions (use Table)
 After validate_question → call generate_prefab_ui to show validation (use P with checkmarks)
 After check_concept_overlap → call generate_prefab_ui to show overlap (use P with bullets)
-For the FINAL question preview → call generate_prefab_ui with full layout (Card + Code + Mermaid)
+For the FINAL question preview → split into MULTIPLE generate_prefab_ui calls:
+  Call 1: Header card (difficulty badge, category badge, question text)
+  Call 2: Schema card (Code block with sql_data)
+  Call 3: Solution card (Code block with sql_solution + explanation steps)
+  Call 4: ER diagram card (Mermaid block, if available)
+  Call 5: Concepts card (Badge per concept)
+NEVER put the full question preview in a single generate_prefab_ui call — large payloads with SQL cause serialization errors.
 
 When writing generate_prefab_ui code, follow this EXACT pattern:
 
 ```python
-from prefab_ui.components import Column, Row, Card, CardContent, CardHeader, Badge, Code, Mermaid, H3, H4, P, Metric, Table, TableHeader, TableBody, TableRow, TableHead, TableCell
+from prefab_ui.components import Column, Row, Card, CardContent, CardHeader, Badge, Code, H3, H4, P, Metric
 from prefab_ui.app import PrefabApp
 
 with PrefabApp() as app:
-    with Column(gap=4):
-        H3("Question Preview")
+    with Column(gap=3):
+        H3("Validation Results")
         with Card():
-            with CardHeader():
-                with Row(gap=2):
-                    Badge(difficulty, variant="default")
-                    Badge(category, variant="outline")
             with CardContent():
-                with Column(gap=3):
-                    H4("Question")
-                    P(sql_question)
-                    H4("Schema")
-                    Code(sql_data)
-                    H4("Solution")
-                    Code(sql_solution)
+                P("✓ Schema Valid — 9 rows inserted")
+                P("✓ Solution Valid — returns 5 rows")
+```
+
+Each call should render ONE section only. For example, to show the schema:
+```python
+with PrefabApp() as app:
+    with Column(gap=3):
+        H4("Schema")
+        with Card():
+            with CardContent():
+                Code(sql_data)
 ```
 
 CRITICAL RULES for generate_prefab_ui:
@@ -295,6 +302,7 @@ async def run_agent(prompt: str, api_key: str = None, model: str = None):
         step_count = 0
         tool_calls_made = 0
         tools_used = set()
+        malformed_retries = 0
 
         while step_count < MAX_STEPS:
             step_count += 1
@@ -321,6 +329,13 @@ async def run_agent(prompt: str, api_key: str = None, model: str = None):
             if not candidates or not candidates[0].get("content", {}).get("parts"):
                 finish = candidates[0].get("finishReason", "unknown") if candidates else "no candidates"
                 print(f"[LLM] Empty response (finishReason: {finish})")
+                if finish == "MALFORMED_FUNCTION_CALL" and malformed_retries < 2:
+                    malformed_retries += 1
+                    print(f"[LLM] MALFORMED_FUNCTION_CALL retry #{malformed_retries} — asking for smaller calls")
+                    yield {"type": "system", "content": f"Serialization error — retrying with smaller payload (attempt {malformed_retries})"}
+                    messages.append({"role": "model", "parts": [{"text": "I encountered a serialization error with my function call."}]})
+                    messages.append({"role": "user", "parts": [{"text": "Your last generate_prefab_ui call failed because the payload was too large. Split it into SMALLER calls — one section per call. For example, show the schema in one call and the solution in a separate call. Do NOT combine everything into one call."}]})
+                    continue
                 yield {"type": "error", "content": f"Empty Gemini response ({finish})", "latencyMs": latency_ms}
                 break
 
