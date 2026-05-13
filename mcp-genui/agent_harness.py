@@ -234,6 +234,7 @@ def call_gemini(messages: list, api_key: str, model: str, tool_declarations: lis
         "generationConfig": {
             "temperature": 0.3,
             "maxOutputTokens": MAX_OUTPUT_TOKENS,
+            "thinkingConfig": {"thinkingBudget": 0},
         },
     }
     resp = httpx.post(url, json=body, timeout=60)
@@ -312,6 +313,11 @@ async def run_agent(prompt: str, api_key: str = None, model: str = None):
             candidates = data.get("candidates", [])
             if not candidates or not candidates[0].get("content", {}).get("parts"):
                 finish = candidates[0].get("finishReason", "unknown") if candidates else "no candidates"
+                # STOP with empty parts = Gemini is done (not an error)
+                if finish == "STOP":
+                    print(f"[LLM] Gemini finished (STOP with no parts) — treating as completion")
+                    yield {"type": "system", "content": "Agent finished."}
+                    break
                 print(f"[LLM] Empty response (finishReason: {finish})")
                 # Log raw response and context for debugging MALFORMED calls
                 raw_candidate = candidates[0] if candidates else {}
