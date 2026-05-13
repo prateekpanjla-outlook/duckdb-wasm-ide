@@ -323,18 +323,25 @@ LANDING_PAGE = """\
                                     esc(step.tool) + ' result'
                                     + (step.result ? '<br><small>' + esc(JSON.stringify(step.result).substring(0, 150)) + '</small>' : '')
                                 );
-                                // Fix 1: Skip generate_prefab_ui results — they render directly in iframe
-                                if (step.tool === 'generate_prefab_ui' || step.tool === 'search_prefab_components') {
+                                if (step.tool === 'search_prefab_components') {
                                     break;
                                 }
-                                const toolInput = pendingToolArgs[step.tool] || {};
-                                const merged = { ...step.result, _input: toolInput };
-                                if (toolInput.sql_data) merged._sql_data = toolInput.sql_data;
-                                if (toolInput.sql) merged._sql = toolInput.sql;
-                                dashboardResults.push({
-                                    tool: step.tool,
-                                    data: merged
-                                });
+                                const toolInput = step.input || pendingToolArgs[step.tool] || {};
+                                if (step.tool === 'generate_prefab_ui') {
+                                    // Pass code + data for server-side rendering via build_dashboard
+                                    dashboardResults.push({
+                                        tool: 'generate_prefab_ui',
+                                        data: { code: toolInput.code || '', data: toolInput.data || {} }
+                                    });
+                                } else {
+                                    const merged = { ...step.result, _input: toolInput };
+                                    if (toolInput.sql_data) merged._sql_data = toolInput.sql_data;
+                                    if (toolInput.sql) merged._sql = toolInput.sql;
+                                    dashboardResults.push({
+                                        tool: step.tool,
+                                        data: merged
+                                    });
+                                }
                                 // Fix 2: Always debounce, never immediate
                                 scheduleDashboardRender();
                                 break;

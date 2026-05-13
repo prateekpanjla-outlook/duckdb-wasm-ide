@@ -426,6 +426,50 @@ def build_reasoning_card(reasoning_text: str) -> Column:
     return layout
 
 
+def _exec_prefab_code(code: str, data: dict) -> Column:
+    """Execute LLM-generated Prefab code server-side and return the Column.
+
+    The code expects top-level variables from `data` and uses PrefabApp context.
+    We exec it in a sandbox namespace with prefab_ui components available,
+    then extract the Column from the PrefabApp.
+    """
+    if not code.strip():
+        return Column(children=[P(content="(empty generate_prefab_ui code)")])
+
+    from prefab_ui.app import PrefabApp
+
+    namespace = {**data}  # inject data as top-level variables
+    # Make all prefab components available
+    import prefab_ui.components as _pc
+    for name in dir(_pc):
+        if not name.startswith("_"):
+            namespace[name] = getattr(_pc, name)
+    namespace["PrefabApp"] = PrefabApp
+
+    try:
+        exec(code, namespace)
+    except Exception as e:
+        return Column(children=[
+            Card(children=[
+                CardContent(children=[
+                    P(content=f"Prefab code error: {e}"),
+                    Code(content=code),
+                ])
+            ])
+        ])
+
+    # Extract the rendered content from PrefabApp context
+    app = namespace.get("app")
+    if app and hasattr(app, "children"):
+        return Column(children=app.children)
+    # Fallback: show the code
+    return Column(children=[
+        Card(children=[
+            CardContent(children=[Code(content=code)])
+        ])
+    ])
+
+
 # ── Dashboard: combined view of all tool results ──
 
 TOOL_BUILDERS = {
@@ -456,8 +500,10 @@ def build_dashboard(results: list[dict]) -> Column:
                 sections.append(build_answer_preview(data.get("text", "")))
             elif tool_name == "_reasoning":
                 sections.append(build_reasoning_card(data.get("text", "")))
-            elif tool_name == "generate_prefab_ui" or tool_name == "search_prefab_components":
-                continue  # skip — these render directly via Prefab iframe
+            elif tool_name == "search_prefab_components":
+                continue
+            elif tool_name == "generate_prefab_ui":
+                sections.append(_exec_prefab_code(data.get("code", ""), data.get("data", {})))
             elif tool_name in TOOL_BUILDERS:
                 builder = TOOL_BUILDERS[tool_name]
                 if tool_name == "validate_question":

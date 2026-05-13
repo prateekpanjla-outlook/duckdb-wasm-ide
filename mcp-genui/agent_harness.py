@@ -418,6 +418,7 @@ async def run_agent(prompt: str, api_key: str = None, model: str = None):
                         "type": "tool_result",
                         "tool": name,
                         "result": tool_result,
+                        "input": args,
                     }
 
                     function_responses.append({
