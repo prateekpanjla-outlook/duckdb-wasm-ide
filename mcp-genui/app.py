@@ -328,7 +328,12 @@ LANDING_PAGE = """\
                                 if (step.tool === 'generate_prefab_ui') {
                                     // Send code+data directly to iframe — Prefab's built-in Pyodide renders it
                                     if (window._prefabExecCode) {
-                                        window._prefabExecCode(toolInput.code || '', toolInput.data || {});
+                                        let data = toolInput.data || {};
+                                        // data may come as JSON string from Gemini — parse it
+                                        if (typeof data === 'string') {
+                                            try { data = JSON.parse(data); } catch(e) { data = {}; }
+                                        }
+                                        window._prefabExecCode(toolInput.code || '', data);
                                     }
                                 }
                                 break;
@@ -510,13 +515,21 @@ LANDING_PAGE = """\
                 // Each section: find the body inside PrefabApp context, preserve relative indent
                 for (let i = 0; i < genUiSections.length; i++) {
                     const s = genUiSections[i];
+                    // Ensure data is an object (may be string from Gemini)
+                    let sData = s.data;
+                    if (typeof sData === 'string') {
+                        try { sData = JSON.parse(sData); } catch(e) { sData = {}; }
+                    }
+                    if (!sData || typeof sData !== 'object' || Array.isArray(sData)) sData = {};
+                    // Wrap each section in try/except so one failure doesn't kill the rest
+                    combined += `        try:\\n`;
                     // Inject data as variables (convert JS → Python literals)
-                    for (const [key, val] of Object.entries(s.data)) {
+                    for (const [key, val] of Object.entries(sData)) {
                         let pyVal = JSON.stringify(val);
                         if (pyVal === 'null') pyVal = 'None';
                         else if (pyVal === 'true') pyVal = 'True';
                         else if (pyVal === 'false') pyVal = 'False';
-                        combined += `        ${key} = ${pyVal}\\n`;
+                        combined += `            ${key} = ${pyVal}\\n`;
                     }
                     // Find the body lines — everything after "with PrefabApp"
                     const lines = s.code.split('\\n');
@@ -536,10 +549,12 @@ LANDING_PAGE = """\
                         // Detect base indent of first body line
                         const indent = line.length - line.trimStart().length;
                         if (baseIndent < 0) baseIndent = indent;
-                        // Re-indent: remove base indent, add 8 spaces (inside our Column)
+                        // Re-indent: remove base indent, add 12 spaces (inside try)
                         const relativeIndent = Math.max(0, indent - baseIndent);
-                        combined += `        ${' '.repeat(relativeIndent)}${trimmed}\\n`;
+                        combined += `            ${' '.repeat(relativeIndent)}${trimmed}\\n`;
                     }
+                    combined += `        except Exception as _e${i}:\\n`;
+                    combined += `            P(f"Section ${i+1} error: {_e${i}}")\\n`;
                     combined += '\\n';
                 }
 
