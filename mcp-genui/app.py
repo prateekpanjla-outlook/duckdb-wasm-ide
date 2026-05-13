@@ -433,40 +433,43 @@ LANDING_PAGE = """\
             iframe.src = "/ui-resource?uri=renderer";
             await new Promise(r => iframe.addEventListener("load", r, { once: true }));
 
-            // Warm up Pyodide — send test code and wait for successful execution
+            // Warm up Pyodide — send test code and wait for tool result from iframe
             console.log("[Prefab GenUI] Warming up Pyodide...");
             runBtn.textContent = 'Loading Pyodide...';
             const warmupStart = Date.now();
 
-            // Hook console.log to detect renderer's exec success message
-            let pyodideReady = false;
-            const origLog = console.log;
-            const logInterceptor = function(...args) {
-                origLog.apply(console, args);
-                const msg = args.join(' ');
-                if (msg.includes('[Prefab] exec #') && msg.includes('success') && !pyodideReady) {
-                    pyodideReady = true;
-                    const elapsed = ((Date.now() - warmupStart) / 1000).toFixed(1);
-                    origLog(`[Prefab GenUI] Pyodide exec success detected after ${elapsed}s`);
-                }
-            };
-            console.log = logInterceptor;
-
             // Send warmup code — triggers Pyodide load + pydantic + prefab
             bridge.sendToolInput({ arguments: { code: 'from prefab_ui.components import P\\nfrom prefab_ui.app import PrefabApp\\nwith PrefabApp() as app:\\n    P("Pyodide ready")' } });
 
-            // Wait for exec success or timeout
+            // Wait for tool result from iframe (renderer sends it after Pyodide executes)
             await new Promise((resolve) => {
-                const check = setInterval(() => {
+                let resolved = false;
+                // The bridge fires oncalltool or receives messages when renderer responds
+                // Use a simple approach: listen for postMessage with JSON-RPC result
+                const handler = (event) => {
+                    if (resolved) return;
+                    if (event.source !== iframe.contentWindow) return;
+                    try {
+                        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+                        // Renderer sends JSON-RPC notifications/results — any with 'result' key means exec done
+                        if (data && (data.result || data.method)) {
+                            resolved = true;
+                            window.removeEventListener('message', handler);
+                            const elapsed = ((Date.now() - warmupStart) / 1000).toFixed(1);
+                            console.log(`[Prefab GenUI] Pyodide warm-up complete (${elapsed}s)`);
+                            resolve();
+                        }
+                    } catch(e) { /* not JSON, ignore */ }
+                };
+                window.addEventListener('message', handler);
+
+                // Progress + timeout
+                const timer = setInterval(() => {
                     const elapsed = Math.floor((Date.now() - warmupStart) / 1000);
-                    if (pyodideReady) {
-                        clearInterval(check);
-                        console.log = origLog;
-                        console.log(`[Prefab GenUI] Pyodide warm-up complete (${elapsed}s)`);
-                        resolve();
-                    } else if (elapsed >= 180) {
-                        clearInterval(check);
-                        console.log = origLog;
+                    if (resolved) { clearInterval(timer); return; }
+                    if (elapsed >= 180) {
+                        clearInterval(timer);
+                        window.removeEventListener('message', handler);
                         console.warn("[Prefab GenUI] Pyodide warm-up timeout (180s)");
                         resolve();
                     } else if (elapsed % 15 === 0 && elapsed > 0) {
