@@ -429,6 +429,42 @@ LANDING_PAGE = """\
             iframe.src = "/ui-resource?uri=renderer";
             await new Promise(r => iframe.addEventListener("load", r, { once: true }));
 
+            // Warm up Pyodide — send a tiny test code and wait for it to render
+            // This triggers Pyodide loading + pydantic install + prefab mount
+            console.log("[Prefab GenUI] Warming up Pyodide...");
+            runBtn.textContent = 'Loading Pyodide...';
+            bridge.sendToolInput({ arguments: { code: 'from prefab_ui.components import P\\nfrom prefab_ui.app import PrefabApp\\nwith PrefabApp() as app:\\n    P("Pyodide ready")' } });
+
+            // Wait for Pyodide to be ready by polling iframe content
+            let pyodideWarmupAttempts = 0;
+            await new Promise((resolve) => {
+                const check = setInterval(() => {
+                    pyodideWarmupAttempts++;
+                    try {
+                        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                        const text = iframeDoc.body ? iframeDoc.body.innerText : '';
+                        if (text.includes('Pyodide ready') || text.includes('ready')) {
+                            clearInterval(check);
+                            console.log(`[Prefab GenUI] Pyodide warm-up complete (${pyodideWarmupAttempts}s)`);
+                            resolve();
+                        } else if (pyodideWarmupAttempts >= 120) {
+                            clearInterval(check);
+                            console.warn("[Prefab GenUI] Pyodide warm-up timeout (120s)");
+                            resolve();
+                        } else if (pyodideWarmupAttempts % 10 === 0) {
+                            console.log(`[Prefab GenUI] Pyodide still loading... (${pyodideWarmupAttempts}s)`);
+                        }
+                    } catch (e) {
+                        // cross-origin — can't read iframe. Fall back to timeout
+                        if (pyodideWarmupAttempts >= 60) {
+                            clearInterval(check);
+                            console.warn("[Prefab GenUI] Pyodide warm-up: cross-origin, assuming ready after 60s");
+                            resolve();
+                        }
+                    }
+                }, 1000);
+            });
+
             // Accumulate LLM-generated Prefab code sections for combined Pyodide execution
             // Variables declared in inline script scope — accessed here via closure
 
@@ -458,24 +494,34 @@ LANDING_PAGE = """\
                 combined += 'with PrefabApp() as app:\\n';
                 combined += '    with Column(gap=4):\\n';
 
-                // Each section becomes a function call inside the Column
+                // Each section: find the body inside PrefabApp context, preserve relative indent
                 for (let i = 0; i < genUiSections.length; i++) {
                     const s = genUiSections[i];
-                    // Inject data as variables, then inline the component code
+                    // Inject data as variables
                     for (const [key, val] of Object.entries(s.data)) {
                         combined += `        ${key} = ${JSON.stringify(val)}\\n`;
                     }
-                    // Extract component lines (skip imports/PrefabApp/outer Column)
+                    // Find the body lines — everything after "with PrefabApp"
                     const lines = s.code.split('\\n');
+                    let inBody = false;
+                    let baseIndent = -1;
                     for (const line of lines) {
                         const trimmed = line.trimStart();
-                        // Skip import lines and PrefabApp/Column wrappers
+                        // Skip imports
                         if (trimmed.startsWith('from ') || trimmed.startsWith('import ')) continue;
-                        if (trimmed.startsWith('with PrefabApp')) continue;
                         if (trimmed === '') continue;
-                        // The LLM code is indented inside PrefabApp + Column (8 spaces)
-                        // We need it at 8 spaces (inside our Column)
-                        combined += `        ${trimmed}\\n`;
+                        // Mark PrefabApp line — body starts after it
+                        if (trimmed.startsWith('with PrefabApp')) {
+                            inBody = true;
+                            continue;
+                        }
+                        if (!inBody) continue;
+                        // Detect base indent of first body line
+                        const indent = line.length - line.trimStart().length;
+                        if (baseIndent < 0) baseIndent = indent;
+                        // Re-indent: remove base indent, add 8 spaces (inside our Column)
+                        const relativeIndent = Math.max(0, indent - baseIndent);
+                        combined += `        ${' '.repeat(relativeIndent)}${trimmed}\\n`;
                     }
                     combined += '\\n';
                 }
@@ -492,11 +538,13 @@ LANDING_PAGE = """\
             }
             window._sendCombinedToIframe = _sendCombinedToIframe;
 
-            // Signal Prefab ready — enable Run button
+            // Signal Prefab + Pyodide ready — enable Run button
             prefabReady = true;
             runBtn.disabled = false;
             runBtn.textContent = 'Run Agent';
-            console.log("[Prefab GenUI] Ready");
+            prefabEmpty.style.display = 'none';
+            iframe.style.display = 'block';
+            console.log("[Prefab GenUI] Ready (Pyodide warmed up)");
         } catch (err) {
             console.warn("[Prefab GenUI] Init failed:", err.message);
             // Fix 4: Show error state but still allow running (dashboard won't work)

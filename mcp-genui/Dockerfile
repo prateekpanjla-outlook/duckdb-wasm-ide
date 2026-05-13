@@ -16,7 +16,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl bzip2 && \
       https://github.com/pyodide/pyodide/releases/download/0.27.4/pyodide-core-0.27.4.tar.bz2 && \
     tar xjf pyodide.tar.bz2 --strip-components=1 && \
     rm pyodide.tar.bz2 && \
-    echo "Pyodide downloaded: $(du -sh . | cut -f1)"
+    echo "Pyodide core downloaded: $(du -sh . | cut -f1)" && \
+    # Download pydantic wheels needed by prefab_ui (zero CDN at runtime)
+    for whl in \
+      pydantic-2.10.5-py3-none-any.whl \
+      pydantic_core-2.27.2-cp312-cp312-pyodide_2024_0_wasm32.whl \
+      typing_extensions-4.11.0-py3-none-any.whl \
+      annotated_types-0.6.0-py3-none-any.whl; do \
+      curl -L -o "$whl" "https://cdn.jsdelivr.net/pyodide/v0.27.4/full/$whl" && \
+      echo "Downloaded $whl: $(du -sh $whl | cut -f1)"; \
+    done
 
 # Stage 3: Python dependencies + patch app-bridge.js + patch Pyodide URL
 FROM python:3.12-slim AS py-deps
