@@ -433,49 +433,47 @@ LANDING_PAGE = """\
             iframe.src = "/ui-resource?uri=renderer";
             await new Promise(r => iframe.addEventListener("load", r, { once: true }));
 
-            // Warm up Pyodide — send test code, detect ready via postMessage from iframe
+            // Warm up Pyodide — send test code and wait for successful execution
             console.log("[Prefab GenUI] Warming up Pyodide...");
             runBtn.textContent = 'Loading Pyodide...';
-
-            // Listen for any postMessage from iframe — when Pyodide executes,
-            // the renderer sends JSON-RPC messages via PostMessageTransport
-            let pyodideReady = false;
             const warmupStart = Date.now();
 
-            // The renderer sends postMessage when code result is ready.
-            // We detect Pyodide readiness by monitoring these messages.
-            const messageHandler = (event) => {
-                if (event.source === iframe.contentWindow && !pyodideReady) {
-                    // Any message from renderer after our sendToolInput = Pyodide working
-                    const elapsed = ((Date.now() - warmupStart) / 1000).toFixed(1);
-                    console.log(`[Prefab GenUI] Pyodide message detected after ${elapsed}s`);
+            // Hook console.log to detect renderer's exec success message
+            let pyodideReady = false;
+            const origLog = console.log;
+            const logInterceptor = function(...args) {
+                origLog.apply(console, args);
+                const msg = args.join(' ');
+                if (msg.includes('[Prefab] exec #') && msg.includes('success') && !pyodideReady) {
                     pyodideReady = true;
+                    const elapsed = ((Date.now() - warmupStart) / 1000).toFixed(1);
+                    origLog(`[Prefab GenUI] Pyodide exec success detected after ${elapsed}s`);
                 }
             };
-            window.addEventListener('message', messageHandler);
+            console.log = logInterceptor;
 
             // Send warmup code — triggers Pyodide load + pydantic + prefab
             bridge.sendToolInput({ arguments: { code: 'from prefab_ui.components import P\\nfrom prefab_ui.app import PrefabApp\\nwith PrefabApp() as app:\\n    P("Pyodide ready")' } });
 
-            // Wait: either message detected or timeout
+            // Wait for exec success or timeout
             await new Promise((resolve) => {
                 const check = setInterval(() => {
                     const elapsed = Math.floor((Date.now() - warmupStart) / 1000);
                     if (pyodideReady) {
                         clearInterval(check);
+                        console.log = origLog;
                         console.log(`[Prefab GenUI] Pyodide warm-up complete (${elapsed}s)`);
                         resolve();
                     } else if (elapsed >= 180) {
                         clearInterval(check);
+                        console.log = origLog;
                         console.warn("[Prefab GenUI] Pyodide warm-up timeout (180s)");
                         resolve();
                     } else if (elapsed % 15 === 0 && elapsed > 0) {
-                        console.log(`[Prefab GenUI] Pyodide still loading... (${elapsed}s)`);
                         runBtn.textContent = `Loading Pyodide... (${elapsed}s)`;
                     }
                 }, 1000);
             });
-            window.removeEventListener('message', messageHandler);
 
             // Accumulate LLM-generated Prefab code sections for combined Pyodide execution
             // Variables declared in inline script scope — accessed here via closure
@@ -509,9 +507,13 @@ LANDING_PAGE = """\
                 // Each section: find the body inside PrefabApp context, preserve relative indent
                 for (let i = 0; i < genUiSections.length; i++) {
                     const s = genUiSections[i];
-                    // Inject data as variables
+                    // Inject data as variables (convert JS → Python literals)
                     for (const [key, val] of Object.entries(s.data)) {
-                        combined += `        ${key} = ${JSON.stringify(val)}\\n`;
+                        let pyVal = JSON.stringify(val);
+                        if (pyVal === 'null') pyVal = 'None';
+                        else if (pyVal === 'true') pyVal = 'True';
+                        else if (pyVal === 'false') pyVal = 'False';
+                        combined += `        ${key} = ${pyVal}\\n`;
                     }
                     // Find the body lines — everything after "with PrefabApp"
                     const lines = s.code.split('\\n');
