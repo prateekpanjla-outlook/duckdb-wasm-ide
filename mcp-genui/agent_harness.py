@@ -313,6 +313,24 @@ async def run_agent(prompt: str, api_key: str = None, model: str = None):
             if not candidates or not candidates[0].get("content", {}).get("parts"):
                 finish = candidates[0].get("finishReason", "unknown") if candidates else "no candidates"
                 print(f"[LLM] Empty response (finishReason: {finish})")
+                # Log raw response and context for debugging MALFORMED calls
+                raw_candidate = candidates[0] if candidates else {}
+                print(f"[LLM] FAILED raw candidate: {json.dumps(raw_candidate, default=str)[:1000]}")
+                # Log the last model+user message that triggered this failure
+                last_model = next((m for m in reversed(messages) if m.get("role") == "model"), None)
+                if last_model:
+                    last_parts_summary = []
+                    for p in last_model.get("parts", []):
+                        if "functionCall" in p:
+                            fc = p["functionCall"]
+                            args_str = json.dumps(fc.get("args", {}), default=str)
+                            last_parts_summary.append(f"functionCall:{fc['name']}(args={len(args_str)} chars)")
+                        elif "functionResponse" in p:
+                            fr = p["functionResponse"]
+                            last_parts_summary.append(f"functionResponse:{fr.get('name','?')}")
+                        elif "text" in p:
+                            last_parts_summary.append(f"text({len(p['text'])} chars)")
+                    print(f"[LLM] FAILED prev context: {'; '.join(last_parts_summary)}")
                 if finish == "MALFORMED_FUNCTION_CALL" and malformed_retries < 2:
                     malformed_retries += 1
                     print(f"[LLM] MALFORMED_FUNCTION_CALL retry #{malformed_retries} — asking for smaller calls")
@@ -326,6 +344,13 @@ async def run_agent(prompt: str, api_key: str = None, model: str = None):
             parts = candidates[0]["content"]["parts"]
             usage = data.get("usageMetadata", {})
             print(f"[LLM] Response ← {latency_ms}ms | tokens: in={usage.get('promptTokenCount', '?')} out={usage.get('candidatesTokenCount', '?')}")
+            if malformed_retries > 0 and any("functionCall" in p for p in parts):
+                # Log the successful call after a MALFORMED retry for comparison
+                for p in parts:
+                    if "functionCall" in p:
+                        fc = p["functionCall"]
+                        args_str = json.dumps(fc.get("args", {}), default=str)
+                        print(f"[LLM] RETRY SUCCESS: {fc['name']}(args={len(args_str)} chars): {args_str[:500]}")
 
             messages.append({"role": "model", "parts": parts})
 
