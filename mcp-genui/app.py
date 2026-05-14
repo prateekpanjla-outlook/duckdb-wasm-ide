@@ -88,6 +88,8 @@ async def agent_stream(request: Request):
         try:
             async for step in run_agent(prompt):
                 yield f"data: {json.dumps(step)}\n\n"
+                # SSE comment as keepalive — prevents Cloud Run idle timeout
+                yield ": keepalive\n\n"
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
@@ -99,6 +101,7 @@ async def agent_stream(request: Request):
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
+            "Keep-Alive": "timeout=600",
         },
     )
 

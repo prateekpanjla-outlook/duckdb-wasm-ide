@@ -1,5 +1,5 @@
 # Multi-stage build for MCP Generative UI Agent service
-# Includes: Python + FastMCP + Prefab + Pyodide (browser WASM) + Deno (server sandbox)
+# Includes: Python + FastMCP + Prefab + Pyodide (browser WASM)
 
 # Stage 1: Bundle JS dependencies (SDK + patched AppBridge)
 FROM node:18-alpine AS js-deps
@@ -61,21 +61,6 @@ WORKDIR /app
 # Copy Python packages
 COPY --from=py-deps /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=py-deps /usr/local/bin/uvicorn /usr/local/bin/uvicorn
-
-# Install Deno for server-side Pyodide sandbox
-RUN apt-get update && apt-get install -y --no-install-recommends curl unzip && \
-    curl -fsSL https://deno.land/install.sh | sh && \
-    apt-get remove -y curl unzip && apt-get autoremove -y && rm -rf /var/lib/apt/lists/* && \
-    echo "Deno installed: $(/root/.deno/bin/deno --version | head -1)"
-ENV DENO_DIR=/root/.deno
-ENV PATH="/root/.deno/bin:$PATH"
-
-# Pre-cache Deno npm dependencies (Pyodide) so no CDN fetch at runtime
-RUN python -c "\
-from pathlib import Path; import prefab_ui; \
-print(Path(prefab_ui.__file__).parent / 'sandbox' / 'runner.js')" | \
-    xargs -I{} deno cache {} 2>/dev/null || \
-    echo "WARNING: Deno pre-cache skipped (non-fatal)"
 
 # Copy application code
 COPY . .
