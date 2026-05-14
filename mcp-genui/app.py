@@ -389,11 +389,14 @@ LANDING_PAGE = """\
             const iframe = document.getElementById('prefabFrame');
             const prefabEmpty = document.getElementById('prefabEmpty');
 
-            // Load iframe + warm up Pyodide FIRST (before MCP connection)
-            // This avoids the MCP SSE connection sitting idle during Pyodide load → 409 on reconnect
+            // Connect MCP client first — bridge needs server capabilities
             const client = new Client({ name: "mcp-genui", version: "3.0.0" });
+            const mcpUrl = new URL("/mcp", window.location.origin);
+            await client.connect(new StreamableHTTPClientTransport(mcpUrl));
+            console.log("[Prefab GenUI] MCP connected");
 
-            // Set up bridge with a deferred client (connect MCP after warmup)
+            const serverCaps = client.getServerCapabilities();
+
             const transport = new PostMessageTransport(
                 iframe.contentWindow,
                 iframe.contentWindow
@@ -404,6 +407,8 @@ LANDING_PAGE = """\
                 { name: "mcp-genui", version: "3.0.0" },
                 {
                     openLinks: {},
+                    serverTools: serverCaps?.tools,
+                    serverResources: serverCaps?.resources,
                 },
                 {
                     hostContext: {
@@ -566,13 +571,6 @@ LANDING_PAGE = """\
                 // Final complete render — no debounce, immediate execution
                 bridge.sendToolInput({ arguments: { code: fullScript } });
             };
-
-            // NOW connect MCP client — Pyodide is warm, no idle time on SSE connection
-            console.log("[Prefab GenUI] Connecting MCP client...");
-            runBtn.textContent = 'Connecting MCP...';
-            const mcpUrl = new URL("/mcp", window.location.origin);
-            await client.connect(new StreamableHTTPClientTransport(mcpUrl));
-            console.log("[Prefab GenUI] MCP connected");
 
             // Signal Prefab + Pyodide + MCP ready — enable Run button
             prefabReady = true;
