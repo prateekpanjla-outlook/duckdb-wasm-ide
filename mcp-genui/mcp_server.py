@@ -10,7 +10,6 @@ Run: PYTHONIOENCODING=utf-8 fastmcp dev apps mcp_server.py --no-reload
 import json as _json
 
 from fastmcp import FastMCP
-from fastmcp.apps.generative import GenerativeUI
 from fastmcp.tools.base import ToolResult
 from mcp.types import TextContent
 from prefab_ui.components import *
@@ -30,10 +29,38 @@ from ui.components import (
 
 mcp = FastMCP("SQL Practice Agent — Generative UI")
 
-# Register GenerativeUI provider — adds generate_prefab_ui + search_prefab_components tools
-mcp.add_provider(GenerativeUI())
-
 api = ApiClient()
+
+
+# Pass-through generative UI tools — browser Pyodide does the real rendering
+@mcp.tool()
+def generate_prefab_ui(code: str, data: dict | str | None = None) -> str:
+    """Execute Prefab Python code to render a UI component.
+
+    Write Python code using prefab_ui components (Column, Row, Card, Badge,
+    Code, Mermaid, Heading, Text, BarChart, DataTable, Tabs, Tab, Metric,
+    Table, Input, Select, Form, P, H4, CardContent, CardHeader).
+
+    Always use PrefabApp as the outermost context manager.
+    Values passed via `data` are available as global variables in the code.
+
+    Args:
+        code: Python source using prefab_ui components inside PrefabApp().
+        data: Optional dict of values accessible as variables in the code.
+    """
+    # No server-side execution — code is sent to browser Pyodide via SSE
+    return "[Rendered Prefab UI]"
+
+
+@mcp.tool()
+def search_prefab_components(query: str = "") -> str:
+    """Search the Prefab component library for available components.
+
+    Args:
+        query: Filter by component name or description. Space-separated terms are OR-matched.
+    """
+    from prefab_ui.generative import search_components
+    return search_components(query)
 
 
 def _dual(data: dict, column: Column) -> ToolResult:

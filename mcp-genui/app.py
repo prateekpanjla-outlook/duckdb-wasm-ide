@@ -40,10 +40,14 @@ if pyodide_dir.exists():
 # ── HTTPS scheme fix for Cloud Run ──
 
 @app.middleware("http")
-async def force_https_scheme(request, call_next):
+async def force_https_and_coi(request, call_next):
     if request.headers.get("x-forwarded-proto") == "https":
         request.scope["scheme"] = "https"
-    return await call_next(request)
+    response = await call_next(request)
+    # Cross-origin isolation for SharedArrayBuffer (Pyodide multi-threaded)
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    response.headers["Cross-Origin-Embedder-Policy"] = "require-corp"
+    return response
 
 
 # ── Routes ──
