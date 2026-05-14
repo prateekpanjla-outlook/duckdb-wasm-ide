@@ -222,9 +222,10 @@ LANDING_PAGE = """\
         let running = false;
         let prefabReady = false;
         const pendingToolArgs = {};
-        let genUiSections = [];
+        // Option C: single growing script — no duplication
+        let accumulatedScript = '';   // the one Python script that grows
         let genUiCallCount = 0;
-        let genUiRenderTimer = null;
+        let activeToolCallId = 'genui-tool-0';  // synthetic tool call ID for bridge
 
         // Fix 3: Disable Run button until Prefab is ready
         runBtn.disabled = true;
@@ -259,10 +260,9 @@ LANDING_PAGE = """\
             runBtn.textContent = 'Running...';
             runBtn.disabled = true;
             logEl.innerHTML = '<h3>Agent Log</h3>';
-            genUiSections = [];
+            accumulatedScript = '';
             genUiCallCount = 0;
-            if (genUiRenderTimer) clearTimeout(genUiRenderTimer);
-            genUiRenderTimer = null;
+            activeToolCallId = 'genui-tool-' + Date.now();
 
             try {
                 const response = await fetch('/agent/stream', {
@@ -349,13 +349,9 @@ LANDING_PAGE = """\
                                 break;
                             case 'done':
                                 addStep('system', 'Agent complete');
-                                // Flush pending genui sections immediately
-                                if (genUiRenderTimer) {
-                                    clearTimeout(genUiRenderTimer);
-                                    genUiRenderTimer = null;
-                                }
-                                if (genUiSections.length > 0 && window._sendCombinedToIframe) {
-                                    window._sendCombinedToIframe();
+                                // Final render — send complete script via sendToolInput (no debounce)
+                                if (accumulatedScript && window._prefabFinalRender) {
+                                    window._prefabFinalRender();
                                 }
                                 break;
                         }
@@ -483,92 +479,89 @@ LANDING_PAGE = """\
                 }, 1000);
             });
 
-            // Accumulate LLM-generated Prefab code sections for combined Pyodide execution
-            // Variables declared in inline script scope — accessed here via closure
+            // Option C: Append mode — single growing Python script
+            // Each generate_prefab_ui call appends its section to accumulatedScript.
+            // sendToolInputPartial streams the growing script (50ms debounce + code healing).
+            // Final sendToolInput on agent done gives a clean complete render.
+
+            function _buildSectionCode(code, data) {
+                // Extract body from LLM-generated Prefab code
+                let sData = data;
+                if (typeof sData === 'string') {
+                    try { sData = JSON.parse(sData); } catch(e) { sData = {}; }
+                }
+                if (!sData || typeof sData !== 'object' || Array.isArray(sData)) sData = {};
+
+                let section = '';
+                const sectionIdx = genUiCallCount;
+
+                // Inject data as top-level variables inside try block
+                section += `        try:\\n`;
+                for (const [key, val] of Object.entries(sData)) {
+                    let pyVal = JSON.stringify(val);
+                    if (pyVal === 'null') pyVal = 'None';
+                    else if (pyVal === 'true') pyVal = 'True';
+                    else if (pyVal === 'false') pyVal = 'False';
+                    section += `            ${key} = ${pyVal}\\n`;
+                }
+
+                // Find body lines — everything after "with PrefabApp"
+                const lines = code.split('\\n');
+                let inBody = false;
+                let baseIndent = -1;
+                for (const line of lines) {
+                    const trimmed = line.trimStart();
+                    if (trimmed.startsWith('from ') || trimmed.startsWith('import ')) continue;
+                    if (trimmed === '') continue;
+                    if (trimmed.startsWith('with PrefabApp')) { inBody = true; continue; }
+                    if (!inBody) continue;
+                    const indent = line.length - line.trimStart().length;
+                    if (baseIndent < 0) baseIndent = indent;
+                    const relativeIndent = Math.max(0, indent - baseIndent);
+                    section += `            ${' '.repeat(relativeIndent)}${trimmed}\\n`;
+                }
+                section += `        except Exception as _e${sectionIdx}:\\n`;
+                section += `            P(f"Section ${sectionIdx} error: {_e${sectionIdx}}")\\n`;
+                section += '\\n';
+                return section;
+            }
+
+            function _getFullScript() {
+                // Wrap accumulated sections in PrefabApp + Column
+                let script = 'from prefab_ui.components import *\\n';
+                script += 'from prefab_ui.app import PrefabApp\\n\\n';
+                script += 'with PrefabApp() as app:\\n';
+                script += '    with Column(gap=4):\\n';
+                script += accumulatedScript;
+                return script;
+            }
 
             window._prefabExecCode = function(code, data) {
                 genUiCallCount++;
                 const callNum = genUiCallCount;
-                console.log(`[Prefab GenUI] Pyodide section #${callNum}: ${code.length} chars, data keys: ${Object.keys(data || {}).join(', ')}`);
+                console.log(`[Prefab GenUI] Section #${callNum}: ${code.length} chars, data keys: ${Object.keys(data || {}).join(', ')}`);
 
-                genUiSections.push({ code, data: data || {} });
+                // Append this section to the growing script
+                accumulatedScript += _buildSectionCode(code, data || {});
+                const fullScript = _getFullScript();
 
-                // Debounce: combine all sections and send after 500ms of quiet
-                if (genUiRenderTimer) clearTimeout(genUiRenderTimer);
-                genUiRenderTimer = setTimeout(() => {
-                    genUiRenderTimer = null;
-                    _sendCombinedToIframe();
-                }, 500);
-            };
-
-            function _sendCombinedToIframe() {
-                if (genUiSections.length === 0) return;
-                const sectionCount = genUiSections.length;
-                console.log(`[Prefab GenUI] Combining ${sectionCount} sections for Pyodide`);
-
-                // Build combined Python script
-                let combined = 'from prefab_ui.components import *\\n';
-                combined += 'from prefab_ui.app import PrefabApp\\n\\n';
-                combined += 'with PrefabApp() as app:\\n';
-                combined += '    with Column(gap=4):\\n';
-
-                // Each section: find the body inside PrefabApp context, preserve relative indent
-                for (let i = 0; i < genUiSections.length; i++) {
-                    const s = genUiSections[i];
-                    // Ensure data is an object (may be string from Gemini)
-                    let sData = s.data;
-                    if (typeof sData === 'string') {
-                        try { sData = JSON.parse(sData); } catch(e) { sData = {}; }
-                    }
-                    if (!sData || typeof sData !== 'object' || Array.isArray(sData)) sData = {};
-                    // Wrap each section in try/except so one failure doesn't kill the rest
-                    combined += `        try:\\n`;
-                    // Inject data as variables (convert JS → Python literals)
-                    for (const [key, val] of Object.entries(sData)) {
-                        let pyVal = JSON.stringify(val);
-                        if (pyVal === 'null') pyVal = 'None';
-                        else if (pyVal === 'true') pyVal = 'True';
-                        else if (pyVal === 'false') pyVal = 'False';
-                        combined += `            ${key} = ${pyVal}\\n`;
-                    }
-                    // Find the body lines — everything after "with PrefabApp"
-                    const lines = s.code.split('\\n');
-                    let inBody = false;
-                    let baseIndent = -1;
-                    for (const line of lines) {
-                        const trimmed = line.trimStart();
-                        // Skip imports
-                        if (trimmed.startsWith('from ') || trimmed.startsWith('import ')) continue;
-                        if (trimmed === '') continue;
-                        // Mark PrefabApp line — body starts after it
-                        if (trimmed.startsWith('with PrefabApp')) {
-                            inBody = true;
-                            continue;
-                        }
-                        if (!inBody) continue;
-                        // Detect base indent of first body line
-                        const indent = line.length - line.trimStart().length;
-                        if (baseIndent < 0) baseIndent = indent;
-                        // Re-indent: remove base indent, add 12 spaces (inside try)
-                        const relativeIndent = Math.max(0, indent - baseIndent);
-                        combined += `            ${' '.repeat(relativeIndent)}${trimmed}\\n`;
-                    }
-                    combined += `        except Exception as _e${i}:\\n`;
-                    combined += `            P(f"Section ${i+1} error: {_e${i}}")\\n`;
-                    combined += '\\n';
-                }
-
-                console.log(`[Prefab GenUI] Combined code: ${combined.length} chars, ${sectionCount} sections`);
+                console.log(`[Prefab GenUI] Streaming partial (${callNum} sections, ${fullScript.length} chars)`);
 
                 // Show iframe
                 prefabEmpty.style.display = 'none';
                 iframe.style.display = 'block';
 
-                // Send to iframe — Prefab's built-in Pyodide executes it
-                bridge.sendToolInput({ arguments: { code: combined } });
-                console.log(`[Prefab GenUI] Sent to Pyodide via sendToolInput`);
-            }
-            window._sendCombinedToIframe = _sendCombinedToIframe;
+                // Stream via sendToolInputPartial — 50ms debounce + code healing in renderer
+                bridge.sendToolInputPartial({ arguments: { code: fullScript } });
+            };
+
+            window._prefabFinalRender = function() {
+                if (!accumulatedScript) return;
+                const fullScript = _getFullScript();
+                console.log(`[Prefab GenUI] Final render (${genUiCallCount} sections, ${fullScript.length} chars)`);
+                // Final complete render — no debounce, immediate execution
+                bridge.sendToolInput({ arguments: { code: fullScript } });
+            };
 
             // Signal Prefab + Pyodide ready — enable Run button
             prefabReady = true;
