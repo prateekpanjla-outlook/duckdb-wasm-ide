@@ -389,21 +389,26 @@ LANDING_PAGE = """\
             const iframe = document.getElementById('prefabFrame');
             const prefabEmpty = document.getElementById('prefabEmpty');
 
-            // Connect MCP client first — bridge needs server capabilities
+            // Connect MCP client briefly to get server capabilities, then close.
+            // The SSE connection sits idle during agent runs (~3 min), drops,
+            // and the 409 reconnect failure cascades to kill /agent/stream.
+            // We don't need the SSE — iframe never calls tools or needs push notifications.
             const client = new Client({ name: "mcp-genui", version: "3.0.0" });
             const mcpUrl = new URL("/mcp", window.location.origin);
             await client.connect(new StreamableHTTPClientTransport(mcpUrl));
-            console.log("[Prefab GenUI] MCP connected");
-
             const serverCaps = client.getServerCapabilities();
+            await client.close();
+            console.log("[Prefab GenUI] MCP capabilities fetched, SSE closed");
 
             const transport = new PostMessageTransport(
                 iframe.contentWindow,
                 iframe.contentWindow
             );
 
+            // Pass null for client — no MCP SSE needed.
+            // Iframe renders static Prefab UI via Pyodide, never initiates tool calls.
             const bridge = new AppBridge(
-                client,
+                null,
                 { name: "mcp-genui", version: "3.0.0" },
                 {
                     openLinks: {},
@@ -428,17 +433,6 @@ LANDING_PAGE = """\
             };
 
             await bridge.connect(transport);
-
-            bridge.oncalltool = async (params) => {
-                console.log("[Prefab GenUI] CallTool:", params.name);
-                const result = await client.callTool({
-                    name: params.name,
-                    arguments: params.arguments || {},
-                });
-                await bridge.sendToolInput({ arguments: params.arguments || {} });
-                await bridge.sendToolResult(result);
-                return result;
-            };
 
             iframe.src = "/ui-resource?uri=renderer";
             await new Promise(r => iframe.addEventListener("load", r, { once: true }));
