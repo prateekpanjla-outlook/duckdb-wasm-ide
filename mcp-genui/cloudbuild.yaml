@@ -45,7 +45,6 @@ steps:
       - '--timeout'
       - '3600'
       - '--session-affinity'
-      - '--http2'
       - '--set-env-vars'
       - 'CLOUD_RUN_BASE=https://duckdb-ide-frxi6yk4jq-uc.a.run.app,NODE_ENV=production'
       - '--set-secrets'
