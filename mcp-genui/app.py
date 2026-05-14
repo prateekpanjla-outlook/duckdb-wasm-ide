@@ -385,12 +385,11 @@ LANDING_PAGE = """\
             const iframe = document.getElementById('prefabFrame');
             const prefabEmpty = document.getElementById('prefabEmpty');
 
+            // Load iframe + warm up Pyodide FIRST (before MCP connection)
+            // This avoids the MCP SSE connection sitting idle during Pyodide load → 409 on reconnect
             const client = new Client({ name: "mcp-genui", version: "3.0.0" });
-            const mcpUrl = new URL("/mcp", window.location.origin);
-            await client.connect(new StreamableHTTPClientTransport(mcpUrl));
 
-            const serverCaps = client.getServerCapabilities();
-
+            // Set up bridge with a deferred client (connect MCP after warmup)
             const transport = new PostMessageTransport(
                 iframe.contentWindow,
                 iframe.contentWindow
@@ -401,8 +400,6 @@ LANDING_PAGE = """\
                 { name: "mcp-genui", version: "3.0.0" },
                 {
                     openLinks: {},
-                    serverTools: serverCaps?.tools,
-                    serverResources: serverCaps?.resources,
                 },
                 {
                     hostContext: {
@@ -566,7 +563,14 @@ LANDING_PAGE = """\
                 bridge.sendToolInput({ arguments: { code: fullScript } });
             };
 
-            // Signal Prefab + Pyodide ready — enable Run button
+            // NOW connect MCP client — Pyodide is warm, no idle time on SSE connection
+            console.log("[Prefab GenUI] Connecting MCP client...");
+            runBtn.textContent = 'Connecting MCP...';
+            const mcpUrl = new URL("/mcp", window.location.origin);
+            await client.connect(new StreamableHTTPClientTransport(mcpUrl));
+            console.log("[Prefab GenUI] MCP connected");
+
+            // Signal Prefab + Pyodide + MCP ready — enable Run button
             prefabReady = true;
             runBtn.disabled = false;
             runBtn.textContent = 'Run Agent';
