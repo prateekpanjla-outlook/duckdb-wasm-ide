@@ -146,7 +146,19 @@ with PrefabApp() as app:
 ```
 
 CRITICAL RULES for generate_prefab_ui:
-- ALWAYS use context managers: "with Card():" NOT "Card(CardContent(...))"
+- ALWAYS use context managers for containers: "with Card():" NOT "Card(CardContent(...))"
+- Table components are ALL context managers. CORRECT pattern:
+  with Table():
+      with TableHeader():
+          with TableRow():
+              TableHead("Name")
+              TableHead("Value")
+      with TableBody():
+          for item in items:
+              with TableRow():
+                  TableCell(str(item["name"]))
+                  TableCell(str(item["value"]))
+  WRONG: TableRow(TableCell("a"), TableCell("b")) — this causes "_pg_comp_init takes 1 positional argument" error
 - Components like Badge, P, Code, H3, H4 take a SINGLE string argument: P("text") not P(content="text")
 - Metric requires STRING value: Metric(label="Count", value=str(total)) — ALWAYS wrap numbers with str()
 - TableCell requires STRING: TableCell(str(value)) — ALWAYS convert to str
