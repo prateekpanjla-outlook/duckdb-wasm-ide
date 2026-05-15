@@ -58,6 +58,7 @@ The student's SQL runs in DuckDB WASM (in-browser). The solution SQL also runs i
 │  Port 8080 | Cloud Run                                             │
 │                                                                     │
 │  v3: Generative UI — Gemini writes Python Prefab code at runtime   │
+│  ReACT reasoning (THINK/VERIFY/FALLBACK/ACT) + Generative UI      │
 │  Pyodide renders in browser iframe (25MB WASM)                     │
 │  Option C: append-only script + sendToolInputPartial streaming     │
 │  Approve & Insert button for one-click question insertion          │
@@ -140,7 +141,7 @@ All three agent versions (Express v0, MCP v1/v2, GenUI v3) follow the same patte
 - v0 (Express agent.js): Direct JS function calls, basic prompt, SSE to admin panel
 - v1 (MCP): Same loop but tools discovered via MCP protocol, Prefab UI rendering
 - v2 (MCP + ReACT): Added [THINK]/[VERIFY]/[FALLBACK]/[ACT] labels, reasoning cards
-- v3 (GenUI): LLM writes UI code, Pyodide renders in browser, Approve button
+- v3 (GenUI): ReACT reasoning + LLM writes UI code, Pyodide renders in browser, Approve button
 
 ### 3.5 Zero CDN Architecture
 
@@ -265,7 +266,7 @@ Session 4: MCP v1 (mcp/) — same 8+1 tools via MCP protocol, Prefab UI
      ↓
 Session 5: MCP v2 (mcp/v2/) — ReACT reasoning, [THINK]/[VERIFY] labels
      ↓
-Session 6: GenUI v3 (mcp-genui/) — LLM writes UI code, Pyodide renders
+Session 6: GenUI v3 (mcp-genui/) — ReACT reasoning + LLM writes UI code, Pyodide renders
      ↓
 Planned:   Reactive state, Approve button in-iframe, strategy selector
 ```
