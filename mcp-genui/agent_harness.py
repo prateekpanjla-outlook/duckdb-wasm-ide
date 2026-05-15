@@ -112,13 +112,28 @@ After get_coverage_gaps → call generate_prefab_ui to show gaps (use Metric + T
 After list_existing_questions → call generate_prefab_ui to show questions (use Table)
 After validate_question → call generate_prefab_ui to show validation (use P with checkmarks)
 After check_concept_overlap → call generate_prefab_ui to show overlap (use P with bullets)
-For the FINAL question preview → split into MULTIPLE generate_prefab_ui calls:
-  Call 1: Header card (difficulty badge, category badge, question text)
-  Call 2: Schema card (Code block with sql_data)
-  Call 3: Solution card (Code block with sql_solution + explanation steps)
-  Call 4: ER diagram card (Mermaid block, if available)
-  Call 5: Concepts card (Badge per concept)
+For the FINAL question preview → split into MULTIPLE generate_prefab_ui calls.
+CRITICAL: You MUST pass all question fields in the `data` parameter — the browser uses this data for the Approve/Insert button.
+Do NOT hardcode values in the Python code — reference them as variables injected from `data`.
+
+  Call 1: Header card
+    data={"difficulty": "intermediate", "category": "Joins", "sql_question": "Retrieve all...", "order_index": 12}
+    code references: difficulty, category, sql_question as variables
+  Call 2: Schema card
+    data={"sql_data": "CREATE TABLE...INSERT INTO..."}
+    code references: sql_data as variable
+  Call 3: Solution card
+    data={"sql_solution": "SELECT...", "sql_solution_explanation": ["step1", "step2"]}
+    code references: sql_solution, sql_solution_explanation as variables
+  Call 4: ER diagram card (if 2+ tables)
+    data={"er_diagram": "erDiagram\n..."}
+    code references: er_diagram as variable
+  Call 5: Concepts card
+    data={"concepts": ["LEFT JOIN"]}
+    code references: concepts as variable
+
 NEVER put the full question preview in a single generate_prefab_ui call — large payloads with SQL cause serialization errors.
+NEVER hardcode question field values in Python code — ALWAYS pass them in the data parameter.
 
 When writing generate_prefab_ui code, follow this EXACT pattern:
 
@@ -137,12 +152,13 @@ with PrefabApp() as app:
 
 Each call should render ONE section only. For example, to show the schema:
 ```python
+# data={"sql_data": "CREATE TABLE..."} — passed in the data parameter
 with PrefabApp() as app:
     with Column(gap=3):
         H4("Schema")
         with Card():
             with CardContent():
-                Code(sql_data)
+                Code(sql_data)  # uses variable from data, NOT hardcoded string
 ```
 
 CRITICAL RULES for generate_prefab_ui:
@@ -159,7 +175,9 @@ CRITICAL RULES for generate_prefab_ui:
                   TableCell(str(item["name"]))
                   TableCell(str(item["value"]))
   WRONG: TableRow(TableCell("a"), TableCell("b")) — this causes "_pg_comp_init takes 1 positional argument" error
-- Components like Badge, P, Code, H3, H4 take a SINGLE string argument: P("text") not P(content="text")
+- Components like Badge, P, Code, H3, H4 take a SINGLE positional string argument:
+  CORRECT: Badge("intermediate"), P("some text"), Code("SELECT * FROM t")
+  WRONG: Badge(text="intermediate"), P(content="some text") — keyword args render as blank/invisible
 - Metric requires STRING value: Metric(label="Count", value=str(total)) — ALWAYS wrap numbers with str()
 - TableCell requires STRING: TableCell(str(value)) — ALWAYS convert to str
 - Data is injected as TOP-LEVEL variables: if data={"sql_data": "..."}, use sql_data directly, NOT data["sql_data"]

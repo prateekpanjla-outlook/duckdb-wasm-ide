@@ -110,6 +110,44 @@ async def agent_stream(request: Request):
     )
 
 
+@app.post("/agent/insert")
+async def agent_insert(request: Request):
+    """Insert a validated question — called by the Approve button."""
+    body = await request.json()
+    admin_key = body.get("admin_key", "")
+    question = body.get("question", {})
+
+    if not admin_key:
+        return JSONResponse({"error": "Admin key required"}, status_code=400)
+
+    # Pick only the fields insert_question needs
+    required = ["sql_data", "sql_question", "sql_solution", "difficulty", "category"]
+    missing = [k for k in required if not question.get(k)]
+    if missing:
+        return JSONResponse({"error": f"Missing fields: {', '.join(missing)}"}, status_code=400)
+
+    params = {
+        "sql_data": question.get("sql_data", ""),
+        "sql_question": question.get("sql_question", ""),
+        "sql_solution": question.get("sql_solution", ""),
+        "sql_solution_explanation": question.get("sql_solution_explanation", []),
+        "difficulty": question.get("difficulty", ""),
+        "category": question.get("category", ""),
+        "order_index": int(question.get("order_index", 0)),
+        "er_diagram": question.get("er_diagram", ""),
+    }
+
+    os.environ["ADMIN_KEY"] = admin_key
+
+    try:
+        from tools.api_client import ApiClient
+        api = ApiClient()
+        result = await api.insert_question(params)
+        return JSONResponse(result)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 # ── Landing Page HTML ──
 
 LANDING_PAGE = """\
@@ -194,11 +232,24 @@ LANDING_PAGE = """\
             padding: 10px 14px; background: #f8fafc;
             border-bottom: 1px solid #e2e8f0; flex-shrink: 0;
         }
-        #prefabFrame { flex: 1; border: none; width: 100%; display: none; }
+        #prefabFrame { flex: 1; border: none; width: 100%; display: none; overflow-y: auto; }
         .empty-state {
             display: flex; align-items: center; justify-content: center;
             height: 100%; color: #64748b; font-size: 13px;
         }
+        .approve-bar {
+            padding: 10px 14px; background: #f0fdf4;
+            border-top: 1px solid #bbf7d0; flex-shrink: 0;
+            display: flex; align-items: center; gap: 12px;
+        }
+        .approve-bar button {
+            padding: 8px 24px; border-radius: 6px; border: none;
+            background: #16a34a; color: white; font-size: 13px;
+            font-weight: 600; cursor: pointer; white-space: nowrap;
+        }
+        .approve-bar button:hover { background: #15803d; }
+        .approve-bar button:disabled { background: #9ca3af; cursor: not-allowed; }
+        .approve-bar .insert-status { font-size: 13px; font-weight: 500; }
     </style>
 </head>
 <body>
@@ -218,6 +269,10 @@ LANDING_PAGE = """\
             <h3>Prefab UI — Generative</h3>
             <div class="empty-state" id="prefabEmpty">Tool results will render here (Pyodide-powered)</div>
             <iframe id="prefabFrame"></iframe>
+            <div class="approve-bar">
+                <button id="approveBtn" style="display:none;">Approve &amp; Insert Question</button>
+                <span id="insertStatus" class="insert-status"></span>
+            </div>
         </div>
     </div>
 
@@ -233,6 +288,9 @@ LANDING_PAGE = """\
         let accumulatedScript = '';   // the one Python script that grows
         let genUiCallCount = 0;
         let activeToolCallId = 'genui-tool-0';  // synthetic tool call ID for bridge
+        // Accumulate question data from generate_prefab_ui calls for Approve button
+        let questionData = {};
+        let extractedOrderIndex = null;  // from list_existing_questions result
 
         // Fix 3: Disable Run button until Prefab is ready
         runBtn.disabled = true;
@@ -270,6 +328,10 @@ LANDING_PAGE = """\
             accumulatedScript = '';
             genUiCallCount = 0;
             activeToolCallId = 'genui-tool-' + Date.now();
+            questionData = {};
+            extractedOrderIndex = null;
+            document.getElementById('approveBtn').style.display = 'none';
+            document.getElementById('insertStatus').textContent = '';
 
             try {
                 const response = await fetch('/agent/stream', {
@@ -328,18 +390,30 @@ LANDING_PAGE = """\
                                     esc(step.tool) + ' result'
                                     + (step.result ? '<br><small>' + esc(JSON.stringify(step.result).substring(0, 150)) + '</small>' : '')
                                 );
+                                // Extract order_index from list_existing_questions
+                                if (step.tool === 'list_existing_questions' && step.result) {
+                                    const oi = step.result.next_order_index;
+                                    if (oi != null) {
+                                        extractedOrderIndex = oi;
+                                        console.log('[Approve] Extracted order_index:', oi);
+                                    }
+                                }
                                 if (step.tool === 'search_prefab_components') {
                                     break;
                                 }
                                 const toolInput = step.input || pendingToolArgs[step.tool] || {};
                                 if (step.tool === 'generate_prefab_ui') {
-                                    // Send code+data directly to iframe — Prefab's built-in Pyodide renders it
+                                    // Accumulate data for Approve button
+                                    let data = toolInput.data || {};
+                                    if (typeof data === 'string') {
+                                        try { data = JSON.parse(data); } catch(e) { data = {}; }
+                                    }
+                                    if (data && typeof data === 'object' && !Array.isArray(data)) {
+                                        Object.assign(questionData, data);
+                                        console.log('[Approve] Accumulated keys:', Object.keys(questionData).join(', '));
+                                    }
+                                    // Send code+data to iframe for Pyodide rendering
                                     if (window._prefabExecCode) {
-                                        let data = toolInput.data || {};
-                                        // data may come as JSON string from Gemini — parse it
-                                        if (typeof data === 'string') {
-                                            try { data = JSON.parse(data); } catch(e) { data = {}; }
-                                        }
                                         window._prefabExecCode(toolInput.code || '', data);
                                     }
                                 }
@@ -360,6 +434,21 @@ LANDING_PAGE = """\
                                 if (accumulatedScript && window._prefabFinalRender) {
                                     window._prefabFinalRender();
                                 }
+                                // Fallback: inject order_index if Gemini didn't pass it in data
+                                if (extractedOrderIndex != null && !questionData.order_index) {
+                                    questionData.order_index = extractedOrderIndex;
+                                }
+                                // Show Approve button if we have required fields
+                                const required = ['sql_data', 'sql_question', 'sql_solution', 'difficulty', 'category'];
+                                const hasRequired = required.every(k => questionData[k]);
+                                if (hasRequired) {
+                                    document.getElementById('approveBtn').style.display = 'inline-block';
+                                    console.log('[Approve] Ready — fields:', Object.keys(questionData).join(', '));
+                                } else {
+                                    const missing = required.filter(k => !questionData[k]);
+                                    console.warn('[Approve] Missing fields:', missing.join(', '));
+                                    addStep('system', 'Preview complete — missing fields for insert: ' + missing.join(', '));
+                                }
                                 break;
                         }
                     }
@@ -373,7 +462,56 @@ LANDING_PAGE = """\
             runBtn.disabled = false;
         }
 
+        async function insertQuestion() {
+            const btn = document.getElementById('approveBtn');
+            const status = document.getElementById('insertStatus');
+            btn.disabled = true;
+            btn.textContent = 'Inserting...';
+            status.textContent = '';
+
+            // Ensure order_index is a number
+            if (questionData.order_index != null) {
+                questionData.order_index = parseInt(questionData.order_index, 10) || 0;
+            }
+            // Ensure sql_solution_explanation is an array
+            if (typeof questionData.sql_solution_explanation === 'string') {
+                questionData.sql_solution_explanation = [questionData.sql_solution_explanation];
+            }
+            if (!Array.isArray(questionData.sql_solution_explanation)) {
+                questionData.sql_solution_explanation = [];
+            }
+
+            console.log('[Approve] Inserting:', JSON.stringify(questionData).substring(0, 500));
+
+            try {
+                const resp = await fetch('/agent/insert', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        admin_key: document.getElementById('adminKey').value.trim(),
+                        question: questionData,
+                    }),
+                });
+                const result = await resp.json();
+                if (resp.ok && !result.error) {
+                    status.textContent = '\\u2705 Inserted! ID: ' + (result.id || result.question_id || 'ok');
+                    status.style.color = '#22c55e';
+                    btn.textContent = 'Inserted';
+                    addStep('system', 'Question inserted successfully');
+                } else {
+                    throw new Error(result.error || 'Insert failed');
+                }
+            } catch (err) {
+                status.textContent = '\\u274c ' + err.message;
+                status.style.color = '#ef4444';
+                btn.disabled = false;
+                btn.textContent = 'Retry Insert';
+                addStep('error', 'Insert failed: ' + err.message);
+            }
+        }
+
         runBtn.addEventListener('click', runAgent);
+        document.getElementById('approveBtn').addEventListener('click', insertQuestion);
         document.getElementById('prompt').addEventListener('keydown', (e) => {
             if (e.key === 'Enter') runAgent();
         });
