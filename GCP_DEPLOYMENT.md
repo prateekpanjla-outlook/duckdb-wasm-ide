@@ -119,14 +119,20 @@ echo -n "YOUR_SECURE_PASSWORD" | gcloud secrets create db-password --data-file=-
 # JWT secret
 echo -n "$(openssl rand -base64 32)" | gcloud secrets create jwt-secret --data-file=-
 
+# Gemini API key (for AI hints and agent)
+echo -n "YOUR_GEMINI_API_KEY" | gcloud secrets create gemini-api-key --data-file=-
+
+# Admin secret (for admin API endpoints)
+echo -n "YOUR_ADMIN_SECRET" | gcloud secrets create admin-secret --data-file=-
+
 # Grant Cloud Run service account access to secrets
 PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
 SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
 
-gcloud secrets add-iam-policy-binding db-password \
-    --member="serviceAccount:$SA" --role="roles/secretmanager.secretAccessor"
-gcloud secrets add-iam-policy-binding jwt-secret \
-    --member="serviceAccount:$SA" --role="roles/secretmanager.secretAccessor"
+for secret in db-password jwt-secret gemini-api-key admin-secret; do
+  gcloud secrets add-iam-policy-binding $secret \
+      --member="serviceAccount:$SA" --role="roles/secretmanager.secretAccessor"
+done
 ```
 
 ### Step 4: Create Artifact Registry
@@ -165,11 +171,11 @@ gcloud run deploy duckdb-ide \
     --memory=512Mi \
     --cpu=1 \
     --max-instances=10 \
-    --timeout=300 \
+    --timeout=3600 \
     --allow-unauthenticated \
     --add-cloudsql-instances=$SQL_CONN \
     --set-env-vars="DB_HOST=/cloudsql/$SQL_CONN,DB_PORT=5432,DB_NAME=duckdb_ide,DB_USER=postgres,JWT_EXPIRES_IN=7d,NODE_ENV=production" \
-    --set-secrets="DB_PASSWORD=db-password:latest,JWT_SECRET=jwt-secret:latest"
+    --set-secrets="DB_PASSWORD=db-password:latest,JWT_SECRET=jwt-secret:latest,GEMINI_API_KEY=gemini-api-key:latest,ADMIN_SECRET=admin-secret:latest"
 ```
 
 ### Step 7: Initialize Database
@@ -240,6 +246,26 @@ gcloud run services logs read duckdb-ide --region=us-central1 --limit=50
 # Get service URL
 gcloud run services describe duckdb-ide --region=us-central1 --format="value(status.url)"
 ```
+
+---
+
+## Additional Services
+
+Two additional Cloud Run services provide AI agent capabilities:
+
+| Service | Directory | Dockerfile | Workflow | Purpose |
+|---------|-----------|------------|----------|---------|
+| `duckdb-ide-mcp` | `mcp/` | `mcp/Dockerfile` | `deploy-mcp.yml` | v1 + v2 MCP agent (Python/FastMCP + Prefab UI) |
+| `duckdb-ide-genui` | `mcp-genui/` | `mcp-genui/Dockerfile` | `deploy-mcp-genui.yml` | v3 Generative UI agent (Pyodide WASM rendering) |
+
+Both deploy automatically via GitHub Actions on push to `main` when their respective directories change. They use the same GCP project, WIF provider, and deployer service account. Each has its own `cloudbuild.yaml` with separate Cloud Run service names.
+
+**Service accounts:**
+- Deployer: `sql-practice-deployer@$PROJECT_ID.iam.gserviceaccount.com` (used by Cloud Build)
+- Runtime: `sql-practice-runtime@$PROJECT_ID.iam.gserviceaccount.com` (used by Cloud Run services)
+
+**Workload Identity Federation** (for GitHub Actions):
+- Provider: `projects/192834930119/locations/global/workloadIdentityPools/sql-practice-github/providers/github-actions`
 
 ---
 

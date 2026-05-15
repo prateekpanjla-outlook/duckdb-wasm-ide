@@ -43,7 +43,7 @@ When the admin asks "Add a question about DENSE_RANK()", the agent:
 4. Presents a structured preview for human approval
 5. On approval, inserts the question into the database — it immediately appears in the question list
 
-The agent uses 7 custom tools, each solving a specific failure mode:
+The agent uses 8 custom tools, each solving a specific failure mode:
 
 | Tool | Why |
 |------|-----|
@@ -53,6 +53,7 @@ The agent uses 7 custom tools, each solving a specific failure mode:
 | `check_concept_overlap` | Shows admin which concepts are already covered — informed approve/reject decision |
 | `list_concepts` | Full coverage picture so agent picks correct difficulty and category |
 | `execute_sql` | Agent can test individual SQL statements during generation |
+| `generate_test` | Auto-generates Playwright E2E test for the new question |
 | `insert_question` | Only callable after human approval — human-in-the-loop gate |
 
 The reasoning chain streams in real-time via SSE — each tool call, result, and retry is visible in the admin panel. Gemini 503 errors trigger exponential backoff (1m, 5m, 10m, 20m, 1h) with visible retry steps.
@@ -85,6 +86,17 @@ The reasoning chain streams in real-time via SSE — each tool call, result, and
 └──────────────────────────────────────────────┘
 ```
 
+### MCP Agent Services (v2 + v3)
+
+Two additional Cloud Run services provide AI agent capabilities via the [Model Context Protocol](https://modelcontextprotocol.io/):
+
+| Service | URL | Stack | Purpose |
+|---------|-----|-------|---------|
+| `duckdb-ide-mcp` | [mcp](https://duckdb-ide-mcp-frxi6yk4jq-uc.a.run.app) | Python/FastMCP + Prefab UI | v1 agent + v2 ReACT agent with structured reasoning |
+| `duckdb-ide-genui` | [genui](https://duckdb-ide-genui-frxi6yk4jq-uc.a.run.app) | Python/FastMCP + Pyodide WASM | v3 Generative UI — Gemini writes Python Prefab code, Pyodide renders live in browser |
+
+The v3 GenUI agent streams progressive UI updates via `sendToolInputPartial`, accumulates question data across 5 preview cards, and provides an **Approve & Insert** button for one-click question insertion. See [docs/mcp-v3-genui-architecture.md](docs/mcp-v3-genui-architecture.md).
+
 Key design decisions:
 - **Client-side grading only** — DuckDB WASM runs both user and solution queries in the browser. No server-side SQL execution for grading. Eliminates dialect mismatch and keeps server load at zero per query.
 - **No bundler** — vanilla ES modules served directly. No webpack, no Vite, no build step for frontend code.
@@ -99,7 +111,7 @@ Key design decisions:
 | Frontend | Vanilla ES modules (no framework, no bundler) |
 | Backend | Node.js 18+, Express, `pg` |
 | Database | PostgreSQL 16 |
-| Auth | JWT in localStorage, bcrypt password hashing |
+| Auth | JWT in localStorage, bcryptjs password hashing |
 | Deployment | Cloud Run + Cloud SQL + Secret Manager |
 | CI/CD | GitHub Actions → Cloud Build → Cloud Run (via WIF) |
 | Tests | Playwright (E2E) |
@@ -163,6 +175,8 @@ Project: `sql-practice-project-489106` | Run cost: ~$9/month (Cloud SQL db-f1-mi
 | [GCP_DEPLOYMENT.md](GCP_DEPLOYMENT.md) | GCP deployment architecture |
 | [docs/gemini-integration.md](docs/gemini-integration.md) | Gemini AI integration: architecture, prompts, issues, fine-tuning analysis |
 | [docs/question-authoring-agent.md](docs/question-authoring-agent.md) | Question Authoring Agent: tools, SSE streaming, concept taxonomy |
+| [docs/mcp-v2-architecture.md](docs/mcp-v2-architecture.md) | MCP v2 ReACT agent: reasoning framework, Prefab UI, SSE streaming |
+| [docs/mcp-v3-genui-architecture.md](docs/mcp-v3-genui-architecture.md) | MCP v3 Generative UI: Pyodide WASM, progressive rendering, Approve button |
 | [docs/terraform-learnings.md](docs/terraform-learnings.md) | Terraform/GCP gotchas and fixes (11 items) |
 | [infra/terraform/](infra/terraform/) | Terraform IaC — all GCP resources (35 managed) |
 

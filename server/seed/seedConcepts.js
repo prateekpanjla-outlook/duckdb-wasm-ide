@@ -1,6 +1,6 @@
 /**
  * SQL Concept Taxonomy — seed data
- * ~30 concepts covering a standard SQL curriculum.
+ * 38 concepts covering a standard SQL curriculum.
  * Used by the Question Authoring Agent to identify coverage gaps.
  */
 

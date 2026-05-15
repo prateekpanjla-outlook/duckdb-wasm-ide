@@ -590,16 +590,16 @@ COPY package.json ./
 RUN npm install
 
 # Stage 2: Python dependencies
-FROM python:3.14-slim AS py-deps
+FROM python:3.12-slim AS py-deps
 WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Stage 3: Production
-FROM python:3.14-slim
+FROM python:3.12-slim
 WORKDIR /app
 RUN pip install --no-cache-dir uvicorn
-COPY --from=py-deps /usr/local/lib/python3.14/site-packages /usr/local/lib/python3.14/site-packages
+COPY --from=py-deps /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=js-deps /app/node_modules ./node_modules
 COPY . .
 # Copy JS bundles to static

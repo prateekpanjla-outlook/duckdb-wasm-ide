@@ -24,18 +24,12 @@ graph TB
         T6["execute_sql()"]
         T7["insert_question()"]
         T8["generate_test()"]
-        T9["search_web() — NEW"]
-        T10["manage_file() — NEW"]
+        T9["render_dashboard() — UI only"]
     end
 
     subgraph CloudRun["Cloud Run (existing, unchanged)"]
         Express["Express API"]
         PG["PostgreSQL"]
-    end
-
-    subgraph External["External"]
-        StackOverflow["StackOverflow API"]
-        LocalFile["Local JSON file"]
     end
 
     PrefabUI <-->|"postMessage<br/>(AppBridge)"| AgentLoop
@@ -45,8 +39,7 @@ graph TB
     MCPClient <-->|"MCP JSON-RPC<br/>(stdio)"| MCPServer
     T1 & T2 & T3 & T4 & T5 & T6 & T7 & T8 -->|HTTP proxy| Express
     Express --> PG
-    T9 --> StackOverflow
-    T10 --> LocalFile
+    T9 -->|"UI only<br/>(excluded from LLM)"| PrefabUI
 ```
 
 ## Sequence Diagram — Full Question Authoring Flow
@@ -60,31 +53,11 @@ sequenceDiagram
     participant MCP as FastMCP Server
     participant API as Cloud Run Express
     participant DB as PostgreSQL
-    participant Web as StackOverflow API
-    participant File as Local JSON File
 
     Admin->>Agent: "Add a question about DENSE_RANK"
 
     Note over Agent,LLM: Agent Loop — Step 1
     Agent->>LLM: prompt + tool declarations
-    LLM-->>Agent: functionCall: search_web("DENSE_RANK")
-    Agent->>MCP: tools/call search_web
-    MCP->>Web: GET /search?q=DENSE_RANK+SQL
-    Web-->>MCP: 5 results
-    MCP-->>Agent: JSON + Prefab UI (search results card)
-    Agent-->>UI: Render search results
-    UI-->>Admin: Shows search results in browser
-    Agent->>LLM: functionResponse(results)
-
-    Note over Agent,LLM: Agent Loop — Step 2
-    LLM-->>Agent: functionCall: manage_file("create", notes)
-    Agent->>MCP: tools/call manage_file
-    MCP->>File: Write questions_draft.json
-    MCP-->>Agent: JSON + Prefab UI (file saved confirmation)
-    Agent-->>UI: Render file confirmation
-    Agent->>LLM: functionResponse(saved)
-
-    Note over Agent,LLM: Agent Loop — Step 3
     LLM-->>Agent: functionCall: get_coverage_gaps()
     Agent->>MCP: tools/call get_coverage_gaps
     MCP->>API: GET /api/admin/coverage-gaps
@@ -130,4 +103,4 @@ sequenceDiagram
 
 4. **Prefab renders in browser**: Via `fastmcp dev apps` at localhost:8080. Each tool call updates the UI in real-time as the agent works through its steps.
 
-5. **Two new tools for the assignment**: `search_web` (internet requirement) and `manage_file` (local file CRUD requirement). The other 8 are existing tools wrapped with Prefab UI.
+5. **9 tools total**: 8 data tools (coverage gaps, validation, SQL execution, etc.) + `render_dashboard` (UI-only, excluded from LLM function declarations). See also v2 (`mcp/v2/`) with ReACT reasoning and v3 (`mcp-genui/`) with Generative UI.

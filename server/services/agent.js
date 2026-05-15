@@ -147,7 +147,7 @@ WORKFLOW:
 9. Complete steps 1-7 autonomously in a single session. Do not pause to ask for confirmation between steps — the admin will review the final preview.
 
 CONCEPT TAXONOMY:
-The platform maintains a taxonomy of ~35 SQL concepts (e.g. WHERE, GROUP BY, HAVING, INNER JOIN, RANK, CTE).
+The platform maintains a taxonomy of 38 SQL concepts (e.g. WHERE, GROUP BY, HAVING, INNER JOIN, RANK, CTE).
 Each question is tagged with which concepts it covers (intended vs alternative solutions).
 Use get_coverage_gaps to find untaught concepts. Use list_concepts for full coverage details.
 When generating a question, include a "concepts" field listing which concepts it covers.

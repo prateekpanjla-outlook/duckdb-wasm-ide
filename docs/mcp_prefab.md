@@ -59,7 +59,7 @@ Unsafe attempt to load URL file:///C:/tmp/dashboard.html from frame with URL fil
 
 **What happened:**
 ```
-fastmcp dev inspector mcp_dashboard.py
+fastmcp dev inspector mcp_server.py
 ```
 Inspector launched at http://localhost:6274 with proxy on port 6277. But clicking Connect in the inspector UI failed.
 
@@ -108,7 +108,7 @@ taskkill /F /IM node.exe
 
 **What happened:**
 ```
-fastmcp dev apps mcp_dashboard.py --no-reload
+fastmcp dev apps mcp_server.py --no-reload
 ```
 Server started, dev UI at http://localhost:8080 loaded, but showed:
 ```
@@ -264,7 +264,7 @@ print([x for x in dir(prefab_ui.components) if not x.startswith('_')])
 
 ## Working Configuration (Final)
 
-**File: `mcp_dashboard.py`**
+**File: `mcp_server.py`**
 ```python
 from fastmcp import FastMCP
 from prefab_ui.components import *
@@ -284,7 +284,7 @@ if __name__ == "__main__":
 
 **Run command:**
 ```bash
-PYTHONIOENCODING=utf-8 fastmcp dev apps mcp_dashboard.py --no-reload
+PYTHONIOENCODING=utf-8 fastmcp dev apps mcp_server.py --no-reload
 ```
 
 **Access:** http://localhost:8080 → Click Launch on `show_dashboard`

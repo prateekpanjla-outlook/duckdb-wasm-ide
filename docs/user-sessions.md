@@ -11,7 +11,7 @@
 > **Implementation references:**
 > - [js/services/api-client.js](../js/services/api-client.js) — token/user storage
 > - [server/models/UserSession.js](../server/models/UserSession.js) — server-side practice session
-> - [js/query-editor.js](../js/query-editor.js) — query history in localStorage
+> - [js/services/practice-manager.js](../js/services/practice-manager.js) — practice flow and query execution
 >
 > **Known limitation:** Concurrent sessions across multiple tabs/browsers have race conditions. See **Vikunja task #32** — "Analyze concurrent session handling: multi-tab, multi-browser, multi-IP" — for the tracked follow-up.
 >

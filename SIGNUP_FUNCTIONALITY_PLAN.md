@@ -69,7 +69,7 @@ The authentication system currently includes:
 | **Google OAuth** | Sign in with Google | 📋 Vikunja **#30** |
 | **GitHub OAuth** | Sign in with GitHub | 📋 Vikunja **#30** |
 | **Magic Links** | Passwordless email login | 📋 Vikunja **#30** |
-| **Guest Access** | Anonymous instant start | 📋 Vikunja **#31** |
+| **Guest Access** | Anonymous instant start | ✅ Completed 2026-04-19 (GitHub #4) |
 
 ---
 

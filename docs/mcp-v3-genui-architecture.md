@@ -34,8 +34,7 @@ graph TB
     subgraph "Cloud Run: duckdb-ide-genui"
         FA[FastAPI app.py<br/>SSE + static files]
         AH[agent_harness.py<br/>Gemini ReACT loop]
-        MCP[mcp_server.py<br/>FastMCP + GenerativeUI provider]
-        Deno[Deno Subprocess<br/>Sandbox validation]
+        MCP[mcp_server.py<br/>FastMCP + pass-through tools]
         Pyodide_Local[static/pyodide/<br/>WASM files]
         JS_Local[static/js/<br/>sdk-bundle, app-bridge, zod-v4]
     end
@@ -57,7 +56,7 @@ graph TB
     AH -- "in-memory Client" --> MCP
     AH -- "httpx POST" --> Gemini
     MCP -- "httpx" --> Express
-    MCP -- "GenerativeUI provider" --> Deno
+    MCP -- "pass-through (no server exec)" --> MCP
 ```
 
 ### SSE Event Flow
@@ -90,13 +89,18 @@ sequenceDiagram
 
         Note over B: If tool is generate_prefab_ui:
         B->>B: _prefabExecCode(code, data)
-        B->>B: Debounce 500ms, combine sections
-        B->>B: bridge.sendToolInput({code: combined})
-        B->>B: Pyodide executes in iframe
+        B->>B: Append section to accumulatedScript
+        B->>B: bridge.sendToolInputPartial({code: fullScript})
+        B->>B: Pyodide executes progressively (50ms debounce + code healing)
     end
 
     A-->>S: SSE: {type: "answer", content: "..."}
     S-->>B: SSE: {type: "done"}
+    Note over B: Final render via bridge.sendToolInput
+    Note over B: If required fields present: show Approve button
+    B->>S: POST /agent/insert {questionData}
+    S->>E: POST /api/admin/tools/insert
+    E-->>B: {id: 12}
 ```
 
 ### Pyodide Rendering Path
@@ -107,37 +111,45 @@ graph LR
         TC[tool_result:<br/>generate_prefab_ui]
     end
 
-    subgraph "Landing Page JS"
+    subgraph "Landing Page JS (Option C)"
         Exec["_prefabExecCode(code, data)"]
-        Acc[Accumulate sections]
-        Debounce[500ms debounce timer]
-        Combine["_sendCombinedToIframe()<br/>Build combined Python script"]
+        Acc["Append to accumulatedScript<br/>+ merge data into questionData"]
+        Full["_getFullScript()<br/>PrefabApp + Column + all sections"]
+        Partial["bridge.sendToolInputPartial<br/>(progressive render)"]
     end
 
     subgraph "iframe (Prefab Renderer)"
-        Bridge["bridge.sendToolInput<br/>{code: combined}"]
+        Heal["50ms debounce + code healing"]
         PyExec["Pyodide exec(code)<br/>in fresh namespace"]
         Render[Prefab components render]
     end
 
-    TC --> Exec --> Acc --> Debounce --> Combine --> Bridge --> PyExec --> Render
+    subgraph "On Agent Done"
+        Final["bridge.sendToolInput<br/>(final clean render)"]
+        Approve["Show Approve button<br/>if required fields present"]
+    end
+
+    TC --> Exec --> Acc --> Full --> Partial --> Heal --> PyExec --> Render
+    Full --> Final --> Approve
 ```
 
 ---
 
 ## 3. Component Rationale
 
-### GenerativeUI Provider (FastMCP)
+### Pass-Through Tools (No Server-Side Execution)
 
-The `mcp.add_provider(GenerativeUI())` call registers two tools: `generate_prefab_ui` and `search_prefab_components`. This lets the LLM discover available Prefab components via `search_prefab_components`, then write Python code that uses them. The LLM becomes the UI author rather than the developer, enabling adaptive visualizations per-step without code changes.
+The `generate_prefab_ui` and `search_prefab_components` tools are registered as simple `@mcp.tool()` functions. `generate_prefab_ui` is a **pass-through** — it returns `"[Rendered Prefab UI]"` without executing any code. The actual Python code is sent to the browser via SSE and executed client-side by Pyodide. `search_prefab_components` calls `prefab_ui.generative.search_components()` for component discovery.
+
+> **Note**: The original design used `mcp.add_provider(GenerativeUI())` which included a Deno sandbox for server-side code validation. This was removed because: (1) The browser Pyodide is the real executor, (2) Deno had different imports causing false errors (NameError, TypeError), (3) It added ~40MB to the Docker image, (4) It added latency to every tool call.
 
 ### Pyodide (Python in WASM)
 
 The LLM writes Python code using the `prefab_ui.components` library. This code must execute somewhere. Pyodide compiles CPython to WebAssembly, allowing the browser to run Python directly. The Prefab renderer iframe has Pyodide built in -- it receives code via `sendToolInput`, executes it with `exec()`, extracts the resulting `PrefabApp` component tree, and renders it.
 
-### Deno Subprocess (Server-Side Sandbox)
+### Deno Subprocess (Removed)
 
-The FastMCP `GenerativeUI` provider uses a Deno subprocess to validate LLM-generated code in a sandboxed server-side environment before returning `structuredContent`. Deno's permission model (no file/network access by default) provides safety. The Dockerfile installs Deno and pre-caches its npm dependencies so no CDN fetch occurs at runtime.
+> **Removed in May 2026.** The original design used a Deno subprocess for server-side code validation via the `GenerativeUI` provider. This was removed because the browser Pyodide executes the code directly, and the Deno sandbox produced false-negative errors due to different import environments. All code execution is now client-side only.
 
 ### AppBridge + PostMessageTransport
 
@@ -164,7 +176,7 @@ The Dockerfile patches URLs in `app-bridge.js` (replacing `esm.sh` imports with 
 
 The Prefab renderer's built-in Pyodide execution uses a 50ms debounce: when partial code arrives via streaming, it waits 50ms of quiet before attempting `exec()`. This prevents wasted execution of incomplete code during token-level streaming.
 
-The landing page adds a second debounce layer: 500ms of quiet between `generate_prefab_ui` calls before combining sections and sending to the iframe. This is because the agent typically emits multiple `generate_prefab_ui` calls in rapid succession (e.g., five cards for a question preview).
+The landing page uses **Option C: Append mode** — a single growing Python script. Each `generate_prefab_ui` call appends its section to `accumulatedScript`, then sends the full script via `bridge.sendToolInputPartial()` for progressive rendering. On agent completion, `bridge.sendToolInput()` sends the final clean render. No debounce on the JS side — the renderer's 50ms debounce handles execution timing.
 
 ### Code Healing
 
@@ -174,41 +186,49 @@ When partial code arrives (during streaming or when the LLM truncates output), t
 
 ## 4. Rendering Flow
 
-### Path A: Server-Side (In-Memory MCP Client)
+### Path A: Server-Side (Pass-Through)
 
 ```
 Agent harness → Client.call_tool("generate_prefab_ui", {code, data})
-             → MCP server GenerativeUI provider
-             → Deno subprocess validates code
-             → Returns ToolResult with structuredContent (Prefab JSON)
-             → Agent extracts text content for Gemini conversation
-             → structuredContent is LOST (never reaches browser)
+             → MCP server pass-through tool
+             → Returns "[Rendered Prefab UI]" (no execution)
+             → Agent extracts text for Gemini conversation
+             → Code + data sent to browser via SSE tool_result event
 ```
 
-This path runs automatically because the agent uses an in-memory `fastmcp.Client` connected directly to the MCP server instance. The `structuredContent` from GenerativeUI is computed server-side but has no way to reach the browser -- the SSE protocol only sends the text portion of tool results. This is a known limitation (see Known Issues).
+The server does NOT execute the code. The `generate_prefab_ui` tool is a pass-through that returns a simple acknowledgment string. The original design used a `GenerativeUI` provider with Deno sandbox validation, but this was removed (see Component Rationale).
 
-### Path B: Client-Side (Pyodide in iframe)
+### Path B: Client-Side (Option C — Append Mode)
 
 ```
 SSE event {type: "tool_result", tool: "generate_prefab_ui", input: {code, data}}
   → Landing page JS: _prefabExecCode(code, data)
-  → Accumulates {code, data} in genUiSections[]
-  → After 500ms quiet: _sendCombinedToIframe()
-    → Builds combined Python script:
-        - Shared imports (prefab_ui.components, PrefabApp)
-        - Outer "with PrefabApp() as app: with Column(gap=4):"
-        - Each section's data injected as variables
-        - Each section's component code (imports/PrefabApp stripped, re-indented)
-    → bridge.sendToolInput({arguments: {code: combined}})
-    → iframe Pyodide exec(combined)
-    → Prefab components render in iframe
+  → Append section to accumulatedScript (single growing Python script)
+  → Merge data into questionData (for Approve button)
+  → _getFullScript(): wrap in PrefabApp + Column header
+  → bridge.sendToolInputPartial({arguments: {code: fullScript}})
+    → iframe Pyodide exec with 50ms debounce + code healing
+    → Progressive render: shows all sections accumulated so far
+
+On agent done:
+  → bridge.sendToolInput({arguments: {code: fullScript}})  // final clean render
+  → Validate required fields in questionData
+  → Show "Approve & Insert" button if complete
 ```
 
-This is the path that actually works end-to-end. The landing page intercepts `generate_prefab_ui` tool results from SSE, extracts the `code` and `data` from the tool input, and forwards them to the iframe's Pyodide runtime.
+Each section is appended once — no duplication, no re-combining. The script only grows. `sendToolInputPartial` triggers progressive rendering; `sendToolInput` on done gives a clean final render.
 
-### Path C: Token-Level Streaming (Future)
+### Path C: Token-Level Streaming (Partially Implemented)
 
-The AppBridge protocol supports `ontoolinputpartial` events for progressive rendering. Combined with the renderer's 50ms debounce and code healing, this would allow the UI to update as the LLM streams each token of the Python code. This path is not yet implemented in the agent harness -- it would require forwarding Gemini's streaming tokens for `generate_prefab_ui` arguments before the function call is complete.
+`bridge.sendToolInputPartial()` is now used for progressive rendering (Option C append mode). Each new `generate_prefab_ui` call appends to the growing script and sends it via `sendToolInputPartial`. The renderer's 50ms debounce + code healing provides smooth progressive updates. Full token-level streaming (forwarding Gemini's streaming tokens mid-function-call) is not yet implemented — it would require the Gemini streaming API.
+
+### Approve & Insert Button
+
+After the agent completes, the landing page checks if `questionData` has all required fields (`sql_data`, `sql_question`, `sql_solution`, `difficulty`, `category`). If present, an "Approve & Insert Question" button appears. Clicking it sends `POST /agent/insert` with the accumulated data directly to the Express API, bypassing Gemini entirely. The `order_index` is extracted from the `list_existing_questions` result as a fallback if Gemini doesn't include it in `data`.
+
+### MCP SSE Connection (Closed After Init)
+
+The browser MCP client (`StreamableHTTPClientTransport`) connects briefly to fetch `serverCapabilities`, then closes immediately. The `AppBridge` is created with `null` client. This prevents the idle MCP SSE from dropping after ~2 min and cascading a 409 Conflict failure that kills the agent stream.
 
 ---
 
@@ -263,7 +283,7 @@ This triple-nesting of escape sequences frequently causes Gemini to emit a `MALF
 **Mitigation**: Split preview into 5 cards, retry with smaller payload prompt, `data` parameter separation.
 
 ### generate_prefab_ui structuredContent Lost in In-Memory Session
-**Cause**: The agent uses `fastmcp.Client(mcp_server)` with in-memory transport. The `GenerativeUI` provider computes `structuredContent` server-side, but the agent only extracts `text` content for the Gemini conversation. The SSE protocol sends `tool_result` events with the text JSON, not the Prefab structured content.
+**Cause**: Resolved. The `GenerativeUI` provider was removed. The `generate_prefab_ui` tool is now a pass-through that returns `"[Rendered Prefab UI]"`. Code and data are sent to the browser via SSE `tool_result` events (in the `input` field), where Pyodide renders them client-side.
 **Impact**: Server-side rendered Prefab UI never reaches the browser.
 **Workaround**: Path B (client-side Pyodide) handles rendering by forwarding code+data from SSE events to the iframe.
 
@@ -313,7 +333,7 @@ if finish == "STOP":
 
 ### Gemini thoughtSignature vs Visible Reasoning
 **Cause**: Gemini 2.5 models with thinking enabled return `thoughtSignature` fields on function call parts, which consumes tokens but adds no visible value. The ReACT framework's `[THINK]`/`[ACT]` labels provide explicit reasoning.
-**Fix**: Set `thinkingBudget: 0` in `generationConfig.thinkingConfig` to disable internal thinking. The agent gets reasoning through the explicit text + function call pattern instead.
+**Fix**: Set `thinkingBudget: 1024` in `generationConfig.thinkingConfig`. Setting to 0 disabled reasoning entirely; 1024 gives limited visible reasoning while keeping the explicit `[THINK]/[ACT]` text pattern.
 
 ### MAX_STEPS Too Low for Split-Preview Pattern
 **Cause**: Splitting the final preview into 5 separate `generate_prefab_ui` calls means the agent needs 5 extra steps. With the original limit of 15, complex questions hit the cap.
@@ -359,7 +379,7 @@ The code runs in a fresh namespace each time. The `PrefabApp` context manager (`
 | `ontoolinputpartial` | During streaming (each token chunk) | Debounce 50ms, code heal, render partial |
 | `ontoolinput` | After complete code arrives | Execute immediately, render final |
 
-The landing page currently uses only `ontoolinput` (via `bridge.sendToolInput`) since the agent harness does not stream individual tokens of function call arguments. The partial path is available for future token-level streaming.
+The landing page uses `sendToolInputPartial` for progressive rendering during the agent run (Option C append mode), and `sendToolInput` for the final clean render on agent completion. Full token-level streaming of individual function call argument tokens is not yet implemented.
 
 ---
 
@@ -447,8 +467,7 @@ Then two critical patches:
 Assembles everything:
 
 1. **Python packages**: Copied from stage 3 site-packages
-2. **Deno**: Installed via `deno.land/install.sh` for server-side sandbox validation. `DENO_DIR` and `PATH` are set.
-3. **Deno pre-cache**: Runs `deno cache` on `prefab_ui/sandbox/runner.js` to pre-download npm dependencies (Pyodide) so no CDN fetch occurs at runtime. Non-fatal if it fails.
+2. ~~**Deno**~~: Removed. Server-side sandbox validation is no longer used. All code execution is client-side via Pyodide.
 4. **Application code**: `COPY . .` brings in all Python source files
 5. **JS assets**: `sdk-bundle.js` from stage 1, `app-bridge.js` from stage 3
 6. **Pyodide files**: Entire `/pyodide/` directory from stage 2 into `static/pyodide/`
@@ -463,7 +482,7 @@ Assembles everything:
 | Python 3.12 slim base | ~150 MB |
 | Python packages (fastmcp, prefab-ui, httpx, etc.) | ~80 MB |
 | Pyodide WASM files | ~15 MB |
-| Deno binary | ~40 MB |
+| ~~Deno binary~~ | Removed |
 | JS bundles (sdk-bundle, app-bridge, zod-v4) | ~1 MB |
 | Application code | ~50 KB |
 
@@ -475,7 +494,7 @@ Assembles everything:
 mcp-genui/
   app.py                    # FastAPI: landing page HTML, SSE endpoint, static mounts
   agent_harness.py          # Gemini ReACT loop with MCP client (in-memory)
-  mcp_server.py             # FastMCP server: 8 data tools + GenerativeUI provider
+  mcp_server.py             # FastMCP server: 8 data tools + pass-through generate_prefab_ui + search_prefab_components
   config.py                 # Environment config (Gemini, Express URL, agent settings)
   Dockerfile                # 4-stage build (JS, Pyodide, Python+patch, production)
   cloudbuild.yaml           # Cloud Build: build, push, deploy to Cloud Run
