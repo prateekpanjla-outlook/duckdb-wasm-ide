@@ -42,10 +42,8 @@ test.describe('Cache-busting — stale UI prevention (#24)', () => {
         expect(cacheControl).toContain('immutable');
     });
 
-    test('WASM files have immutable cache headers', async ({ page }) => {
-        const response = await page.goto('/libs/duckdb-wasm/duckdb-eh.wasm', {
-            waitUntil: 'domcontentloaded',
-        });
+    test('WASM files have immutable cache headers', async ({ request }) => {
+        const response = await request.head(`${BASE}/libs/duckdb-wasm/duckdb-eh.wasm`);
         const cacheControl = response.headers()['cache-control'];
         expect(cacheControl).toContain('max-age=31536000');
         expect(cacheControl).toContain('immutable');

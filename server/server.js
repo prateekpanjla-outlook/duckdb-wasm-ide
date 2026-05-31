@@ -112,9 +112,11 @@ app.use((req, res, next) => {
 });
 
 // Serve frontend static files (in production, Express serves everything)
+// index.html is excluded — served by the SPA fallback below with no-cache + version injection
 app.use(express.static(staticRoot, {
     maxAge: '1y',
     immutable: true,
+    index: false,
     setHeaders: (res, filePath) => {
         if (filePath.endsWith('.wasm')) {
             res.set('Content-Type', 'application/wasm');
