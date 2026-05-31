@@ -7,11 +7,14 @@ import { PracticeManager } from './services/practice-manager.js';
 import QuestionsManager from './services/questions-manager.js';
 import QuestionDropdownManager from './services/question-dropdown-manager.js';
 
+const VERSION_POLL_INTERVAL = 5 * 60 * 1000; // 5 minutes
+
 class App {
     constructor() {
         this.dbManager = new DuckDBManager();
         this.queryEditor = new QueryEditor();
         this.resultsView = new ResultsView();
+        this._appVersion = null;
 
         // Initialize async and handle errors
         this.init().catch((error) => {
@@ -58,6 +61,7 @@ class App {
             } else {
                 this.showLoginPrompt();
             }
+            this.startVersionPolling();
         } catch (error) {
             console.error('[app.js] Error during initialization:', error);
         } finally {
@@ -209,6 +213,41 @@ class App {
                 <p>Failed to initialize: ${message}</p>
                 <p>Try refreshing the page. If the problem persists, check the browser console for details.</p>
             </div>`;
+        }
+    }
+
+    async startVersionPolling() {
+        try {
+            const resp = await fetch('/api/version');
+            if (resp.ok) {
+                const { version } = await resp.json();
+                this._appVersion = version;
+            }
+        } catch (e) {
+            // version endpoint unavailable — skip polling
+            return;
+        }
+
+        this._versionInterval = setInterval(() => this.checkVersion(), VERSION_POLL_INTERVAL);
+
+        const banner = document.getElementById('updateBanner');
+        const refreshBtn = document.getElementById('updateRefreshBtn');
+        const dismissBtn = document.getElementById('updateDismissBtn');
+        if (refreshBtn) refreshBtn.addEventListener('click', () => window.location.reload());
+        if (dismissBtn) dismissBtn.addEventListener('click', () => banner.classList.add('hidden'));
+    }
+
+    async checkVersion() {
+        try {
+            const resp = await fetch('/api/version');
+            if (!resp.ok) return;
+            const { version } = await resp.json();
+            if (this._appVersion && version !== this._appVersion) {
+                document.getElementById('updateBanner')?.classList.remove('hidden');
+                clearInterval(this._versionInterval);
+            }
+        } catch (e) {
+            // network error — ignore, try again next interval
         }
     }
 

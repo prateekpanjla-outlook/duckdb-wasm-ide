@@ -1832,3 +1832,42 @@ table tbody tr.no-data td {
     max-width: 100%;
     height: auto;
 }
+
+/* ==================== Update Notification Banner ==================== */
+.update-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 11001;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    background: #1a73e8;
+    color: white;
+    font-size: 0.9rem;
+    animation: slideDown 0.3s ease;
+}
+.update-banner.hidden { display: none; }
+.btn-update {
+    padding: 0.3rem 1rem;
+    background: white;
+    color: #1a73e8;
+    border: none;
+    border-radius: 4px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.btn-update:hover { background: #e8f0fe; }
+.btn-dismiss {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.3rem;
+    cursor: pointer;
+    padding: 0 0.3rem;
+    opacity: 0.8;
+}
+.btn-dismiss:hover { opacity: 1; }
