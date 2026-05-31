@@ -1491,9 +1491,6 @@ table tbody tr.no-data td {
 }
 
 /* ==================== Question Selector Section ==================== */
-.question-selector-section h2 {
-    color: red; /* TEMPORARY: cache-busting visual test — remove after verification */
-}
 .question-selector-section {
     background: var(--card-bg);
     border: 1px solid var(--border-color);
