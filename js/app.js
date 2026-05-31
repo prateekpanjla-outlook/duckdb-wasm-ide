@@ -7,7 +7,7 @@ import { PracticeManager } from './services/practice-manager.js';
 import QuestionsManager from './services/questions-manager.js';
 import QuestionDropdownManager from './services/question-dropdown-manager.js';
 
-const VERSION_POLL_INTERVAL = 30 * 1000; // 30 seconds (temporarily reduced for testing)
+const VERSION_POLL_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
 class App {
     constructor() {
