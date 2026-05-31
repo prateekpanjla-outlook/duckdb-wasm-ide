@@ -53,6 +53,10 @@ COPY --from=build --chown=nodejs:nodejs /app/css ./css
 COPY --from=build --chown=nodejs:nodejs /app/js ./js
 COPY --from=build --chown=nodejs:nodejs /app/libs ./libs
 
+# App version for cache-busting (set by Cloud Build or defaults to build timestamp)
+ARG APP_VERSION=unknown
+ENV APP_VERSION=${APP_VERSION}
+
 # Set environment variables
 ENV NODE_ENV=production
 ENV PORT=8080

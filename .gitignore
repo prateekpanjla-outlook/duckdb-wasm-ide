@@ -40,3 +40,10 @@ playwright/.cache/
 .vagrant/
 *.box
 vagrant_data/
+
+# Local planning docs (not for repo)
+eag-curriculum-roadmap.md
+docs/session6-assignment-analysis.md
+
+# LLM Gateway V3 (Session 5 course material, not part of this project)
+llm_gatewayV3/

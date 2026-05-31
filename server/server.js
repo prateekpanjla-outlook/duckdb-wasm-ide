@@ -21,6 +21,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// App version for cache-busting — set at build time or fall back to startup timestamp
+const APP_VERSION = process.env.APP_VERSION || Date.now().toString(36);
+
 // Security middleware — all assets served from same origin, no CDN
 app.use(helmet({
     contentSecurityPolicy: {
@@ -110,19 +113,35 @@ app.use((req, res, next) => {
 
 // Serve frontend static files (in production, Express serves everything)
 app.use(express.static(staticRoot, {
-    maxAge: '1h',
+    maxAge: '1y',
+    immutable: true,
     setHeaders: (res, filePath) => {
         if (filePath.endsWith('.wasm')) {
             res.set('Content-Type', 'application/wasm');
-            res.set('Cache-Control', 'public, max-age=31536000, immutable');
         }
     }
 }));
 
-// SPA fallback — serve index.html for non-API routes
+// Version endpoint — clients poll this to detect new deployments
+app.get('/api/version', (req, res) => {
+    res.json({ version: APP_VERSION });
+});
+
+// SPA fallback — serve index.html with cache-busting version injected
+// no-cache forces browser to revalidate on every load (304 if unchanged)
+const indexPath = path.join(staticRoot, 'index.html');
+let indexTemplate = null;
+function getIndexHtml() {
+    if (!indexTemplate) {
+        indexTemplate = fs.readFileSync(indexPath, 'utf-8');
+    }
+    return indexTemplate.replace(/\.(css|js)"/g, `.$1?v=${APP_VERSION}"`);
+}
 app.use((req, res, next) => {
     if (!req.path.startsWith('/api/') && !req.path.startsWith('/health')) {
-        return res.sendFile(path.join(staticRoot, 'index.html'));
+        res.set('Cache-Control', 'no-cache, must-revalidate');
+        res.set('Content-Type', 'text/html');
+        return res.send(getIndexHtml());
     }
     next();
 });

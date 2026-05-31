@@ -45,7 +45,7 @@ jobs:
             --config=cloudbuild.yaml \
             --region=${{ env.REGION }} \
             --project=${{ env.PROJECT_ID }} \
-            --substitutions=COMMIT_SHA=${{ github.sha }} \
+            --substitutions=COMMIT_SHA=${{ github.sha }},SHORT_SHA=${GITHUB_SHA::7} \
             --gcs-source-staging-dir=gs://sql-practice-cloudbuild-source/source \
             --gcs-log-dir=gs://sql-practice-cloudbuild-logs/logs
 
