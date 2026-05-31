@@ -1,6 +1,6 @@
 # Pending Tasks
 
-Tracked in [GitHub Issues](https://github.com/prateekpanjla-outlook/duckdb-wasm-ide/issues) and local [Vikunja](https://vikunja.io/) instance (project ID 2). Last updated: 2026-05-16.
+Tracked in [GitHub Issues](https://github.com/prateekpanjla-outlook/duckdb-wasm-ide/issues) and local [Vikunja](https://vikunja.io/) instance (project ID 2). Last updated: 2026-05-31.
 
 ## Bug
 
@@ -25,7 +25,6 @@ Tracked in [GitHub Issues](https://github.com/prateekpanjla-outlook/duckdb-wasm-
 | GH# | Vikunja# | Task |
 |-----|----------|------|
 | 22 | 84 | Switch Cloud SQL from password auth to IAM database authentication |
-| 24 | 88 | Stale UI after deployment — push refresh notification to clients |
 | 25 | 89 | Terraform provisioning secrets from scratch (Secret Manager + initial values) |
 | 2 | 14 | Add ESLint/Prettier config |
 | 44 | 107 | Custom domain mapping for Cloud Run |
@@ -38,6 +37,7 @@ Tracked in [GitHub Issues](https://github.com/prateekpanjla-outlook/duckdb-wasm-
 | 10 | 59 | Add proper progress tracking with visual indicators |
 | 3 | 30 | Add advanced sign-in: Google OAuth, GitHub OAuth, magic links |
 | 65 | 116 | Per-question attempt history — show last attempt when revisiting a question |
+| 70 | 121 | Implement Claude Design suggestions |
 | — | 111 | Add Mermaid ER diagrams to main question interface |
 
 ## Agentic AI / MCP
@@ -94,6 +94,8 @@ Tracked in [GitHub Issues](https://github.com/prateekpanjla-outlook/duckdb-wasm-
 
 ## Completed (recent)
 
+- ~~#24/88~~ Stale UI after deployment — cache-busting with version query strings (2026-05-31)
+- ~~#69/120~~ Version-aware session — notify active tabs of new deployment (2026-05-31)
 - ~~#4/31~~ Guest user access (2026-04-19)
 - ~~#33/97~~ Gemini Flash 2.5 AI hints integration (2026-04-19)
 - ~~#35/99~~ Question Authoring Agent — 8 tools, SSE streaming, exponential backoff (2026-04-20)

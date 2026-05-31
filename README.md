@@ -101,6 +101,7 @@ Key design decisions:
 - **Client-side grading only** — DuckDB WASM runs both user and solution queries in the browser. No server-side SQL execution for grading. Eliminates dialect mismatch and keeps server load at zero per query.
 - **No bundler** — vanilla ES modules served directly. No webpack, no Vite, no build step for frontend code.
 - **Self-hosted CodeMirror** — vendored in `libs/codemirror/` to avoid CDN dependencies.
+- **Cache-busting** — `index.html` served with `no-cache` and version query strings (`?v=<git-hash>`) on CSS/JS. Static assets cached 1 year immutable. Active tabs poll `/api/version` every 5 minutes and show an update banner on deploy.
 
 ## Stack
 

@@ -34,6 +34,7 @@ This application consists of:
 - Cloud SQL has NO public IP — connector bypasses it entirely
 - WASM files pre-compressed at build time (gzip -9) to stay under 32MB HTTP/1.1 limit
 - EH bundle (WASM exceptions) — 1.3s init, no SharedArrayBuffer/threading needed
+- Cache-busting — `index.html` served with `no-cache`, CSS/JS URLs include `?v=<SHORT_SHA>` from Cloud Build. Static assets cached 1 year immutable. `APP_VERSION` build arg set in cloudbuild.yaml.
 
 ---
 
